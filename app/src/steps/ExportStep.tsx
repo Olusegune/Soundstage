@@ -47,6 +47,7 @@ export function ExportStep({ ctx }: { ctx: Ctx }) {
     setResult(null);
     try {
       setResult(await api.exportProject(project, folder, ack));
+      ctx.markExported();
       ctx.toast("Export finished.");
     } catch (e) {
       const err = e as ExportError;
@@ -111,7 +112,7 @@ export function ExportStep({ ctx }: { ctx: Ctx }) {
         <p id="fmt-note" className="small muted">MP3 is not in this version. The export writes a master, separate dialogue, effects and music stems of equal length, and a manifest listing every voice, licence decision and file hash. The manifest records that the dialogue is AI-generated.</p>
         <div className="row">
           <button className="primary" disabled={reason !== null || busy} onClick={() => void run()}>{busy ? "Exporting…" : "Export"}</button>
-          {reason && <span className="small" style={{ color: "var(--warning)" }}>{reason}</span>}
+          {reason && <span className="small" style={{ color: "var(--warn)" }}>{reason}</span>}
         </div>
       </div>
 

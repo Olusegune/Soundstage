@@ -1,0 +1,146 @@
+/* Soundstage design tokens. Colours come from the supplied brand art: a dark stage, warm gold light, deep teal.
+   Every text/background pair below is checked by src/contrast.test.ts for WCAG 2.2 AA. */
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #05080b;
+  --surface-1: #0a1015;
+  --surface-2: #101820;
+  --surface-3: #16212b;
+  --surface-4: #1e2b37;
+  --line: rgba(242, 236, 224, 0.1);
+  --line-strong: rgba(242, 236, 224, 0.2);
+  --control-line: #6b7680;
+
+  --text: #f2ece0;
+  --text-2: #bdbab0;
+  --text-3: #9499a0;
+
+  --gold: #e9b85c;
+  --gold-hi: #f7d68e;
+  --on-gold: #1a1204;
+  --accent-text: #f0c673;
+  --gold-wash: rgba(233, 184, 92, 0.12);
+  --gold-line: rgba(233, 184, 92, 0.45);
+
+  --teal: #52bacb;
+  --teal-text: #7fd3e0;
+  --teal-wash: rgba(82, 186, 203, 0.12);
+  --teal-line: rgba(82, 186, 203, 0.4);
+
+  --ok: #62d6a6;
+  --warn: #f0a860;
+  --err: #ff8a80;
+  --ok-wash: rgba(98, 214, 166, 0.1);
+  --warn-wash: rgba(240, 168, 96, 0.1);
+  --err-wash: rgba(255, 138, 128, 0.1);
+
+  --focus: #8fdde9;
+  --glow: radial-gradient(1100px 520px at 50% -140px, rgba(233, 184, 92, 0.1), transparent 70%),
+    radial-gradient(900px 600px at 100% 100%, rgba(82, 186, 203, 0.05), transparent 70%);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--line);
+  --scrim: rgba(2, 4, 6, 0.72);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f4f0e6;
+  --surface-1: #fbf9f3;
+  --surface-2: #ffffff;
+  --surface-3: #efe9db;
+  --surface-4: #e4dcc8;
+  --line: rgba(40, 30, 10, 0.13);
+  --line-strong: rgba(40, 30, 10, 0.28);
+  --control-line: #7d7a72;
+
+  --text: #1b1e22;
+  --text-2: #4a4f57;
+  --text-3: #5d626b;
+
+  --gold: #b8801a;
+  --gold-hi: #c9922a;
+  --on-gold: #1a1204;
+  --accent-text: #7a4f00;
+  --gold-wash: rgba(176, 122, 18, 0.1);
+  --gold-line: rgba(176, 122, 18, 0.5);
+
+  --teal: #1f8a9b;
+  --teal-text: #0e6674;
+  --teal-wash: rgba(31, 138, 155, 0.1);
+  --teal-line: rgba(31, 138, 155, 0.5);
+
+  --ok: #17724f;
+  --warn: #85490a;
+  --err: #b3261e;
+  --ok-wash: rgba(23, 114, 79, 0.09);
+  --warn-wash: rgba(133, 73, 10, 0.09);
+  --err-wash: rgba(179, 38, 30, 0.08);
+
+  --focus: #0e6674;
+  --glow: radial-gradient(1000px 480px at 50% -160px, rgba(233, 184, 92, 0.22), transparent 70%);
+  --shadow-1: 0 1px 2px rgba(60, 40, 10, 0.12);
+  --shadow-2: 0 12px 36px rgba(60, 40, 10, 0.18), 0 0 0 1px var(--line);
+  --scrim: rgba(30, 24, 12, 0.5);
+}
+
+:root {
+  /* Type */
+  --font: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, "Courier New", monospace;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 28px;
+  --fs-hero: 40px;
+
+  /* Space (4 px base) */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  /* Shape: restrained */
+  --r-ctl: 4px;
+  --r-card: 6px;
+  --r-dialog: 10px;
+
+  /* Control sizes (WCAG 2.2 target size is 24 px; controls are larger) */
+  --ctl: 36px;
+  --ctl-sm: 28px;
+
+  /* Layout */
+  --rail-w: 244px;
+  --rail-w-collapsed: 64px;
+  --toolbar-h: 52px;
+  --guide-w: 352px;
+
+  /* Motion */
+  --t-fast: 120ms;
+  --t-base: 180ms;
+  --t-slow: 260ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --z-panel: 10;
+  --z-palette: 80;
+  --z-dialog: 90;
+  --z-toast: 100;
+  --z-splash: 200;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-fast: 0ms;
+    --t-base: 0ms;
+    --t-slow: 0ms;
+  }
+}

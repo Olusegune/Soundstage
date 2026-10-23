@@ -6,7 +6,7 @@ import { NON_VERBAL, type Voice } from "../types";
 
 const ALL_TAGS = [...NON_VERBAL, "whisper", "shout", "excited", "sad", "tired", "sarcastic", "curious", "serious"];
 
-export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: boolean) => void; onBack: () => void; inProject: boolean }) {
+export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: boolean) => void; onBack: () => void; inProject: boolean; onSettings: () => void }) {
   const { voices } = props;
   const [q, setQ] = useState("");
   const [lang, setLang] = useState("");
@@ -28,8 +28,8 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
 
   return (
     <div className="page">
-      <div className="row" style={{ marginBottom: 12 }}>
-        <h1 style={{ margin: 0 }}>Voice library</h1><span className="spacer" />
+      <div className="stage-title">
+        <h1>Voice library</h1><span className="spacer" />
         <button onClick={props.onBack}>{props.inProject ? "Back to project" : "Back"}</button>
       </div>
       <div className="card">
@@ -39,7 +39,7 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
           <div><label htmlFor="vli">Licence</label><select id="vli" value={lic} onChange={(e) => setLic(e.target.value)}><option value="">All</option><option value="commercial">Commercial</option><option value="unknown">Unknown</option><option value="non-commercial">Non-commercial</option></select></div>
         </div>
       </div>
-      {!voices.some((v) => v.sends_data) && <div className="callout small"><strong>Want cloud voices?</strong>Save an ElevenLabs key in Settings and their premade and designed voices appear here. Cloned and professional voices from your account are never listed, because they need a consent record.</div>}
+      {!voices.some((v) => v.sends_data) && <div className="callout small"><strong>Want cloud voices?</strong>Save an ElevenLabs key and their premade and designed voices appear here. Cloned and professional voices from your account are never listed, because they need a consent record.<div className="row" style={{ marginTop: 8 }}><button className="small" onClick={props.onSettings}>Open Settings</button></div></div>}
       {voices.length === 0 && <div className="callout warn"><strong>Looking for voices…</strong>If this stays empty, Windows has no speech voices installed. Add one in Windows Settings under Time &amp; language, then Speech.</div>}
       <div className="card">
         <table>

@@ -66,7 +66,7 @@ export function ScriptStep({ ctx }: { ctx: Ctx }) {
       <div>
         <div className="card">
           <div className="row" style={{ marginBottom: 8 }}>
-            <h2 style={{ margin: 0 }}>Script</h2>
+            <h3 style={{ margin: 0 }}>Your script</h3>
             <span className="spacer" />
             <label className="inline"><input type="file" accept=".txt,.fountain,text/plain" onChange={(e) => void importFile(e.target.files?.[0])} style={{ display: "none" }} /><span className="small muted" style={{ cursor: "pointer", textDecoration: "underline" }}>Import a text file…</span></label>
           </div>
@@ -122,4 +122,4 @@ export function ScriptStep({ ctx }: { ctx: Ctx }) {
   );
 }
 
-const SAMPLE = "# Kitchen, morning\nAMA: Good morning! [pause:short] You're up early.\nKOLA: [sigh] I couldn't sleep. [pause:long] The rain was loud.\nAMA: [whisper] Then let's not wake the others.\n\n# Market, later\nKOLA: [excited] Look at these mangoes!\nAMA: Careful. [pause:350] Last time you bought the whole stall.\n";
+export const SAMPLE = "# Kitchen, morning\nAMA: Good morning! [pause:short] You're up early.\nKOLA: [sigh] I couldn't sleep. [pause:long] The rain was loud.\nAMA: [whisper] Then let's not wake the others.\n\n# Market, later\nKOLA: [excited] Look at these mangoes!\nAMA: Careful. [pause:350] Last time you bought the whole stall.\n";

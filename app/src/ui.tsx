@@ -1,19 +1,23 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { audioUrl } from "./api";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { api, audioUrl } from "./api";
+import * as I from "./icons";
 import { licenceClass, licenceText } from "./logic";
 import type { Licence } from "./types";
 
-/** One shared player so only one thing plays at a time. */
+/* ------------------------------------------------------------------ one shared player */
 interface PlayerApi {
   playing: string | null;
   play: (path: string, bust?: string) => void;
   stop: () => void;
+  /** Toggle whatever played last, or stop if something is playing. Used by the Space shortcut. */
+  toggleLast: () => void;
   error: string | null;
 }
 const PlayerCtx = createContext<PlayerApi | null>(null);
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const el = useRef<HTMLAudioElement | null>(null);
+  const last = useRef<{ path: string; bust?: string } | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   if (!el.current && typeof Audio !== "undefined") el.current = new Audio();
@@ -32,11 +36,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!a) return;
     if (playing === path) { stop(); return; }
     setError(null);
+    last.current = { path, bust };
     a.src = audioUrl(path, bust);
     setPlaying(path);
     a.play().catch(() => { setPlaying(null); setError("This audio could not be played."); });
   }, [playing, stop]);
-  return <PlayerCtx.Provider value={{ playing, play, stop, error }}>{children}</PlayerCtx.Provider>;
+  const toggleLast = useCallback(() => {
+    if (playing) { stop(); return; }
+    if (last.current) play(last.current.path, last.current.bust);
+  }, [playing, play, stop]);
+  const value = useMemo(() => ({ playing, play, stop, toggleLast, error }), [playing, play, stop, toggleLast, error]);
+  return <PlayerCtx.Provider value={value}>{children}</PlayerCtx.Provider>;
 }
 
 export function usePlayer(): PlayerApi {
@@ -49,21 +59,72 @@ export function PlayButton({ path, label, bust }: { path: string | null; label: 
   const p = usePlayer();
   const on = path !== null && p.playing === path;
   return (
-    <button className="small" disabled={!path} onClick={() => path && p.play(path, bust)} aria-label={`${on ? "Stop" : "Play"} ${label}`}>
-      {on ? "■ Stop" : "▶ Play"}
+    <button className="small icon" disabled={!path} onClick={() => path && p.play(path, bust)} aria-label={`${on ? "Stop" : "Play"} ${label}`} aria-pressed={on} data-tip={path ? undefined : "Nothing to play yet"}>
+      {on ? <I.Stop size={14} /> : <I.Play size={14} />}
     </button>
   );
 }
 
-export function LicenceChip({ licence, note }: { licence: Licence; note?: string }) {
-  const icon = licence === "commercial" ? "✓" : licence === "non-commercial" ? "✕" : "?";
+/* ------------------------------------------------------------------ waveform */
+const waveCache = new Map<string, number[]>();
+
+/** A take's or asset's waveform: the shape of the sound over time. Fetched once per file. */
+export function Waveform({ projectId, file, bins = 96, tone = "teal", dim = false, height = 36, label, fill = false }: {
+  projectId: string; file: string | null; bins?: number; tone?: "teal" | "gold"; dim?: boolean; height?: number; label?: string; fill?: boolean;
+}) {
+  const key = file ? `${projectId}/${file}/${bins}` : "";
+  const [peaks, setPeaks] = useState<number[] | null>(key ? waveCache.get(key) ?? null : null);
+  useEffect(() => {
+    if (!file) { setPeaks(null); return; }
+    const hit = waveCache.get(key);
+    if (hit) { setPeaks(hit); return; }
+    let live = true;
+    api.waveform(projectId, file, bins).then((p) => { waveCache.set(key, p); if (live) setPeaks(p); }).catch(() => { if (live) setPeaks([]); });
+    return () => { live = false; };
+  }, [projectId, file, bins, key]);
+  return <PeaksView peaks={peaks} bins={bins} tone={tone} dim={dim} height={height} label={label} fill={fill} />;
+}
+
+export function PeaksView({ peaks, bins = 96, tone = "teal", dim = false, height = 36, label, fill = false }: { peaks: number[] | null; bins?: number; tone?: "teal" | "gold"; dim?: boolean; height?: number; label?: string; fill?: boolean }) {
+  if (!peaks) return <div className="skeleton" style={{ height }} aria-hidden="true" />;
+  if (peaks.length === 0) return <div className="faint small" style={{ height, display: "grid", alignItems: "center" }}>No waveform available</div>;
+  const n = peaks.length;
+  const w = 100 / n;
   return (
-    <span className={`chip ${licenceClass(licence)}`} title={note}>
-      <span aria-hidden="true">{icon}</span> {licenceText(licence)}
-    </span>
+    <svg className={`wave ${tone === "gold" ? "gold" : ""} ${dim ? "dim" : ""}`} viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" style={fill ? { height: "100%" } : { height }} role="img" aria-label={label ?? "Waveform"}>
+      {peaks.map((p, i) => {
+        const h = Math.max(1, p * (height - 2));
+        return <rect key={i} x={i * w + w * 0.14} y={(height - h) / 2} width={w * 0.72} height={h} rx={0.3} />;
+      })}
+      <title>{label ?? `Waveform of ${bins} slices`}</title>
+    </svg>
   );
 }
 
+/* ------------------------------------------------------------------ chips and small parts */
+export function LicenceChip({ licence, note }: { licence: Licence; note?: string }) {
+  const icon = licence === "commercial" ? <I.Check size={12} /> : licence === "non-commercial" ? <I.Close size={12} /> : <I.Info size={12} />;
+  return <span className={`chip ${licenceClass(licence)}`} title={note}>{icon} {licenceText(licence)}</span>;
+}
+
+export function CostBadge({ cost }: { cost: "free" | "paid" | "mixed" }) {
+  return cost === "free"
+    ? <span className="chip info" title="Runs on this computer"><I.Device size={12} /> Free</span>
+    : cost === "paid"
+      ? <span className="chip gold" title="Uses your provider account"><I.Cloud size={12} /> Paid</span>
+      : <span className="chip gold" title="Free with Windows voices; cloud voices use your provider account"><I.Cloud size={12} /> Free or paid</span>;
+}
+
+export function Kbd({ combo }: { combo: string }) {
+  return <>{combo.split("+").map((k, i) => <kbd key={i} style={{ marginLeft: i ? 3 : 0 }}>{k}</kbd>)}</>;
+}
+
+/** A small "?" that explains a term in plain language. Keyboard and screen-reader friendly. */
+export function Help({ text }: { text: string }) {
+  return <button type="button" className="help-dot" data-tip={text} aria-label={`What is this? ${text}`}>?</button>;
+}
+
+/* ------------------------------------------------------------------ toast */
 export interface ToastMsg { text: string; bad?: boolean }
 
 export function Toast({ toast, onClose }: { toast: ToastMsg | null; onClose: () => void }) {
@@ -75,28 +136,61 @@ export function Toast({ toast, onClose }: { toast: ToastMsg | null; onClose: () 
   if (!toast) return null;
   return (
     <div className={`toast ${toast.bad ? "bad" : ""}`} role={toast.bad ? "alert" : "status"}>
-      {toast.text} <button className="ghost small" onClick={onClose} aria-label="Dismiss">✕</button>
+      <span style={{ color: toast.bad ? "var(--err)" : "var(--teal-text)", paddingTop: 2 }}>{toast.bad ? <I.Alert size={16} /> : <I.Check size={16} />}</span>
+      <span style={{ flex: 1 }}>{toast.text}</span>
+      <button className="ghost small icon" onClick={onClose} aria-label="Dismiss"><I.Close size={14} /></button>
     </div>
   );
 }
 
-/** Confirmation that names the thing being deleted (UX_GOLDEN_PATH section 3). */
-export function Confirm(props: { title: string; body: ReactNode; confirmLabel: string; onConfirm: () => void; onCancel: () => void }) {
-  const ref = useRef<HTMLButtonElement>(null);
-  useEffect(() => { ref.current?.focus(); }, []);
+/* ------------------------------------------------------------------ dialog with focus trap */
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+export function useDialog(onClose: () => void, initialFocus?: React.RefObject<HTMLElement | null>) {
+  const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") props.onCancel(); };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [props]);
+    const prev = document.activeElement as HTMLElement | null;
+    const node = ref.current;
+    (initialFocus?.current ?? node?.querySelector<HTMLElement>(FOCUSABLE) ?? node)?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
+      if (e.key !== "Tab" || !node) return;
+      const items = [...node.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((x) => x.offsetParent !== null);
+      if (items.length === 0) { e.preventDefault(); return; }
+      const first = items[0]!, lastEl = items[items.length - 1]!;
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); lastEl.focus(); }
+      else if (!e.shiftKey && document.activeElement === lastEl) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => { document.removeEventListener("keydown", onKey, true); prev?.focus?.(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return ref;
+}
+
+export function Dialog(props: { title: string; children: ReactNode; onClose: () => void; wide?: boolean; label?: string }) {
+  const ref = useDialog(props.onClose);
   return (
-    <div className="modal-back" role="dialog" aria-modal="true" aria-label={props.title}>
-      <div className="modal">
+    <div className="scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
+      <div className={`dialog ${props.wide ? "wide" : ""}`} role="dialog" aria-modal="true" aria-label={props.label ?? props.title} ref={ref}>
+        {props.children}
+      </div>
+    </div>
+  );
+}
+
+/** Confirmation that names the thing being changed (UX_GOLDEN_PATH section 3). */
+export function Confirm(props: { title: string; body: ReactNode; confirmLabel: string; onConfirm: () => void; onCancel: () => void; danger?: boolean }) {
+  const cancel = useRef<HTMLButtonElement>(null);
+  const ref = useDialog(props.onCancel, cancel);
+  return (
+    <div className="scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onCancel(); }}>
+      <div className="dialog" role="alertdialog" aria-modal="true" aria-label={props.title} ref={ref}>
         <h2>{props.title}</h2>
-        <div style={{ marginBottom: 16 }}>{props.body}</div>
+        <div style={{ marginBottom: 20 }} className="muted">{props.body}</div>
         <div className="row" style={{ justifyContent: "flex-end" }}>
-          <button ref={ref} onClick={props.onCancel}>Cancel</button>
-          <button className="danger" onClick={props.onConfirm}>{props.confirmLabel}</button>
+          <button ref={cancel} onClick={props.onCancel}>Cancel</button>
+          <button className={props.danger === false ? "primary" : "danger"} onClick={props.onConfirm}>{props.confirmLabel}</button>
         </div>
       </div>
     </div>
@@ -112,12 +206,6 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
   );
 }
 
-export function Logo() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
-      {[4, 9, 14, 9, 5].map((h, i) => (
-        <rect key={i} x={1 + i * 4.2} y={11 - h / 2 - 0.5} width="2.6" height={h + 1} rx="1.3" fill="var(--signal)" />
-      ))}
-    </svg>
-  );
+export function Logo({ size = 28 }: { size?: number }) {
+  return <img src="/brand/logo-64.png" width={size} height={size} alt="" aria-hidden="true" style={{ display: "block" }} />;
 }

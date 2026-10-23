@@ -23,7 +23,7 @@ export function LicenceEditor(props: { initial: LicenceInfo; onSave: (info: Lice
   };
 
   return (
-    <div className="col" style={{ background: "var(--obsidian)", padding: 10, borderRadius: 6, border: "1px solid var(--line)" }}>
+    <div className="col" style={{ background: "var(--bg)", padding: 10, borderRadius: 6, border: "1px solid var(--line-strong)" }}>
       <div className="row" style={{ alignItems: "end" }}>
         <div>
           <label>What the terms say</label>

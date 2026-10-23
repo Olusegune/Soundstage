@@ -243,6 +243,7 @@ export interface Loudness {
 
 export interface MixPreview {
   path: string;
+  peaks: number[];
   loudness: Loudness;
   target_lufs: number;
   gain_db: number;

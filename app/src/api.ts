@@ -26,6 +26,7 @@ export const api = {
   previewVoice: (voiceId: string, text: string) => invoke<{ path: string }>("preview_voice", { voiceId, text }),
   analyze: (project: Project) => invoke<Analysis>("analyze_project", { project }),
   renderLines: (project: Project, keys: string[]) => invoke<RenderOutcome>("render_lines", { project, keys }),
+  waveform: (projectId: string, file: string, bins: number) => invoke<number[]>("waveform", { projectId, file, bins }),
   layout: (project: Project) => invoke<Layout>("compute_layout", { project }),
   destinations: () => invoke<Destination[]>("destinations"),
   mixPreview: (project: Project) => invoke<MixPreview>("mix_preview", { project }),

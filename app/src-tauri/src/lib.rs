@@ -158,6 +158,8 @@ async fn preview_voice(state: State<'_, AppState>, voice_id: String, text: Strin
 #[derive(Serialize)]
 struct MixPreview {
     path: String,
+    /// 0..1 peak envelope of the whole mix, for drawing.
+    peaks: Vec<f32>,
     loudness: soundstage_core::loudness::Loudness,
     target_lufs: f64,
     gain_db: f64,
@@ -182,6 +184,7 @@ async fn mix_preview(state: State<'_, AppState>, project: Project) -> Result<Mix
         soundstage_core::audio::write_wav_24(&path, &out.master)?;
         Ok(MixPreview {
             path: path.to_string_lossy().to_string(),
+            peaks: soundstage_core::audio::peaks_of(&[&out.master.l, &out.master.r], 900),
             loudness: out.loudness,
             target_lufs: dest.target_lufs,
             gain_db: out.gain_db,
@@ -248,6 +251,16 @@ async fn render_lines(app: AppHandle, state: State<'_, AppState>, project: Proje
         RenderOutcome { new_takes: p.takes[before..].to_vec(), selected, results }
     })
     .await
+}
+
+/// Peak envelope of a take or asset inside a project, for drawing waveforms.
+#[tauri::command]
+async fn waveform(state: State<'_, AppState>, project_id: String, file: String, bins: usize) -> Result<Vec<f32>, String> {
+    let dir = state.store.dir(&project_id)?;
+    if !soundstage_core::project::safe_relative(&file) {
+        return Err("That is not a file inside the project.".into());
+    }
+    blocking(move || soundstage_core::audio::peaks(&dir.join(file), bins)).await?
 }
 
 #[tauri::command]
@@ -401,6 +414,7 @@ pub fn run() {
             analyze_project,
             render_lines,
             compute_layout,
+            waveform,
             destinations,
             check_export,
             export_project,

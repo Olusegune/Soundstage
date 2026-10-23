@@ -60,6 +60,7 @@ export function CastStep({ ctx }: { ctx: Ctx }) {
   return (
     <div className="page">
       {voices.length === 0 && <div className="callout warn"><strong>Looking for voices on this computer…</strong>This takes a moment the first time.</div>}
+      <div className="voice-grid">
       {analysis.parsed.speakers.map((speaker) => {
         const ch = project.characters[speaker];
         const v = voices.find((x) => x.id === ch?.voice_id);
@@ -68,7 +69,7 @@ export function CastStep({ ctx }: { ctx: Ctx }) {
         const missing = v ? needs.filter((t) => !v.tags.includes(t)) : [];
         const bible = ch?.bible ?? emptyBible();
         return (
-          <div className="card" key={speaker}>
+          <div className={`voice-card ${v ? "ready" : ""}`} key={speaker}>
             <div className="row" style={{ marginBottom: 8 }}>
               <h2 style={{ margin: 0 }} className="speaker">{speaker}</h2>
               <span className="muted small">{lines.length} line{lines.length === 1 ? "" : "s"}</span>
@@ -105,7 +106,7 @@ export function CastStep({ ctx }: { ctx: Ctx }) {
                 {v?.name} cannot perform {missing.map((t) => `[${t}]`).join(", ")}, which {speaker} uses. Pick another voice or remove the tag in Direct. Nothing is dropped silently.
               </div>
             )}
-            <details style={{ marginTop: 8 }}>
+            {ctx.mode === "advanced" && <details style={{ marginTop: 8 }}>
               <summary className="small muted" style={{ cursor: "pointer" }}>Character notes (age, background, habits)</summary>
               <div className="grid2" style={{ marginTop: 8, gridTemplateColumns: "1fr 1fr" }}>
                 {(["age", "background", "speech_habits", "emotional_range", "notes"] as const).map((f) => (
@@ -117,10 +118,11 @@ export function CastStep({ ctx }: { ctx: Ctx }) {
                 ))}
               </div>
               <p className="small muted">These notes stay with the project. Today they are context for you; a voice uses them only where its provider accepts context.</p>
-            </details>
+            </details>}
           </div>
         );
       })}
+      </div>
       {pending && (
         <Confirm
           title={`Change ${pending.speaker}'s voice?`}

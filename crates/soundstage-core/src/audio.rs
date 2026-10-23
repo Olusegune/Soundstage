@@ -169,6 +169,29 @@ pub fn write_wav_16_mono(path: &Path, samples: &[f32], rate: u32) -> Result<(), 
     w.finalize().map_err(|e| e.to_string())
 }
 
+pub const MAX_PEAK_BINS: usize = 2000;
+
+/// Peak envelope for drawing a waveform: `bins` values in 0..=1, the loudest sample (any channel) in each slice.
+pub fn peaks_of(channels: &[&[f32]], bins: usize) -> Vec<f32> {
+    let bins = bins.clamp(8, MAX_PEAK_BINS);
+    let len = channels.iter().map(|c| c.len()).max().unwrap_or(0);
+    if len == 0 {
+        return vec![0.0; bins];
+    }
+    (0..bins)
+        .map(|b| {
+            let (s, e) = (b * len / bins, ((b + 1) * len / bins).max(b * len / bins + 1).min(len));
+            channels.iter().flat_map(|c| c[s.min(c.len())..e.min(c.len())].iter()).fold(0.0f32, |m, x| m.max(x.abs())).min(1.0)
+        })
+        .collect()
+}
+
+pub fn peaks(path: &Path, bins: usize) -> Result<Vec<f32>, String> {
+    let d = read_wav(path)?;
+    let refs: Vec<&[f32]> = d.channels.iter().map(|c| c.as_slice()).collect();
+    Ok(peaks_of(&refs, bins))
+}
+
 /// Planted-defect checks run on every render (TEST_PLAN.md section 3).
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct QualityReport {
@@ -234,6 +257,19 @@ mod tests {
         let q = quality(&x, 1000);
         assert_eq!(q.clipped_samples, 1);
         assert!(q.longest_silence_ms >= 3999);
+    }
+
+    #[test]
+    fn peaks_follow_the_shape_of_the_sound_and_stay_in_range() {
+        let mut x = vec![0.0f32; 1000];
+        for v in x.iter_mut().skip(500) { *v = -0.8; }
+        let p = peaks_of(&[&x], 10);
+        assert_eq!(p.len(), 10);
+        assert!(p[..5].iter().all(|v| *v == 0.0));
+        assert!(p[5..].iter().all(|v| (*v - 0.8).abs() < 1e-6), "negative samples count by size");
+        assert_eq!(peaks_of(&[&[]], 50).len(), 50);
+        assert_eq!(peaks_of(&[&x], 1_000_000).len(), MAX_PEAK_BINS);
+        assert_eq!(peaks_of(&[&[5.0, -5.0]], 8).iter().cloned().fold(0.0, f32::max), 1.0);
     }
 
     #[test]

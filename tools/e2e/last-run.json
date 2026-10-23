@@ -1,0 +1,80 @@
+{
+  "when": "2026-10-23T16:36:22.251Z",
+  "passed": 124,
+  "total": 124,
+  "failed": [],
+  "timings": {
+    "paletteOpenMs": 78,
+    "stepSwitchMs": 433
+  },
+  "accessibility": [
+    {
+      "screen": "shortcut reference dialog",
+      "violations": []
+    },
+    {
+      "screen": "help centre",
+      "violations": []
+    },
+    {
+      "screen": "settings (dark)",
+      "violations": []
+    },
+    {
+      "screen": "settings (light)",
+      "violations": []
+    },
+    {
+      "screen": "script (light)",
+      "violations": []
+    },
+    {
+      "screen": "cast (light)",
+      "violations": []
+    },
+    {
+      "screen": "direct (light)",
+      "violations": []
+    },
+    {
+      "screen": "render (light)",
+      "violations": []
+    },
+    {
+      "screen": "mix (light)",
+      "violations": []
+    },
+    {
+      "screen": "export (light)",
+      "violations": []
+    },
+    {
+      "screen": "script (dark)",
+      "violations": []
+    },
+    {
+      "screen": "cast (dark)",
+      "violations": []
+    },
+    {
+      "screen": "direct (dark)",
+      "violations": []
+    },
+    {
+      "screen": "render (dark)",
+      "violations": []
+    },
+    {
+      "screen": "mix (dark)",
+      "violations": []
+    },
+    {
+      "screen": "export (dark)",
+      "violations": []
+    },
+    {
+      "screen": "home (dark)",
+      "violations": []
+    }
+  ]
+}
