@@ -55,7 +55,12 @@ impl RegistryCell {
     fn get(&self) -> Arc<Registry> {
         let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         // A damaged engines file must never stop the app from starting; Settings shows what is wrong with it.
-        g.get_or_insert_with(|| Arc::new(Registry::standard(key_provider(), &EnginesConfig::load(&self.config_path).unwrap_or_default()))).clone()
+        g.get_or_insert_with(|| Arc::new(Registry::standard(key_provider(), &EnginesConfig::load(&self.config_path).unwrap_or_default()).with_clones(self.consent_store().list()))).clone()
+    }
+    /// Consent records live beside the projects folder's other private data, never inside a project.
+    fn consent_store(&self) -> soundstage_core::clone::ConsentStore {
+        let root = self.config_path.parent().and_then(|p| p.parent()).map(|p| p.to_path_buf()).unwrap_or_default();
+        soundstage_core::clone::ConsentStore::new(root.join(".consent"))
     }
     fn reset(&self) {
         *self.inner.lock().unwrap_or_else(|e| e.into_inner()) = None;
@@ -399,6 +404,97 @@ async fn improve_prompt(base_url: String, model: String, kind: soundstage_core::
     .await?
 }
 
+#[derive(Serialize)]
+struct CloneInfo {
+    statement: &'static str,
+    min_seconds: f32,
+    good_seconds: f32,
+    max_seconds: f32,
+}
+
+#[tauri::command]
+fn clone_info() -> CloneInfo {
+    CloneInfo { statement: soundstage_core::clone::STATEMENT, min_seconds: soundstage_core::clone::MIN_REFERENCE_S, good_seconds: soundstage_core::clone::GOOD_REFERENCE_S, max_seconds: soundstage_core::clone::MAX_REFERENCE_S }
+}
+
+fn load_reference(path: &str) -> Result<soundstage_core::audio::Stereo, String> {
+    let src = PathBuf::from(path);
+    let meta = std::fs::metadata(&src).map_err(|e| format!("Could not open that file: {e}"))?;
+    if !meta.is_file() {
+        return Err("Choose a file, not a folder.".to_string());
+    }
+    if meta.len() > MAX_ASSET_BYTES {
+        return Err("That file is larger than 500 MB.".to_string());
+    }
+    let ext = src.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).unwrap_or_default();
+    if !soundstage_core::decode::IMPORT_EXTENSIONS.contains(&ext.as_str()) {
+        return Err("Choose a WAV, MP3, FLAC, Ogg or M4A recording.".to_string());
+    }
+    Ok(soundstage_core::audio::to_mix_format(&soundstage_core::decode::decode_file(&src)?))
+}
+
+/// Judge a recording before anything is sent. Nothing leaves this computer here.
+#[tauri::command]
+async fn clone_check_reference(path: String) -> Result<soundstage_core::clone::RefReport, String> {
+    blocking(move || Ok(soundstage_core::clone::check_reference(&load_reference(&path)?))).await?
+}
+
+/// Create a voice from a recording, with the owner's recorded consent. The record is saved on this computer first; only
+/// the trimmed recording and a display name are sent to the provider.
+#[tauri::command]
+async fn clone_voice(state: State<'_, AppState>, adapter_id: String, path: String, name: String, attestation: soundstage_core::clone::Attestation) -> Result<soundstage_core::clone::ClonedVoice, String> {
+    let (_, reg) = shared(&state);
+    let cell = reg.clone();
+    let out = blocking(move || {
+        let rec = soundstage_core::clone::build_record(&attestation, &soundstage_core::clone::ConsentStore::new_record_id()).map_err(|p| p.join(" "))?;
+        let audio = load_reference(&path)?;
+        let report = soundstage_core::clone::check_reference(&audio);
+        if !report.problems.is_empty() {
+            return Err(report.problems.join(" "));
+        }
+        let wav = soundstage_core::clone::encode_sample(&audio)?;
+        let registry = reg.get();
+        let adapter = registry.adapter(&adapter_id).ok_or("That provider is not available.")?;
+        if !adapter.ready() {
+            return Err("Save this provider's key first.".to_string());
+        }
+        soundstage_core::clone::run_clone(adapter, &reg.consent_store(), rec, &name, wav)
+    })
+    .await??;
+    cell.reset();
+    Ok(out)
+}
+
+#[tauri::command]
+async fn consent_list(state: State<'_, AppState>) -> Result<Vec<soundstage_core::clone::CloneEntry>, String> {
+    let (_, reg) = shared(&state);
+    blocking(move || reg.consent_store().list()).await
+}
+
+/// Withdraw consent. New renders and exports with the voice stop at once. When asked, the voice is also deleted from the
+/// provider; if that fails, consent is still revoked and the message says so.
+#[tauri::command]
+async fn consent_revoke(state: State<'_, AppState>, consent_id: String, delete_remote: bool) -> Result<String, String> {
+    let (_, reg) = shared(&state);
+    let cell = reg.clone();
+    let msg = blocking(move || {
+        let voice = reg.consent_store().revoke(&consent_id)?;
+        let mut msg = format!("Consent revoked. {} can no longer be used in Soundstage.", voice.name);
+        if delete_remote {
+            let registry = reg.get();
+            match registry.adapter(&voice.adapter_id).map(|a| a.delete_voice(&voice.voice_id)) {
+                Some(Ok(())) => msg.push_str(" The voice was also deleted from the provider."),
+                Some(Err(e)) => msg.push_str(&format!(" It could not be deleted from the provider ({e}); delete it there yourself.")),
+                None => msg.push_str(" The provider is not available, so delete the voice there yourself."),
+            }
+        }
+        Ok::<String, String>(msg)
+    })
+    .await??;
+    cell.reset();
+    Ok(msg)
+}
+
 #[tauri::command]
 async fn list_generators(state: State<'_, AppState>) -> Result<Vec<GeneratorView>, String> {
     let (_, reg) = shared(&state);
@@ -465,13 +561,15 @@ struct DesignerView {
     id: String,
     label: String,
     ready: bool,
+    design: bool,
+    clone: bool,
 }
 
 #[tauri::command]
 async fn list_designers(state: State<'_, AppState>) -> Result<Vec<DesignerView>, String> {
     let (_, reg) = shared(&state);
     blocking(move || {
-        reg.get().adapters.iter().filter(|a| a.capabilities().voice_design).map(|a| DesignerView { id: a.id().into(), label: a.label().into(), ready: a.ready() }).collect()
+        reg.get().adapters.iter().filter(|a| a.capabilities().voice_design || a.capabilities().cloning).map(|a| DesignerView { id: a.id().into(), label: a.label().into(), ready: a.ready(), design: a.capabilities().voice_design, clone: a.capabilities().cloning }).collect()
     })
     .await
 }
@@ -844,6 +942,11 @@ pub fn run() {
             import_asset,
             test_connection,
             improve_prompt,
+            clone_info,
+            clone_check_reference,
+            clone_voice,
+            consent_list,
+            consent_revoke,
             quit_app,
             system_check,
             write_diagnostics,

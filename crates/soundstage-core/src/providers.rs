@@ -75,6 +75,15 @@ pub struct RenderRequest {
     pub language: String,
 }
 
+/// A request to clone a voice. The proof makes it impossible to build without a clean consent record.
+#[derive(Debug)]
+pub struct CloneRequest {
+    pub name: String,
+    /// 16-bit mono WAV of the owner speaking, already checked.
+    pub sample_wav: Vec<u8>,
+    pub proof: crate::consent::ConsentProof,
+}
+
 #[derive(Clone, Debug)]
 pub struct DesignRequest {
     pub description: String,
@@ -125,6 +134,16 @@ pub trait Adapter: Send + Sync {
     /// Keep one candidate as a permanent voice.
     fn save_designed_voice(&self, _generated_id: &str, _name: &str, _description: &str) -> Result<Voice, AdapterError> {
         Err(AdapterError::ProviderError("this voice engine cannot design voices".into()))
+    }
+    /// Tell the provider a voice id outside its own list (a clone the user made) may be rendered.
+    fn allow_voice(&self, _id: &str) {}
+    /// Create a voice from a recording. Returns the new voice's id. Only some providers can.
+    fn clone_voice(&self, _req: &CloneRequest) -> Result<String, AdapterError> {
+        Err(AdapterError::ProviderError("this voice engine cannot clone voices".into()))
+    }
+    /// Remove a voice this provider holds for the user.
+    fn delete_voice(&self, _voice_id: &str) -> Result<(), AdapterError> {
+        Err(AdapterError::ProviderError("this voice engine cannot delete voices".into()))
     }
     /// True when script text leaves this computer to be rendered. The UI asks before sending.
     fn sends_data(&self) -> bool {
@@ -257,11 +276,13 @@ pub struct Registry {
     pub adapters: Vec<Box<dyn Adapter>>,
     pub voices: Vec<Voice>,
     pub generators: Vec<Box<dyn crate::generate::Generator>>,
+    /// Consent record for every cloned voice, by voice id. A voice in this map is usable only while its record is clean.
+    pub consents: std::collections::BTreeMap<String, crate::consent::ConsentRecord>,
 }
 
 impl Registry {
     pub fn new(adapters: Vec<Box<dyn Adapter>>) -> Self {
-        let mut r = Registry { adapters, voices: vec![], generators: vec![] };
+        let mut r = Registry { adapters, voices: vec![], generators: vec![], consents: Default::default() };
         r.refresh();
         r
     }
@@ -297,6 +318,39 @@ impl Registry {
         let mut reg = Registry::new(adapters);
         reg.generators = generators;
         reg
+    }
+
+    /// Add the voices the user cloned, each tied to its consent record. They appear in the library like any other voice.
+    pub fn with_clones(mut self, entries: Vec<crate::clone::CloneEntry>) -> Self {
+        for e in entries {
+            if self.adapter(&e.voice.adapter_id).is_none() || self.voices.iter().any(|v| v.id == e.voice.voice_id) {
+                continue;
+            }
+            let commercial = e.consent.commercial_use_permitted;
+            self.voices.push(Voice {
+                id: e.voice.voice_id.clone(),
+                name: format!("{} (cloned)", e.voice.name),
+                provider: e.voice.adapter_id.clone(),
+                language: "en".into(),
+                accent: String::new(),
+                gender: String::new(),
+                age_range: String::new(),
+                licence: licence_info(if commercial { Licence::Commercial } else { Licence::NonCommercial }, &format!("consent record {}", e.consent.id), &crate::util::today_string(), "Cloned with the voice owner's recorded consent. The provider's own terms still apply to the model."),
+                sample_text: "Hello, this is a short sample of my voice.".into(),
+                notes: format!("Voice of {}. Usable only while the consent record is active.", e.consent.voice_subject),
+            });
+            if let Some(a) = self.adapter(&e.voice.adapter_id) {
+                a.allow_voice(&e.voice.voice_id);
+            }
+            self.consents.insert(e.voice.voice_id, e.consent);
+        }
+        self
+    }
+
+    /// Why a cloned voice cannot be used right now. `None` for ordinary voices and for cloned voices with clean consent.
+    pub fn consent_problems(&self, voice_id: &str, commercial: bool) -> Option<Vec<String>> {
+        let rec = self.consents.get(voice_id)?;
+        crate::consent::require(Some(rec), &crate::consent::Use::Dialogue, commercial).err()
     }
 
     pub fn refresh(&mut self) {

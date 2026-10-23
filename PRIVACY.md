@@ -8,6 +8,7 @@ Your projects, scripts, takes, mixes and exports are saved in `Documents\Soundst
 ## What can leave your computer, and only when you choose it
 Soundstage asks before sending anything. Depending on what you set up:
 - **Online voices (ElevenLabs, OpenRouter, other online engines you add):** the text of the lines you render, and the voice you chose.
+- **Voice cloning:** the recording of the voice (trimmed to three minutes), and the name you give the voice, sent to the provider you chose. The consent record is saved only on your computer and is never sent.
 - **Music, effects and voice design:** the description you typed, sent to the service you chose (ElevenLabs, Kie, fal).
 - **AI prompt helper:** the description you typed, sent to the chat server you set in Settings. If that is Ollama on your computer, nothing leaves it.
 Local engines, Piper, ComfyUI on this computer and Windows voices send nothing.

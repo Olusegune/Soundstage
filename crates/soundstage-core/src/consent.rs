@@ -104,6 +104,15 @@ pub fn require(rec: Option<&ConsentRecord>, use_: &Use, commercial: bool) -> Res
     }
 }
 
+/// Evidence that a clean consent record was checked. It cannot be built anywhere else, so any code that needs one
+/// (such as asking a provider to clone a voice) must have gone through the consent check first.
+#[derive(Debug)]
+pub struct ConsentProof(());
+
+pub fn proof(rec: &ConsentRecord, use_: &Use, commercial: bool) -> Result<ConsentProof, Vec<String>> {
+    require(Some(rec), use_, commercial).map(|_| ConsentProof(()))
+}
+
 pub fn revoke(rec: &mut ConsentRecord) -> Result<(), String> {
     if !rec.revocable {
         return Err("This record is marked not revocable, which Soundstage does not accept.".into());

@@ -363,9 +363,26 @@ export interface GeneratorInfo {
   licence: LicenceInfo;
   notes: string;
 }
-export interface DesignerInfo { id: string; label: string; ready: boolean }
+export interface DesignerInfo { id: string; label: string; ready: boolean; design: boolean; clone: boolean }
 export interface DesignPreview { generated_voice_id: string; path: string }
 
 export interface EnginesView { config: EnginesConfig; load_error: string | null; keys: Record<string, boolean> }
 
 export interface SystemCheck { id: string; label: string; status: "ok" | "info" | "warn"; detail: string; fix: string }
+
+export interface Attestation {
+  subject: string;
+  subject_is_self: boolean;
+  adult: boolean;
+  alive: boolean;
+  not_public_figure: boolean;
+  agrees: boolean;
+  purpose: string;
+  commercial: boolean;
+  expires: string | null;
+}
+export interface CloneInfo { statement: string; min_seconds: number; good_seconds: number; max_seconds: number }
+export interface RefReport { seconds: number; used_seconds: number; peak: number; clipped_pct: number; silence_pct: number; problems: string[]; warnings: string[] }
+export interface ConsentRecord { id: string; voice_subject: string; subject_is_self: boolean; purpose: string; commercial_use_permitted: boolean; expires: string | null; signed_at: string | null; status: "active" | "revoked" | "expired" }
+export interface ClonedVoice { voice_id: string; adapter_id: string; name: string; consent_id: string; created: string }
+export interface CloneEntry { voice: ClonedVoice; consent: ConsentRecord }

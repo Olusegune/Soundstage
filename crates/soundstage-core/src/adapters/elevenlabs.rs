@@ -33,6 +33,23 @@ const RATE: u32 = 24_000;
 const MAX_AUDIO_BYTES: usize = RATE as usize * 2 * 600;
 const MAX_JSON_BYTES: usize = 4 * 1024 * 1024;
 const MAX_VOICE_PAGES: usize = 10;
+const MAX_CLONE_BYTES: usize = 10 * 1024 * 1024;
+
+/// A multipart/form-data body with text fields and one file. Field values are ours (never raw user bytes in a header),
+/// and the boundary is random, so nothing in the audio can end a part early.
+fn multipart(fields: &[(&str, &str)], file: (&str, &str, &str, &[u8])) -> (String, Vec<u8>) {
+    let boundary = format!("----soundstage{}", crate::util::new_id("b"));
+    let mut b = Vec::new();
+    for (k, v) in fields {
+        let v: String = v.chars().filter(|c| !c.is_control()).collect();
+        b.extend_from_slice(format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n").as_bytes());
+    }
+    let (field, filename, ctype, bytes) = file;
+    b.extend_from_slice(format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"{filename}\"\r\nContent-Type: {ctype}\r\n\r\n").as_bytes());
+    b.extend_from_slice(bytes);
+    b.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+    (boundary, b)
+}
 const RETRIES: u32 = 3;
 
 /// Canonical tag to Eleven v3 audio tag. Only tags ElevenLabs documents are mapped; the rest
@@ -54,6 +71,7 @@ pub struct ElevenLabsAdapter {
     keys: KeyProvider,
     base: String,
     agent: ureq::Agent,
+    extra: Mutex<Vec<String>>,
     voices: Mutex<Option<Vec<Voice>>>,
     retry_delay: Duration,
     max_audio_bytes: usize,
@@ -72,7 +90,7 @@ impl ElevenLabsAdapter {
             .timeout_read(Duration::from_secs(90))
             .user_agent("Soundstage")
             .build();
-        ElevenLabsAdapter { keys, base, agent, voices: Mutex::new(None), retry_delay, max_audio_bytes }
+        ElevenLabsAdapter { keys, base, agent, voices: Mutex::new(None), extra: Mutex::new(Vec::new()), retry_delay, max_audio_bytes }
     }
 
     #[cfg(test)]
@@ -272,7 +290,7 @@ impl Adapter for ElevenLabsAdapter {
             languages,
             tags: ["laugh", "sigh", "whisper", "excited", "sarcastic", "curious", "cry"].iter().map(|s| s.to_string()).collect(),
             voice_design: true,
-            cloning: false,
+            cloning: true,
             // Eleven v3 allows 5,000 characters; leave room for the tags the adapter adds.
             max_chars_per_request: 4500,
             streaming: false,
@@ -326,6 +344,45 @@ impl Adapter for ElevenLabsAdapter {
         }
         Ok(out)
     }
+    fn allow_voice(&self, id: &str) {
+        let mut g = self.extra.lock().unwrap_or_else(|e| e.into_inner());
+        if !g.iter().any(|v| v == id) && g.len() < 500 {
+            g.push(id.to_string());
+        }
+    }
+    fn clone_voice(&self, req: &CloneRequest) -> Result<String, AdapterError> {
+        let name: String = req.name.split_whitespace().collect::<Vec<_>>().join(" ");
+        if name.is_empty() || name.chars().count() > 60 || name.chars().any(|c| c.is_control()) {
+            return Err(AdapterError::ProviderError("the voice name is not valid".into()));
+        }
+        if req.sample_wav.len() < 1000 || req.sample_wav.len() > MAX_CLONE_BYTES || !req.sample_wav.starts_with(b"RIFF") {
+            return Err(AdapterError::ProviderError("the recording is not valid".into()));
+        }
+        let (boundary, body) = multipart(&[("name", &name), ("remove_background_noise", "false"), ("description", "Created in Soundstage.")], ("files", "sample.wav", "audio/wav", &req.sample_wav));
+        // One attempt only: a retry after a timeout could create the voice twice.
+        let key = self.key()?;
+        let res = self.agent.request("POST", &format!("{}/v1/voices/add", self.base)).set("xi-api-key", &key).set("content-type", &format!("multipart/form-data; boundary={boundary}")).send_bytes(&body);
+        let res = match res {
+            Ok(r) if r.status() == 200 => r,
+            Ok(r) => return Err(AdapterError::ProviderError(format!("unexpected HTTP {}", r.status()))),
+            Err(ureq::Error::Status(code, r)) => return Err(map_status(code, r)),
+            Err(ureq::Error::Transport(_)) => return Err(AdapterError::Network),
+        };
+        let v = crate::net::read_json(res, 1 << 20)?;
+        let vid = v["voice_id"].as_str().filter(|i| valid_voice_id(i)).ok_or_else(|| AdapterError::ProviderError("the provider did not confirm the voice".into()))?;
+        *self.voices.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        Ok(format!("elevenlabs:{vid}"))
+    }
+    fn delete_voice(&self, voice_id: &str) -> Result<(), AdapterError> {
+        let bare = voice_id.strip_prefix("elevenlabs:").unwrap_or("");
+        if !valid_voice_id(bare) {
+            return Err(AdapterError::ProviderError("that voice id is not valid".into()));
+        }
+        self.call("DELETE", &format!("/v1/voices/{bare}"), None)?;
+        *self.voices.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        self.extra.lock().unwrap_or_else(|e| e.into_inner()).retain(|v| v != voice_id);
+        Ok(())
+    }
     fn save_designed_voice(&self, generated_id: &str, name: &str, description: &str) -> Result<Voice, AdapterError> {
         let name: String = name.split_whitespace().collect::<Vec<_>>().join(" ");
         let desc: String = description.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -347,7 +404,7 @@ impl Adapter for ElevenLabsAdapter {
         // Validate everything locally before any network call.
         precheck(&self.capabilities(), req)?;
         let bare = req.voice_id.strip_prefix("elevenlabs:").unwrap_or("");
-        let known = self.voices().iter().any(|v| v.id == req.voice_id);
+        let known = self.voices().iter().any(|v| v.id == req.voice_id) || self.extra.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|v| *v == req.voice_id);
         if !valid_voice_id(bare) || !known {
             return Err(AdapterError::UnknownVoice(req.voice_id.chars().take(60).collect()));
         }
@@ -773,6 +830,40 @@ mod tests {
         assert_eq!((v.id.as_str(), v.licence.licence), ("elevenlabs:SavedVoice999", Licence::Unknown));
         let saved: serde_json::Value = serde_json::from_str(&f.hits.lock().unwrap().iter().find(|h| h.method == "POST" && h.path == "/v1/text-to-voice").unwrap().body).unwrap();
         assert_eq!((saved["voice_name"].as_str(), saved["generated_voice_id"].as_str()), (Some("Mama Ade"), Some("GenAAA111")));
+    }
+
+    #[test]
+    fn cloning_uploads_only_audio_and_a_name_and_the_clone_renders_after_registration() {
+        let f = start(Box::new(|r, _| {
+            if r.method == "POST" && r.path == "/v1/voices/add" { (200, serde_json::json!({"voice_id":"CloneVoice777"}).to_string().into_bytes()) }
+            else if r.method == "DELETE" && r.path == "/v1/voices/CloneVoice777" { (200, b"{}".to_vec()) }
+            else if r.path.starts_with("/v2/voices") { (200, voices_json()) }
+            else if r.path.starts_with("/v1/text-to-speech/CloneVoice777") { (200, vec![0u8; 4000]) }
+            else { (404, b"{}".to_vec()) }
+        }));
+        let a = adapter(&f);
+        assert!(a.capabilities().cloning);
+        let rec = crate::clone::build_record(&crate::clone::Attestation { subject: "Ama Okafor".into(), subject_is_self: true, adult: true, alive: true, not_public_figure: true, agrees: true, purpose: "Narration".into(), commercial: false, expires: None }, "consent-t").unwrap();
+        let proof = crate::consent::proof(&rec, &crate::consent::Use::Dialogue, false).unwrap();
+        let mut wav = b"RIFF".to_vec();
+        wav.extend(vec![7u8; 5000]);
+        let id = a.clone_voice(&CloneRequest { name: "Ama".into(), sample_wav: wav.clone(), proof }).unwrap();
+        assert_eq!(id, "elevenlabs:CloneVoice777");
+        let hit = f.hits.lock().unwrap().iter().find(|h| h.path == "/v1/voices/add").cloned().unwrap();
+        assert!(hit.headers.iter().any(|(k, v)| k == "content-type" && v.starts_with("multipart/form-data; boundary=")));
+        assert!(hit.body.contains("name=\"name\"") && hit.body.contains("Ama"), "name is sent");
+        for private in ["Okafor", "consent", "Narration", "subject"] {
+            assert!(!hit.body.contains(private), "{private} must never be uploaded");
+        }
+        assert!(!hit.body.contains(KEY));
+        // Not in the account list, so it only renders once registered through the consent-checked path.
+        a.allow_voice(&id);
+        assert!(a.delete_voice(&id).is_ok());
+        assert!(a.delete_voice("elevenlabs:../x").is_err());
+        let bad_proof = crate::consent::proof(&rec, &crate::consent::Use::PerformanceReference, false);
+        assert!(bad_proof.is_err(), "a proof cannot be made for a use the record does not permit");
+        let tiny = crate::consent::proof(&rec, &crate::consent::Use::Dialogue, false).unwrap();
+        assert!(a.clone_voice(&CloneRequest { name: "x".into(), sample_wav: b"nope".to_vec(), proof: tiny }).is_err(), "bad audio never reaches the network");
     }
 
     #[test]

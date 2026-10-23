@@ -190,6 +190,11 @@ pub fn render_line(project: &mut Project, reg: &Registry, project_dir: &Path, li
         .ok_or_else(|| err("no_voice", format!("{} has no voice yet. Pick one in the Cast step.", line.speaker)))?;
     let voice = reg.voice(&voice_id).ok_or_else(|| err("voice_missing", "The cast voice is not available on this computer."))?.clone();
     let adapter: &dyn Adapter = reg.adapter(&voice.provider).ok_or_else(|| err("voice_missing", "The voice's provider is not available."))?;
+    // A cloned voice is used only while its owner's consent is clean. This runs before the cache, so a revoked voice
+    // cannot hand back an old take either.
+    if let Some(problems) = reg.consent_problems(&voice_id, project.licence_target == crate::licence::LicenceTarget::Commercial) {
+        return Err(err("consent", format!("{} cannot be used: {}", voice.name, problems.join(" "))));
+    }
 
     let missing = unsupported_tags(&adapter.capabilities(), &tokens, &resolved.emotion.value);
     if !missing.is_empty() {
@@ -289,6 +294,35 @@ mod tests {
         let dir = std::env::temp_dir().join(new_id("ss-render"));
         std::fs::create_dir_all(&dir).unwrap();
         (p, reg, calls, dir)
+    }
+
+    #[test]
+    fn a_cloned_voice_is_usable_only_while_its_consent_is_clean() {
+        let (mut p, mut reg, calls, dir) = setup();
+        let form = crate::clone::Attestation { subject: "Ama Okafor".into(), subject_is_self: true, adult: true, alive: true, not_public_figure: true, agrees: true, purpose: "Narration".into(), commercial: false, expires: None };
+        let mut rec = crate::clone::build_record(&form, "consent-gate").unwrap();
+        reg.consents.insert("tone:mid".into(), rec.clone());
+        assert!(render_line(&mut p, &reg, &dir, "s0-l0").is_ok(), "clean consent renders");
+        assert!(crate::exporter::check(&p, &reg).allowed, "and exports");
+        assert_eq!(crate::exporter::consent_ids_used(&p, &reg), vec!["consent-gate".to_string()]);
+
+        // Personal use is fine, but the same record blocks a commercial project.
+        p.licence_target = crate::licence::LicenceTarget::Commercial;
+        let e = render_line(&mut p, &reg, &dir, "s0-l2").unwrap_err();
+        assert_eq!(e.kind, "consent");
+        assert!(e.message.contains("commercial"), "{}", e.message);
+        p.licence_target = crate::licence::LicenceTarget::Personal;
+
+        // Revoking blocks a new render, a cached render and the export, at once.
+        crate::consent::revoke(&mut rec).unwrap();
+        reg.consents.insert("tone:mid".into(), rec);
+        let before = calls.load(Ordering::SeqCst);
+        assert_eq!(render_line(&mut p, &reg, &dir, "s0-l0").unwrap_err().kind, "consent", "cached take is blocked too");
+        assert_eq!(render_line(&mut p, &reg, &dir, "s0-l2").unwrap_err().kind, "consent");
+        assert_eq!(calls.load(Ordering::SeqCst), before, "no provider call is made for a revoked voice");
+        let gate = crate::exporter::check(&p, &reg);
+        assert!(!gate.allowed && gate.blocking.iter().any(|b| b.kind == "consent" && b.reason.contains("revoked")));
+        std::fs::remove_dir_all(dir).ok();
     }
 
     #[test]

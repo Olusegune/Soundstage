@@ -44,6 +44,14 @@ Rules:
 - Revoking a consent record immediately blocks new renders and exports that use the voice. Existing exports are listed in the revocation report so the owner can decide what to do.
 - Consent evidence is stored encrypted, outside the project folder, and never sent to a provider.
 
+### 2.2.1 Implementation status (v0.2.0)
+- Cloning is built for ElevenLabs. A clone request cannot be made without a consent proof, which only the consent check can produce.
+- The record is saved to `Documents\Soundstage\.consent` before any upload and is never sent to a provider. Evidence is an in-app attestation (the owner agrees to a fixed statement). Recorded-statement and signed-form evidence are not built.
+- Evidence is **not yet encrypted** at rest (open item: DPAPI or a keyring-wrapped key).
+- Every render and export re-checks the record; revoking blocks both at once. Exports list the consent ids used.
+- Age, identity and public-figure status cannot be verified by the app; the owner attests.
+- Not built: speech-to-speech and performance-reference use, retention policy, revocation reports listing past exports.
+
 ### 2.3 Reference audio
 - Single speaker, minimum length (VERIFY per adapter), no music or background speech.
 - The app runs a check and shows the result. A failed check blocks cloning and says why.

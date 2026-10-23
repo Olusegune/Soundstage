@@ -62,8 +62,37 @@ pub fn subjects(project: &Project, reg: &Registry) -> Vec<Subject> {
     out
 }
 
+/// Consent record ids of every cloned voice that has a take in the mix.
+pub fn consent_ids_used(project: &Project, reg: &Registry) -> Vec<String> {
+    let layout = compute(project, &script::parse(&project.script));
+    let mut ids: Vec<String> = layout.lines.iter().filter_map(|s| project.take(&s.take_id)).filter_map(|t| reg.consents.get(&t.voice_id)).map(|c| c.id.clone()).collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
 pub fn check(project: &Project, reg: &Registry) -> GateReport {
     let mut r = gate(project.licence_target, &subjects(project, reg), &project.mix.destination, today_days());
+    let commercial = project.licence_target == LicenceTarget::Commercial;
+    let mut seen: Vec<String> = vec![];
+    for slot in &compute(project, &script::parse(&project.script)).lines {
+        let Some(take) = project.take(&slot.take_id) else { continue };
+        if seen.contains(&take.voice_id) {
+            continue;
+        }
+        seen.push(take.voice_id.clone());
+        if let Some(problems) = reg.consent_problems(&take.voice_id, commercial) {
+            r.blocking.push(crate::licence::GateItem {
+                kind: "consent".into(),
+                id: take.voice_id.clone(),
+                name: reg.voice(&take.voice_id).map_or_else(|| take.voice_id.clone(), |v| v.name.clone()),
+                reason: problems.join(" "),
+                severity: crate::licence::Severity::Blocking,
+                source: None,
+            });
+            r.allowed = false;
+        }
+    }
     let parsed = script::parse(&project.script);
     let layout = compute(project, &parsed);
     let unplaced = parsed.lines.len().saturating_sub(layout.lines.len());
@@ -246,7 +275,7 @@ pub fn export_with(project: &Project, reg: &Registry, project_dir: &Path, dest: 
     let stem = safe_file_stem(&project.name);
     let tmp = std::env::temp_dir().join(crate::util::new_id("soundstage-export"));
     std::fs::create_dir_all(&tmp).map_err(|e| failed(e.to_string()))?;
-    let result = write_everything(project, project_dir, &folder, &stem, &tmp, &out, &layout, dest_info, &report, opts, ff.as_ref());
+    let result = write_everything(project, project_dir, &folder, &stem, &tmp, &out, &layout, dest_info, &report, opts, ff.as_ref(), &consent_ids_used(project, reg));
     let _ = std::fs::remove_dir_all(&tmp);
     result
 }
@@ -254,7 +283,7 @@ pub fn export_with(project: &Project, reg: &Registry, project_dir: &Path, dest: 
 #[allow(clippy::too_many_arguments)]
 fn write_everything(
     project: &Project, project_dir: &Path, folder: &Path, stem: &str, tmp: &Path, out: &crate::mix::MixOutput, layout: &Layout,
-    dest_info: &crate::loudness::Destination, report: &GateReport, opts: &ExportOptions, ff: Option<&Ffmpeg>,
+    dest_info: &crate::loudness::Destination, report: &GateReport, opts: &ExportOptions, ff: Option<&Ffmpeg>, consents: &[String],
 ) -> Result<ExportResult, ExportError> {
     let mut jobs: Vec<(String, &Stereo, &crate::output::Codec)> = vec![(format!("{stem} - master"), &out.master, &opts.master)];
     if let Some(sc) = &opts.stems {
@@ -321,7 +350,7 @@ fn write_everything(
             "ai_generated": a.generated.is_some(), "generated": a.generated }))).collect::<Vec<_>>(),
         "rejected_takes_excluded": project.takes.iter().filter(|t| t.status == TakeStatus::Rejected).map(|t| t.id.clone()).collect::<Vec<_>>(),
         "files": hashes,
-        "consent_references": Vec::<String>::new(),
+        "consent_references": consents,
     });
     let manifest_name = format!("{stem} - manifest.json");
     std::fs::write(folder.join(&manifest_name), serde_json::to_string_pretty(&manifest).map_err(|e| failed(e.to_string()))?).map_err(|e| failed(e.to_string()))?;

@@ -4,6 +4,7 @@ import { licenceNote } from "../logic";
 import { Flag, languageName } from "../flags";
 import { LicenceChip, PlayButton } from "../ui";
 import { PromptHelper } from "../shell/PromptHelper";
+import { CloneVoice } from "../shell/CloneVoice";
 import { NON_VERBAL, type DesignerInfo, type DesignPreview, type Voice } from "../types";
 
 const ALL_TAGS = [...NON_VERBAL, "whisper", "shout", "excited", "sad", "tired", "sarcastic", "curious", "serious"];
@@ -19,7 +20,8 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
   const [designers, setDesigners] = useState<DesignerInfo[]>([]);
   const [des, setDes] = useState({ adapter: "", text: "", busy: false, confirm: false, previews: [] as DesignPreview[], pick: 0, name: "", saving: false });
   useEffect(() => { void api.listDesigners().then(setDesigners).catch(() => setDesigners([])); }, []);
-  const designer = designers.find((d) => d.id === des.adapter) ?? designers.find((d) => d.ready) ?? designers[0];
+  const designable = designers.filter((d) => d.design);
+  const designer = designable.find((d) => d.id === des.adapter) ?? designable.find((d) => d.ready) ?? designable[0];
   const designLen = des.text.trim().length;
 
   const makePreviews = async () => {
@@ -92,7 +94,7 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
       </div>
       <div className="card" role="group" aria-label="Design a voice">
         <h2>Design a voice</h2>
-        {designers.length === 0 ? (
+        {designable.length === 0 ? (
           <p className="muted">Describe a voice in words and have it made for you. This needs a provider that supports it. Save an ElevenLabs key in Settings and it appears here.</p>
         ) : (
           <>
@@ -101,7 +103,7 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
             <textarea id="d-text" rows={3} maxLength={1000} style={{ width: "100%" }} value={des.text} onChange={(e) => setDes({ ...des, text: e.target.value })} placeholder="A calm older woman with a warm Lagos accent, slow and kind" />
             <PromptHelper kind="voice" value={des.text} onChange={(v) => setDes((d) => ({ ...d, text: v }))} toast={props.toast} />
             <div className="row" style={{ marginTop: 8, alignItems: "end" }}>
-              {designers.length > 1 && <div><label htmlFor="d-src">With</label><select id="d-src" value={designer?.id ?? ""} onChange={(e) => setDes({ ...des, adapter: e.target.value })}>{designers.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}</select></div>}
+              {designable.length > 1 && <div><label htmlFor="d-src">With</label><select id="d-src" value={designer?.id ?? ""} onChange={(e) => setDes({ ...des, adapter: e.target.value })}>{designable.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}</select></div>}
               <button className="primary" disabled={des.busy || !designer?.ready || designLen < 20} onClick={() => setDes({ ...des, confirm: true })}>{des.busy ? <><span className="spin" aria-hidden="true" /> Designing</> : "Design 3 voices"}</button>
               {designer && !designer.ready && <span className="small muted">Save a key for {designer.label} first.</span>}
             </div>
@@ -125,8 +127,8 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
             )}
           </>
         )}
-        <p className="small muted" style={{ marginBottom: 0, marginTop: 12 }}><strong>Voice cloning</strong> arrives in a later version. It will only ever work with a verified, revocable consent record from the voice's owner. Cloning public figures, children and deceased people is refused.</p>
       </div>
+      <CloneVoice designers={designers} toast={props.toast} onChanged={() => props.onChanged?.()} />
       <p className="small muted">Accent and non-verbal quality are not rated here. Soundstage lists a language or sound as supported only after native-speaker listening tests show it works.</p>
     </div>
   );

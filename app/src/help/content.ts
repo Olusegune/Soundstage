@@ -209,15 +209,24 @@ export const ARTICLES: Article[] = [
   },
   {
     id: "consent", title: "Consent and voice cloning", group: "Understanding",
-    summary: "Why cloning is off, and the rules it will follow.",
-    tags: ["consent", "clone", "cloning", "safety", "rights", "voice", "permission"],
+    summary: "How cloning works, and the rules it follows.",
+    tags: ["consent", "clone", "cloning", "safety", "rights", "voice", "permission", "revoke"],
     body: [
-      { t: "p", text: "A person's voice is theirs. Voice cloning is not in this version. When it arrives it will only work with a complete, signed, revocable consent record from the voice's owner, and it will be impossible without one." },
+      { t: "p", text: "A person's voice is theirs. In the Voice library, Clone a voice makes a synthetic copy from a recording, and only with the owner's consent, which you record in the app." },
+      { t: "steps", items: [
+        "Say whose voice it is and what it will be used for. Tick that the owner is 18 or over, alive, and not a public figure, and that they agree to the statement.",
+        "Choose a recording of that one person speaking clearly. Soundstage checks the length, the level and the sound before anything is sent.",
+        "Confirm. The recording and the voice name go to the provider (ElevenLabs). The consent record stays on this computer.",
+      ] },
       { t: "ul", items: [
-        "Public figures, children and deceased people are refused.",
-        "Revoking consent immediately blocks new renders and exports that use the voice.",
+        "Children, people who have died, and public figures are refused.",
+        "Soundstage cannot tell who is speaking or whether the owner really agreed. The record is your promise, and it is kept.",
+        "Every render and every export re-checks the consent. If it is revoked, expired, or does not allow commercial use for a commercial project, the voice is blocked.",
+        "Revoke consent any time from the Voice library. New takes and exports stop at once, and you can also delete the voice from the provider.",
+        "Exports list the consent record of every cloned voice used.",
         "Scripts that look like fraud or impersonation of officials are not rendered, and Soundstage tells you which rule applied.",
       ] },
+      { t: "tip", text: "Consent records are saved in Documents\\Soundstage\\.consent, outside your projects. They are not encrypted yet, so keep that folder private." },
     ],
   },
   {

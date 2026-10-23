@@ -4,6 +4,7 @@
 pub mod adapters;
 pub mod assistant;
 pub mod audio;
+pub mod clone;
 pub mod consent;
 pub mod decode;
 pub mod direction;

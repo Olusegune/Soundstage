@@ -6,6 +6,7 @@
 - **FFmpeg is now included** (LGPL build), so MP3, FLAC, AAC, Opus, Ogg Vorbis and MP4 export work with nothing to install.
 - **Voices:** any OpenAI-compatible speech server (Kokoro, LocalAI, Speaches, OpenRouter and others), Piper, and your own ComfyUI workflows. Local engines need no account.
 - **Music and sound effects:** create them in the Mix step with ElevenLabs, Suno through Kie, fal models (including ACE-Step) or ComfyUI. Everything generated is labelled AI-generated and starts as licence unknown.
+- **Voice cloning** (ElevenLabs), only with a recorded consent record. The record stays on your computer; every render and export re-checks it, and revoking blocks the voice at once.
 - **Voice design:** describe a character and keep one of three candidate voices (ElevenLabs). Descriptions that aim at a real person are refused.
 - **Prompt helper:** "Help me write this" guides beginners with taps and examples, and an optional "Improve with AI" button uses a chat server you choose, such as Ollama.
 - **Export formats:** WAV (16, 24, 32-bit float), and with FFmpeg FLAC, MP3, AAC, Opus, Ogg Vorbis and MP4; SRT and WebVTT subtitles.

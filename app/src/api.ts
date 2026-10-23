@@ -1,7 +1,7 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
-  Analysis, Asset, Destination, DesignPreview, DesignerInfo, EnginesConfig, GeneratorInfo, SystemCheck, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Voice, VoiceDef,
+  Analysis, Asset, Destination, Attestation, CloneEntry, CloneInfo, ClonedVoice, DesignPreview, DesignerInfo, RefReport, EnginesConfig, GeneratorInfo, SystemCheck, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Voice, VoiceDef,
 } from "./types";
 
 /** Tauri rejects with a string for plain errors and with an object for structured ones. */
@@ -47,6 +47,11 @@ export const api = {
   quit: () => invoke<void>("quit_app"),
   systemCheck: (ffmpegPath: string | null) => invoke<SystemCheck[]>("system_check", { ffmpegPath }),
   writeDiagnostics: (ffmpegPath: string | null) => invoke<string>("write_diagnostics", { ffmpegPath }),
+  cloneInfo: () => invoke<CloneInfo>("clone_info"),
+  cloneCheckReference: (path: string) => invoke<RefReport>("clone_check_reference", { path }),
+  cloneVoice: (adapterId: string, path: string, name: string, attestation: Attestation) => invoke<ClonedVoice>("clone_voice", { adapterId, path, name, attestation }),
+  consentList: () => invoke<CloneEntry[]>("consent_list"),
+  consentRevoke: (consentId: string, deleteRemote: boolean) => invoke<string>("consent_revoke", { consentId, deleteRemote }),
   setApiKey: (provider: string, key: string) => invoke<void>("set_api_key", { args: { provider, key } }),
   enginesGet: () => invoke<EnginesView>("engines_get"),
   enginesSave: (config: EnginesConfig) => invoke<void>("engines_save", { config }),

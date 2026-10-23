@@ -261,6 +261,11 @@ try {
     await app.press("Ctrl+Shift+V"); await sleep(600);
     const lib = await app.ev("document.body.textContent");
     app.check("the Voice library has the Design a voice card", /Design a voice/.test(lib));
+    app.check("the Voice library has the Clone a voice card", /Clone a voice/.test(lib));
+    const none = await app.ev("window.__TAURI_INTERNALS__.invoke('consent_list').then(l=>Array.isArray(l),()=>false)");
+    app.check("the consent list is readable", none === true);
+    const refused = await app.ev("window.__TAURI_INTERNALS__.invoke('clone_voice',{adapterId:'elevenlabs',path:'C:/nope.wav',name:'X',attestation:{subject:'Ama',subject_is_self:true,adult:false,alive:true,not_public_figure:true,agrees:false,purpose:'x',commercial:false,expires:null}}).then(()=>'allowed',e=>String(e))");
+    app.check("a clone without the owner's promises is refused before anything is read or sent", /18 or over/.test(String(refused)) && /agree/.test(String(refused)), String(refused).slice(0, 200));
     await app.press("Ctrl+O"); await sleep(500);
   }
   // Prompt helper, Voice engines and Settings screens (v0.2).
