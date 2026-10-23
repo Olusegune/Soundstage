@@ -5,7 +5,7 @@ import type { Ctx } from "../ctx";
 import * as I from "../icons";
 import { fmtMs, licenceNote } from "../logic";
 import { Confirm, Empty, Help, LicenceChip, PeaksView, PlayButton, Waveform } from "../ui";
-import type { Asset, Cue, Destination, Layout } from "../types";
+import type { Asset, Cue, Destination, GeneratorInfo, Layout } from "../types";
 import { LicenceEditor } from "./LicenceEditor";
 
 const lufs = (v: number | null) => (v === null ? "n/a" : `${v.toFixed(1)} LUFS`);
@@ -18,6 +18,24 @@ export function MixStep({ ctx }: { ctx: Ctx }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [removing, setRemoving] = useState<Asset | null>(null);
   const preview = ctx.mixPreview;
+  const [gens, setGens] = useState<GeneratorInfo[]>([]);
+  const [gen, setGen] = useState({ kind: "music" as "music" | "sfx", id: "", prompt: "", seconds: 30, instrumental: true, confirm: false, busy: false });
+  useEffect(() => { void api.listGenerators().then(setGens).catch(() => setGens([])); }, []);
+  const usable = gens.filter((g) => g.kinds.includes(gen.kind));
+  const chosen = usable.find((g) => g.id === gen.id) ?? usable.find((g) => g.ready) ?? usable[0];
+  const limits = chosen ? chosen[gen.kind] : null;
+
+  const create = async () => {
+    if (!chosen) return;
+    setGen((g) => ({ ...g, busy: true, confirm: false }));
+    try {
+      const a = await api.generateAudio(project.id, chosen.id, gen.kind, gen.prompt, limits?.supports_length ? gen.seconds : null, gen.instrumental, null);
+      edit((p) => ({ ...p, assets: [...p.assets, a] }));
+      ctx.toast(`${a.name} created. It is marked AI-generated, and its licence is unknown until you record where its terms were checked.`);
+      setEditing(a.id);
+      setGen((g) => ({ ...g, prompt: "" }));
+    } catch (e) { ctx.toast(messageOf(e), true); } finally { setGen((g) => ({ ...g, busy: false })); }
+  };
 
   useEffect(() => { void api.destinations().then(setDests); }, []);
   useEffect(() => { void api.layout(project).then(setLayout).catch(() => setLayout(null)); }, [project.takes, project.selected, project.line_directions, project.mix.gap_ms, project.mix.scene_gap_ms, project.script]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -27,7 +45,7 @@ export function MixStep({ ctx }: { ctx: Ctx }) {
   const pct = (ms: number) => `${(100 * ms) / total}%`;
 
   const importAsset = async (kind: "music" | "sfx") => {
-    const picked = await open({ multiple: false, filters: [{ name: "WAV audio", extensions: ["wav"] }], title: kind === "music" ? "Import music" : "Import a sound effect" });
+    const picked = await open({ multiple: false, filters: [{ name: "Audio", extensions: ["wav", "mp3", "flac", "ogg", "m4a", "aac"] }], title: kind === "music" ? "Import music" : "Import a sound effect" });
     if (typeof picked !== "string") return;
     try {
       const a = await api.importAsset(project.id, picked, kind);
@@ -92,14 +110,34 @@ export function MixStep({ ctx }: { ctx: Ctx }) {
         <div className="card">
           <h2>Music and effects</h2>
           <div className="row" style={{ marginBottom: 12 }}>
-            <button onClick={() => void importAsset("music")}><I.Music size={16} /> Import music (WAV)</button>
-            <button onClick={() => void importAsset("sfx")}><I.Wave size={16} /> Import effect (WAV)</button>
+            <button onClick={() => void importAsset("music")}><I.Music size={16} /> Import music</button>
+            <button onClick={() => void importAsset("sfx")}><I.Wave size={16} /> Import effect</button>
           </div>
-          {project.assets.length === 0 && <p className="muted small">Nothing imported yet. Soundstage mixes only the music and effects you bring, and tracks the licence of each one. It does not make or find music for you in this version.</p>}
+          <div className="linecard" role="group" aria-label="Create music or an effect">
+            <strong>Create with AI</strong>
+            {gens.length === 0 ? <p className="small muted" style={{ margin: "4px 0 0" }}>No generator is set up. Add ElevenLabs, Kie (Suno music), fal or ComfyUI under Voice engines, and it appears here.</p> : (
+              <>
+                <div className="row" style={{ alignItems: "end", marginTop: 8 }}>
+                  <div><label htmlFor="g-kind">Make</label><select id="g-kind" value={gen.kind} onChange={(e) => setGen({ ...gen, kind: e.target.value as "music" | "sfx", id: "" })}><option value="music">Music</option><option value="sfx">A sound effect</option></select></div>
+                  <div><label htmlFor="g-src">With</label><select id="g-src" value={chosen?.id ?? ""} onChange={(e) => setGen({ ...gen, id: e.target.value })}>{usable.map((g) => <option key={g.id} value={g.id}>{g.label}{g.ready ? "" : " (set up first)"}</option>)}</select></div>
+                  {limits?.supports_length && <div><label htmlFor="g-len">Length {gen.seconds}s</label><input id="g-len" type="range" min={limits.min_s} max={limits.max_s} step={1} value={Math.min(limits.max_s, Math.max(limits.min_s, gen.seconds))} onChange={(e) => setGen({ ...gen, seconds: Number(e.target.value) })} /></div>}
+                </div>
+                <label htmlFor="g-prompt" style={{ marginTop: 8 }}>Describe it</label>
+                <textarea id="g-prompt" rows={2} maxLength={1000} style={{ width: "100%" }} value={gen.prompt} onChange={(e) => setGen({ ...gen, prompt: e.target.value })} placeholder={gen.kind === "music" ? "Warm piano and soft strings, slow, hopeful" : "Heavy wooden door creaking open"} />
+                <div className="row" style={{ marginTop: 8 }}>
+                  {gen.kind === "music" && <label className="inline"><input type="checkbox" checked={gen.instrumental} onChange={(e) => setGen({ ...gen, instrumental: e.target.checked })} /> No singing</label>}
+                  <span className="spacer" />
+                  <button className="primary small" disabled={gen.busy || !chosen?.ready || gen.prompt.trim().length < 3} onClick={() => (chosen?.sends_data ? setGen({ ...gen, confirm: true }) : void create())}>{gen.busy ? <><span className="spin" aria-hidden="true" /> Creating</> : <><I.Plus size={14} /> Create</>}</button>
+                </div>
+                {chosen && <p className="small faint" style={{ margin: "6px 0 0" }}>{chosen.notes} Anything created starts as “licence unknown” and is labelled AI-generated in the export.</p>}
+              </>
+            )}
+          </div>
+          {project.assets.length === 0 && <p className="muted small">Nothing in the project yet. Import a file or create something above, and the licence of each one is tracked.</p>}
           {project.assets.map((a) => (
             <div key={a.id} className="linecard">
               <div className="row">
-                <strong>{a.name}</strong><span className="chip">{a.kind === "music" ? "Music" : "Effect"}</span><span className="muted small">{fmtMs(a.duration_ms)}</span>
+                <strong>{a.name}</strong><span className="chip">{a.kind === "music" ? "Music" : "Effect"}</span>{a.generated && <span className="chip info">AI-generated</span>}<span className="muted small">{fmtMs(a.duration_ms)}</span>
                 <LicenceChip licence={project.licence_checks[`asset:${a.id}`]?.licence ?? a.licence.licence} note={licenceNote(project.licence_checks[`asset:${a.id}`] ?? a.licence)} />
                 <span className="spacer" />
                 <button className="small" onClick={() => addCue(a)}><I.Plus size={14} /> Add to timeline</button>
@@ -171,6 +209,11 @@ export function MixStep({ ctx }: { ctx: Ctx }) {
           ) : <p className="small muted">Build a preview to hear the mix and see its loudness before you export. Nothing is saved outside the project.</p>}
         </div>
       </div>
+      {gen.confirm && chosen && (
+        <Confirm title={`Send this description to ${chosen.label}?`} confirmLabel="Send and create" onCancel={() => setGen({ ...gen, confirm: false })}
+          body={<p>Your description is sent over the internet to {chosen.label} and may use credits on your account there. No script text or audio from your project is sent.</p>}
+          onConfirm={() => void create()} />
+      )}
       {removing && (
         <Confirm title={`Remove “${removing.name}”?`} confirmLabel="Remove" onCancel={() => setRemoving(null)}
           body={<p>This removes {removing.name} and any places it is used on the timeline from this project. Your original file is not touched.</p>}

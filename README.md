@@ -57,3 +57,10 @@ The Windows speech adapter runs against the real engine in tests when voices are
 6. Loudness that cannot be reached without clipping is flagged, not silently limited.
 
 Loudness targets and true-peak ceilings are starting points marked VERIFY in [`docs/SOUND_DESIGN.md`](docs/SOUND_DESIGN.md); confirm them for your destination before delivery. The true-peak figure is an estimate (4x oversampling), not a certified meter.
+
+## Engines and export (v0.2)
+- Voices: Windows voices, ElevenLabs, any OpenAI-compatible speech server (local or cloud), Piper, and your own ComfyUI workflows. No account is needed for the local ones.
+- Music and effects: ElevenLabs, Suno through Kie, fal models, ComfyUI. Everything generated is labelled AI-generated and starts as licence unknown.
+- Voice design from a text description (ElevenLabs).
+- Export: WAV (16, 24, 32-bit float), and with a user-installed FFmpeg FLAC, MP3, AAC, Opus, Ogg Vorbis and MP4 (waveform video); SRT and WebVTT subtitles; stems; manifest.
+See `docs/PROVIDERS.md` section 10 for what is and is not live-tested.

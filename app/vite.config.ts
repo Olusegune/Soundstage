@@ -5,6 +5,6 @@ export default defineConfig({
   plugins: [react()],
   clearScreen: false,
   server: { port: 1421, strictPort: true, host: "127.0.0.1" },
-  build: { target: "es2022", sourcemap: false },
+  build: { target: "es2022", sourcemap: false, assetsInlineLimit: 0 },
   test: { environment: "node" },
 });

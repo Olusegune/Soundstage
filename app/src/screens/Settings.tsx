@@ -15,6 +15,7 @@ export function Settings(props: {
   onTheme: (t: Theme) => void;
   onShortcuts: () => void;
   onTour: () => void;
+  onEngines: () => void;
 }) {
   const [has, setHas] = useState<boolean | null>(null);
   const [key, setKey] = useState("");
@@ -69,6 +70,12 @@ export function Settings(props: {
           <button onClick={props.onTour}><I.Rocket size={16} /> Take the guided tour</button>
           <button className="ghost" onClick={() => { props.onPrefs({ welcomed: false, toured: false }); props.toast("The welcome screen will show next time Soundstage starts."); }}>Show the welcome screen again</button>
         </div>
+      </div>
+
+      <div className="card hero">
+        <div className="row"><div style={{ flex: 1, minWidth: 260 }}><h2 style={{ margin: 0 }}>Local and custom voice engines</h2>
+          <p className="small muted" style={{ margin: "4px 0 0" }}>No account or key needed. Connect an engine running on your own computer, or add Piper, and use its voices next to the built-in ones.</p></div>
+          <button className="primary" onClick={props.onEngines}><I.Layers size={16} /> Manage voice engines</button></div>
       </div>
 
       <div className="card">

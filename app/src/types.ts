@@ -60,6 +60,7 @@ export interface Asset {
   licence: LicenceInfo;
   uses_prohibited: string[];
   source_note: string;
+  generated?: { generator: string; provider_version: string; prompt: string; created: string } | null;
 }
 
 export interface Cue {
@@ -289,3 +290,80 @@ export type StepName = (typeof STEPS)[number];
 
 export const EMOTIONS = ["neutral", "whisper", "shout", "excited", "sad", "tired", "sarcastic", "curious", "serious"] as const;
 export const NON_VERBAL = ["laugh", "chuckle", "sigh", "cough", "sneeze", "gasp", "cry", "breath", "sniff"] as const;
+
+export type Aspect = "wide" | "tall" | "square";
+export type Codec =
+  | { kind: "wav"; bits: 16 | 24 | 32 }
+  | { kind: "flac" }
+  | { kind: "mp3"; kbps: number }
+  | { kind: "aac"; kbps: number }
+  | { kind: "vorbis"; quality: number }
+  | { kind: "opus"; kbps: number }
+  | { kind: "mp4"; aspect: Aspect; kbps: number };
+
+export interface ExportOptions {
+  master: Codec;
+  stems: Codec | null;
+  sample_rate: number;
+  subtitles: ("srt" | "vtt")[];
+  speaker_labels: boolean;
+  ffmpeg_path: string | null;
+}
+
+export interface ExportCaps {
+  ffmpeg: { path: string; version: string; encoders: string[] } | null;
+  configured_failed: boolean;
+  formats: { kind: string; label: string; needs_ffmpeg: boolean; available: boolean }[];
+}
+
+export interface VoiceDef { id: string; name: string; language: string; accent: string; gender: string }
+
+export interface SpeechEngine {
+  id: string;
+  label: string;
+  base_url: string;
+  model: string;
+  voices: VoiceDef[];
+  response_format: "wav" | "mp3" | "flac" | "opus" | "aac";
+  tags: string[];
+  tag_map: Record<string, string>;
+  needs_key: boolean;
+  licence_note: string;
+  notes: string;
+}
+
+export interface PiperConfig { exe: string; voices_dir: string }
+
+export interface JobEngine {
+  id: string;
+  label: string;
+  provider: "fal" | "kie" | "comfy";
+  kind: "speech" | "music" | "sfx";
+  model: string;
+  base_url: string;
+  template: string;
+  voices: VoiceDef[];
+  licence_note: string;
+  min_s: number;
+  max_s: number;
+  default_s: number;
+}
+
+export interface EnginesConfig { version: number; speech: SpeechEngine[]; piper: PiperConfig | null; jobs: JobEngine[] }
+
+export interface GenLimits { min_s: number; max_s: number; default_s: number; supports_length: boolean }
+export interface GeneratorInfo {
+  id: string;
+  label: string;
+  kinds: ("music" | "sfx")[];
+  sends_data: boolean;
+  ready: boolean;
+  music: GenLimits;
+  sfx: GenLimits;
+  licence: LicenceInfo;
+  notes: string;
+}
+export interface DesignerInfo { id: string; label: string; ready: boolean }
+export interface DesignPreview { generated_voice_id: string; path: string }
+
+export interface EnginesView { config: EnginesConfig; load_error: string | null; keys: Record<string, boolean> }

@@ -4,6 +4,11 @@
 use crate::licence::{Licence, LicenceInfo};
 use crate::tags::{required_tags, Token};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+
+/// Credentials are looked up by name (`elevenlabs`, `openrouter`, `engine:my-server`). The shell owns the key store;
+/// adapters only ever call this, and never keep what it returns.
+pub type KeyProvider = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
 
 /// The common error set every adapter maps into.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -71,6 +76,20 @@ pub struct RenderRequest {
 }
 
 #[derive(Clone, Debug)]
+pub struct DesignRequest {
+    pub description: String,
+    /// Words for the candidates to speak. `None` lets the provider write something suited to the description.
+    pub sample_text: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct DesignPreview {
+    pub generated_voice_id: String,
+    pub samples: Vec<f32>,
+    pub sample_rate: u32,
+}
+
+#[derive(Clone, Debug)]
 pub struct RenderOutput {
     pub samples: Vec<f32>,
     pub sample_rate: u32,
@@ -85,8 +104,8 @@ pub struct Cost {
 }
 
 pub trait Adapter: Send + Sync {
-    fn id(&self) -> &'static str;
-    fn label(&self) -> &'static str;
+    fn id(&self) -> &str;
+    fn label(&self) -> &str;
     fn licence(&self) -> LicenceInfo;
     fn capabilities(&self) -> Capabilities;
     fn list_voices(&self) -> Vec<Voice>;
@@ -94,6 +113,18 @@ pub trait Adapter: Send + Sync {
     fn render(&self, req: &RenderRequest) -> Result<RenderOutput, AdapterError>;
     fn estimate_cost(&self, _req: &RenderRequest) -> Option<Cost> {
         None
+    }
+    /// False when nothing is set up yet (for example, no key saved).
+    fn ready(&self) -> bool {
+        true
+    }
+    /// Make three candidate voices from a text description. Only some providers can.
+    fn design_voice(&self, _req: &DesignRequest) -> Result<Vec<DesignPreview>, AdapterError> {
+        Err(AdapterError::ProviderError("this voice engine cannot design voices".into()))
+    }
+    /// Keep one candidate as a permanent voice.
+    fn save_designed_voice(&self, _generated_id: &str, _name: &str, _description: &str) -> Result<Voice, AdapterError> {
+        Err(AdapterError::ProviderError("this voice engine cannot design voices".into()))
     }
     /// True when script text leaves this computer to be rendered. The UI asks before sending.
     fn sends_data(&self) -> bool {
@@ -170,26 +201,102 @@ pub fn split_tokens(tokens: &[Token], max_chars: usize) -> Vec<Vec<Token>> {
     chunks
 }
 
+/// Spoken segments and exact pauses, for engines that take plain text. Delivery and non-verbal directions are written
+/// into the text in the engine's own tag syntax. A direction the engine has no syntax for is an error, never dropped.
+pub fn compose_segments(tokens: &[Token], emotion: &str, native: &dyn Fn(&str) -> Option<String>) -> Result<Vec<Result<String, u32>>, AdapterError> {
+    let mut current = emotion.to_string();
+    let mut segs: Vec<Result<String, u32>> = Vec::new();
+    let mut buf = String::new();
+    let mut started = false;
+    let style = |c: &str| native(c).map(|t| format!("{t} ")).unwrap_or_default();
+    for t in tokens {
+        match t {
+            Token::Text(s) => {
+                if !started {
+                    buf.push_str(&style(&current));
+                    started = true;
+                }
+                buf.push_str(s);
+                buf.push(' ');
+            }
+            Token::Delivery(d) => {
+                started = true;
+                current = d.clone();
+                buf.push_str(&native(d).ok_or_else(|| AdapterError::UnsupportedTag(d.clone()))?);
+                buf.push(' ');
+            }
+            Token::NonVerbal(n) => {
+                if !started {
+                    buf.push_str(&style(&current));
+                    started = true;
+                }
+                buf.push_str(&native(n).ok_or_else(|| AdapterError::UnsupportedTag(n.clone()))?);
+                buf.push(' ');
+            }
+            Token::Pause(ms) => {
+                if !buf.trim().is_empty() {
+                    segs.push(Ok(buf.trim().to_string()));
+                }
+                buf.clear();
+                started = false;
+                segs.push(Err(*ms));
+            }
+        }
+    }
+    if !buf.trim().is_empty() {
+        segs.push(Ok(buf.trim().to_string()));
+    }
+    if !segs.iter().any(|s| s.is_ok()) {
+        return Err(AdapterError::ProviderError("there is nothing to say on this line".into()));
+    }
+    Ok(segs)
+}
+
 /// All adapters plus a cache of their voices.
 pub struct Registry {
     pub adapters: Vec<Box<dyn Adapter>>,
     pub voices: Vec<Voice>,
+    pub generators: Vec<Box<dyn crate::generate::Generator>>,
 }
 
 impl Registry {
     pub fn new(adapters: Vec<Box<dyn Adapter>>) -> Self {
-        let mut r = Registry { adapters, voices: vec![] };
+        let mut r = Registry { adapters, voices: vec![], generators: vec![] };
         r.refresh();
         r
     }
 
     /// The adapters shipped in this build. `keys` supplies credentials; adapters never read the key store themselves.
-    pub fn standard(keys: crate::adapters::elevenlabs::KeyProvider) -> Self {
-        Registry::new(vec![
+    pub fn standard(keys: KeyProvider, engines: &crate::engines::EnginesConfig) -> Self {
+        let mut adapters: Vec<Box<dyn Adapter>> = vec![
             Box::new(crate::adapters::sapi::SapiAdapter::new()),
-            Box::new(crate::adapters::elevenlabs::ElevenLabsAdapter::new(keys)),
-            Box::new(crate::adapters::scratch::ScratchAdapter),
-        ])
+            Box::new(crate::adapters::elevenlabs::ElevenLabsAdapter::new(keys.clone())),
+        ];
+        for e in &engines.speech {
+            // Engines were validated when saved, so a failure here means a hand-edited file; skip it rather than refuse to start.
+            if let Ok(a) = crate::adapters::openai_speech::OpenAiSpeechAdapter::new(e.clone(), keys.clone()) {
+                adapters.push(Box::new(a));
+            }
+        }
+        if let Some(p) = engines.piper.as_ref().filter(|p| !p.exe.trim().is_empty()) {
+            if let Ok(a) = crate::adapters::piper::PiperAdapter::new(p, std::sync::Arc::new(crate::adapters::piper::RealRunner)) {
+                adapters.push(Box::new(a));
+            }
+        }
+        let mut generators: Vec<Box<dyn crate::generate::Generator>> = vec![Box::new(crate::adapters::elevenlabs::ElevenLabsGenerator::new(keys.clone()))];
+        for j in &engines.jobs {
+            // Validated when saved. A failure here means a hand-edited file, so the engine is skipped, not fatal.
+            let Ok((transport, meta)) = build_job(j, &keys) else { continue };
+            match j.kind.as_str() {
+                "speech" => adapters.push(Box::new(crate::jobs::JobSpeech { id: meta.id.clone(), meta, transport })),
+                "music" => generators.push(Box::new(crate::jobs::JobGenerator { meta, kind: crate::generate::GenKind::Music, transport })),
+                _ => generators.push(Box::new(crate::jobs::JobGenerator { meta, kind: crate::generate::GenKind::Sfx, transport })),
+            }
+        }
+        adapters.push(Box::new(crate::adapters::scratch::ScratchAdapter));
+        let mut reg = Registry::new(adapters);
+        reg.generators = generators;
+        reg
     }
 
     pub fn refresh(&mut self) {
@@ -200,6 +307,10 @@ impl Registry {
         self.voices.iter().find(|v| v.id == id)
     }
 
+    pub fn generator(&self, id: &str) -> Option<&dyn crate::generate::Generator> {
+        self.generators.iter().find(|g| g.id() == id).map(|b| b.as_ref())
+    }
+
     pub fn adapter(&self, id: &str) -> Option<&dyn Adapter> {
         self.adapters.iter().find(|a| a.id() == id).map(|b| b.as_ref())
     }
@@ -207,6 +318,21 @@ impl Registry {
     pub fn adapter_for_voice(&self, voice_id: &str) -> Option<&dyn Adapter> {
         self.voice(voice_id).and_then(|v| self.adapter(&v.provider))
     }
+}
+
+fn build_job(j: &crate::engines::JobEngine, keys: &KeyProvider) -> Result<(Box<dyn crate::jobs::Transport>, crate::jobs::JobMeta), String> {
+    use crate::adapters::{comfy::ComfyTransport, fal::FalTransport, kie::KieTransport};
+    use crate::jobs::{parse_template, JobMeta, RealFetcher, MAX_TEMPLATE_BYTES, MAX_WORKFLOW_BYTES};
+    j.validate()?;
+    let comfy = j.provider == "comfy";
+    let tpl = parse_template(&j.template, if j.kind == "speech" { "text" } else { "prompt" }, if comfy { MAX_WORKFLOW_BYTES } else { MAX_TEMPLATE_BYTES })?;
+    let fetch: std::sync::Arc<dyn crate::jobs::Fetcher> = std::sync::Arc::new(RealFetcher);
+    let transport: Box<dyn crate::jobs::Transport> = match j.provider.as_str() {
+        "fal" => Box::new(FalTransport::new(j.model.clone(), tpl, keys.clone(), fetch)),
+        "kie" => Box::new(KieTransport::new(j.model.clone(), tpl, keys.clone(), fetch)),
+        _ => Box::new(ComfyTransport::new(&j.base_url, tpl)?),
+    };
+    Ok((transport, JobMeta { id: format!("job-{}", j.id), label: j.label.clone(), licence_note: j.licence_note.clone(), voices: j.voices.clone(), limits: j.limits() }))
 }
 
 pub fn licence_info(licence: Licence, source: &str, checked: &str, notes: &str) -> LicenceInfo {
@@ -307,6 +433,19 @@ mod tests {
         }
         let words: usize = chunks.iter().flatten().map(|t| if let Token::Text(s) = t { s.split_whitespace().count() } else { 0 }).sum();
         assert_eq!(words, 120 + 1);
+    }
+
+    #[test]
+    fn segments_carry_tags_pauses_and_the_active_style() {
+        let map = |c: &str| match c { "laugh" => Some("[L]".to_string()), "whisper" => Some("[W]".to_string()), _ => None };
+        let (t, _) = tokenize("hi [laugh] there [pause:500] bye [whisper] ok");
+        let segs = compose_segments(&t, "neutral", &map).unwrap();
+        assert_eq!(segs, vec![Ok("hi [L] there".to_string()), Err(500), Ok("bye [W] ok".to_string())]);
+        let (t2, _) = tokenize("one [pause:short] two");
+        assert_eq!(compose_segments(&t2, "whisper", &map).unwrap(), vec![Ok("[W] one".to_string()), Err(250), Ok("[W] two".to_string())], "the active style carries across a pause");
+        let (t3, _) = tokenize("a [sneeze] b");
+        assert_eq!(compose_segments(&t3, "neutral", &map).unwrap_err(), AdapterError::UnsupportedTag("sneeze".into()));
+        assert!(compose_segments(&tokenize("[pause:short]").0, "neutral", &map).is_err());
     }
 
     #[test]

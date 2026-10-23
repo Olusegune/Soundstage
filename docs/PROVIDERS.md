@@ -157,3 +157,19 @@ Logged 2026-10-23 when the ElevenLabs adapter shipped.
 6. **Retention.** `enable_logging` defaults to true (zero-retention is Enterprise only). The UI says text is sent and billed. Decide whether to say more about retention.
 7. **Pricing.** Not recorded and not estimated. Record verified prices with a date.
 8. **Regional hosts.** The docs list US, EU, India and Singapore residency hosts. Only the default host is allowed. Adding one needs approval.
+
+## 10. Engines added after v0.1 (2026-10-23)
+Shipped but **not live-tested** unless stated. Each one is built from public documentation and tested against a local fake server. Run a real call with a real account or install and record the result here.
+| Engine | Where it runs | Host | What was built | VERIFY |
+|---|---|---|---|---|
+| OpenAI-compatible speech (Kokoro-FastAPI, LocalAI, Speaches, OpenRouter, others) | Local, LAN or cloud | Whatever address the user enters; `http` only for loopback and private addresses | `/audio/speech`, optional voice discovery, tag map per engine | Presets are typical addresses, not promises. OpenRouter's model id and voices need a live check |
+| Piper | Local | None (subprocess, argument list only) | Reads `.onnx` voices from a folder; uses `--output_file` and `--length-scale` | Confirm the CLI flags against the installed Piper release; each voice has its own licence |
+| ElevenLabs music and sound effects | Cloud | api.elevenlabs.io (already approved) | `/v1/music`, `/v1/sound-generation` | Live call, plan limits, commercial terms |
+| ElevenLabs voice design | Cloud | api.elevenlabs.io | `/v1/text-to-voice/design`, `/v1/text-to-voice` | Live call; credits per preview |
+| Kie (Suno and other jobs) | Cloud | api.kie.ai (**needs approval before first live use**) | Create-task then poll; template per model; Suno template `{"custom_mode":false,"instrumental":"{{instrumental}}","model":"V6","prompt":"{{prompt}}"}` on `ai-music-api/generate` | Endpoint, model names and output terms |
+| fal | Cloud | queue.fal.run (**needs approval before first live use**) | Queue submit, poll, fetch result; template per model | Field names differ per model; presets are starting points |
+| ComfyUI | Local | Loopback or private address | Submit a user-supplied API-format workflow, poll history, fetch the output file | Behaviour differs by node pack and version |
+
+Downloads of generated audio from a provider go through a hardened fetcher: https only, public addresses only, at most three validated redirects, a size cap, and no credentials sent.
+
+Not bundled: FFmpeg (user-installed, LGPL/GPL by build), Piper, ComfyUI, any model weights. Bundling an LGPL FFmpeg build (about 70 to 100 MB) is a decision for the project owner.

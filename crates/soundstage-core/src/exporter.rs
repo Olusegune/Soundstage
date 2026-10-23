@@ -1,7 +1,8 @@
 //! Licence-gated export (FR-7, FR-13): master plus dialogue, effects and music stems of
 //! identical length, and a provenance manifest recording every decision.
 
-use crate::audio::{read_wav, resample, to_mix_format, write_wav_24, Stereo, SR};
+use crate::audio::{read_wav, resample, to_mix_format, Stereo, SR};
+use crate::output::{subtitle_cues, to_srt, to_vtt, write_audio, ExportOptions, Ffmpeg, SubtitleFormat};
 use crate::layout::{compute, Layout};
 use crate::licence::{gate, GateReport, Licence, LicenceInfo, LicenceTarget, Subject};
 use crate::loudness::{destination, Loudness};
@@ -11,7 +12,7 @@ use crate::providers::Registry;
 use crate::script;
 use crate::util::{iso_now, safe_file_stem, sha256_hex, today_days};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -188,7 +189,16 @@ pub fn render_mix(project: &Project, project_dir: &Path) -> Result<(crate::mix::
     Ok((out, dest_info, built.layout))
 }
 
+/// What FFmpeg-backed formats this computer can write, for the Export screen.
+pub fn ffmpeg_status(configured: Option<&str>) -> Option<Ffmpeg> {
+    Ffmpeg::detect(configured)
+}
+
 pub fn export(project: &Project, reg: &Registry, project_dir: &Path, dest: &Path, acknowledged: bool) -> Result<ExportResult, ExportError> {
+    export_with(project, reg, project_dir, dest, acknowledged, &ExportOptions::default())
+}
+
+pub fn export_with(project: &Project, reg: &Registry, project_dir: &Path, dest: &Path, acknowledged: bool, opts: &ExportOptions) -> Result<ExportResult, ExportError> {
     let report = check(project, reg);
     if !report.allowed {
         return Err(ExportError::Blocked { report });
@@ -201,6 +211,26 @@ pub fn export(project: &Project, reg: &Registry, project_dir: &Path, dest: &Path
     if !dest.is_dir() {
         return Err(failed("Choose a folder that exists to export into."));
     }
+    // Everything that can be refused is refused before anything is written.
+    opts.validate().map_err(failed)?;
+    let needs_ff = opts.master.needs_ffmpeg() || opts.stems.as_ref().is_some_and(|c| c.needs_ffmpeg());
+    let ff = if needs_ff {
+        let ff = Ffmpeg::detect(opts.ffmpeg_path.as_deref()).ok_or_else(|| {
+            failed(if opts.ffmpeg_path.as_deref().is_some_and(|p| !p.trim().is_empty()) {
+                "The FFmpeg you chose could not be started. Choose ffmpeg.exe again, or pick WAV."
+            } else {
+                "FFmpeg is needed for this format and was not found. Install it (it is free), or pick WAV."
+            })
+        })?;
+        for c in std::iter::once(&opts.master).chain(opts.stems.iter()) {
+            if !ff.supports(c) {
+                return Err(failed(format!("This copy of FFmpeg cannot write {}. Use a full build of FFmpeg, or pick another format.", c.label())));
+            }
+        }
+        Some(ff)
+    } else {
+        None
+    };
     let (out, dest_info, layout) = render_mix(project, project_dir)?;
 
     let stamp = iso_now().replace([':', '-'], "").replace('T', "-").replace('Z', "");
@@ -214,18 +244,49 @@ pub fn export(project: &Project, reg: &Registry, project_dir: &Path, dest: &Path
     }
     std::fs::create_dir(&folder).map_err(|e| failed(format!("Could not create the export folder: {e}")))?;
     let stem = safe_file_stem(&project.name);
-    let files = [
-        (format!("{stem} - master.wav"), &out.master),
-        (format!("{stem} - stem dialogue.wav"), &out.dialogue),
-        (format!("{stem} - stem effects.wav"), &out.effects),
-        (format!("{stem} - stem music.wav"), &out.music),
-    ];
+    let tmp = std::env::temp_dir().join(crate::util::new_id("soundstage-export"));
+    std::fs::create_dir_all(&tmp).map_err(|e| failed(e.to_string()))?;
+    let result = write_everything(project, project_dir, &folder, &stem, &tmp, &out, &layout, dest_info, &report, opts, ff.as_ref());
+    let _ = std::fs::remove_dir_all(&tmp);
+    result
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write_everything(
+    project: &Project, project_dir: &Path, folder: &Path, stem: &str, tmp: &Path, out: &crate::mix::MixOutput, layout: &Layout,
+    dest_info: &crate::loudness::Destination, report: &GateReport, opts: &ExportOptions, ff: Option<&Ffmpeg>,
+) -> Result<ExportResult, ExportError> {
+    let mut jobs: Vec<(String, &Stereo, &crate::output::Codec)> = vec![(format!("{stem} - master"), &out.master, &opts.master)];
+    if let Some(sc) = &opts.stems {
+        jobs.push((format!("{stem} - stem dialogue"), &out.dialogue, sc));
+        jobs.push((format!("{stem} - stem effects"), &out.effects, sc));
+        jobs.push((format!("{stem} - stem music"), &out.music, sc));
+    }
+    let mut names: Vec<String> = Vec::new();
     let mut hashes = Vec::new();
-    for (name, buf) in &files {
-        let path: PathBuf = folder.join(name);
-        write_wav_24(&path, buf).map_err(failed)?;
+    for (name, buf, codec) in &jobs {
+        let path = write_audio(buf, &folder.join(name), codec, opts.sample_rate, ff, &project.name, tmp).map_err(failed)?;
         let bytes = std::fs::read(&path).map_err(|e| failed(e.to_string()))?;
-        hashes.push(serde_json::json!({ "file": name, "sha256": sha256_hex(&bytes), "samples": buf.len(), "sample_rate": SR }));
+        let file = path.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default();
+        hashes.push(serde_json::json!({ "file": file, "format": codec.label(), "sha256": sha256_hex(&bytes), "samples": buf.len(), "sample_rate": opts.sample_rate, "bytes": bytes.len() }));
+        names.push(file);
+    }
+
+    if !opts.subtitles.is_empty() {
+        let parsed = script::parse(&project.script);
+        let cues = subtitle_cues(project, &parsed, layout, opts.speaker_labels);
+        let mut seen: Vec<SubtitleFormat> = vec![];
+        for f in &opts.subtitles {
+            if seen.contains(f) {
+                continue;
+            }
+            seen.push(*f);
+            let (ext, text) = match f { SubtitleFormat::Srt => ("srt", to_srt(&cues)), SubtitleFormat::Vtt => ("vtt", to_vtt(&cues)) };
+            let file = format!("{stem}.{ext}");
+            std::fs::write(folder.join(&file), text.as_bytes()).map_err(|e| failed(e.to_string()))?;
+            hashes.push(serde_json::json!({ "file": file, "format": format!("{} subtitles", ext.to_uppercase()), "sha256": sha256_hex(text.as_bytes()), "cues": cues.len() }));
+            names.push(file);
+        }
     }
 
     let lines: Vec<_> = layout
@@ -247,37 +308,41 @@ pub fn export(project: &Project, reg: &Registry, project_dir: &Path, dest: &Path
         "exported_at": iso_now(),
         "app": { "name": "Soundstage", "version": APP_VERSION },
         "disclosure": "Dialogue in this export was generated by AI voices.",
+        "output": { "master": opts.master.label(), "stems": opts.stems.as_ref().map(|c| c.label()), "sample_rate": opts.sample_rate,
+                    "subtitles": opts.subtitles, "encoder": ff.map(|f| f.version.clone()) },
         "loudness": { "destination": dest_info.id, "target_lufs": dest_info.target_lufs, "true_peak_ceiling_dbtp": dest_info.true_peak_ceiling_dbtp,
-                      "measured": out.loudness, "gain_applied_db": out.gain_db, "target_reached": out.target_reached, "warnings": out.warnings },
+                      "measured": out.loudness, "gain_applied_db": out.gain_db, "target_reached": out.target_reached, "warnings": out.warnings,
+                      "note": "Measured on the mix before encoding. Lossy formats can shift true peak slightly." },
         "licence_gate": { "decision": "allowed", "report": report },
         "licence_checks_recorded_by_user": project.licence_checks,
         "lines": lines,
         "cues": project.cues.iter().filter_map(|c| project.asset(&c.asset_id).map(|a| serde_json::json!({
-            "cue": c.id, "asset": a.id, "name": a.name, "kind": a.kind, "licence": a.licence, "scene": c.scene, "offset_ms": c.offset_ms, "gain_db": c.gain_db, "ducked": c.duck }))).collect::<Vec<_>>(),
+            "cue": c.id, "asset": a.id, "name": a.name, "kind": a.kind, "licence": a.licence, "scene": c.scene, "offset_ms": c.offset_ms, "gain_db": c.gain_db, "ducked": c.duck,
+            "ai_generated": a.generated.is_some(), "generated": a.generated }))).collect::<Vec<_>>(),
         "rejected_takes_excluded": project.takes.iter().filter(|t| t.status == TakeStatus::Rejected).map(|t| t.id.clone()).collect::<Vec<_>>(),
         "files": hashes,
         "consent_references": Vec::<String>::new(),
     });
     let manifest_name = format!("{stem} - manifest.json");
     std::fs::write(folder.join(&manifest_name), serde_json::to_string_pretty(&manifest).map_err(|e| failed(e.to_string()))?).map_err(|e| failed(e.to_string()))?;
-
-    let mut names: Vec<String> = files.iter().map(|(n, _)| n.clone()).collect();
     names.push(manifest_name);
     let _ = Licence::Unknown;
     Ok(ExportResult {
         folder: folder.to_string_lossy().to_string(),
         files: names,
-        loudness: out.loudness,
+        loudness: out.loudness.clone(),
         target_lufs: dest_info.target_lufs,
         gain_db: out.gain_db,
         target_reached: out.target_reached,
-        warnings: out.warnings,
+        warnings: out.warnings.clone(),
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::output::{Aspect, Codec};
+    use std::path::PathBuf;
     use crate::adapters::scratch::ScratchAdapter;
     use crate::audio::write_wav_16_mono;
     use crate::project::{Asset, Character, Cue};
@@ -307,7 +372,7 @@ mod tests {
         p.assets.push(Asset {
             id: "asset-m".into(), name: "Library Theme".into(), kind: AssetKind::Music, file: "assets/m.wav".into(), duration_ms: 2000,
             licence: LicenceInfo { licence: lic, source: Some("https://example.com/licence".into()), checked, notes: String::new() },
-            uses_prohibited: vec![], source_note: String::new(),
+            uses_prohibited: vec![], source_note: String::new(), generated: None,
         });
         p.cues.push(Cue { id: "cue-1".into(), asset_id: "asset-m".into(), scene: Some(0), loop_to_scene: true, ..Default::default() });
     }
@@ -382,6 +447,64 @@ mod tests {
         let dest = dir.join("out");
         std::fs::create_dir_all(&dest).unwrap();
         assert!(matches!(export(&p, &reg, &dir, &dest, true), Err(ExportError::Failed { .. })));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+
+    #[test]
+    fn other_formats_subtitles_and_a_truthful_manifest() {
+        let Some(ff) = Ffmpeg::detect(None) else { eprintln!("FFmpeg not found; skipping"); return };
+        let (mut p, reg, dir) = fixture();
+        p.line_directions.clear();
+        let opts = ExportOptions { master: Codec::Mp3 { kbps: 192 }, stems: Some(Codec::Flac), sample_rate: 44_100, subtitles: vec![SubtitleFormat::Srt, SubtitleFormat::Vtt, SubtitleFormat::Srt], speaker_labels: true, ffmpeg_path: None };
+        if !ff.supports(&opts.master) || !ff.supports(opts.stems.as_ref().unwrap()) { eprintln!("encoders missing; skipping"); return }
+        let dest = dir.join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+        let r = export_with(&p, &reg, &dir, &dest, true, &opts).unwrap();
+        let folder = PathBuf::from(&r.folder);
+        for f in ["Test Film - master.mp3", "Test Film - stem dialogue.flac", "Test Film - stem effects.flac", "Test Film - stem music.flac", "Test Film.srt", "Test Film.vtt", "Test Film - manifest.json"] {
+            assert!(folder.join(f).is_file(), "{f} missing: {:?}", r.files);
+        }
+        assert_eq!(r.files.iter().filter(|f| f.ends_with(".srt")).count(), 1, "a repeated subtitle format is written once");
+        let srt = std::fs::read_to_string(folder.join("Test Film.srt")).unwrap();
+        assert!(srt.contains("AMA: hello there my friend"), "{srt}");
+        let m: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(folder.join("Test Film - manifest.json")).unwrap()).unwrap();
+        assert_eq!(m["output"]["master"], "MP3 192 kbps");
+        assert_eq!(m["output"]["sample_rate"], 44_100);
+        assert!(m["output"]["encoder"].as_str().unwrap().to_lowercase().starts_with("ffmpeg version"));
+        assert!(m["files"].as_array().unwrap().iter().any(|f| f["file"] == "Test Film - master.mp3" && f["bytes"].as_u64().unwrap() > 1000));
+        assert!(!folder.join("Test Film - master.wav").exists(), "no stray WAV is left behind");
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_missing_ffmpeg_is_refused_before_anything_is_written() {
+        let (p, reg, dir) = fixture();
+        let dest = dir.join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+        let opts = ExportOptions { master: Codec::Mp3 { kbps: 192 }, ffmpeg_path: Some("C:\\nowhere\\ffmpeg.exe".into()), ..Default::default() };
+        match export_with(&p, &reg, &dir, &dest, true, &opts) {
+            Err(ExportError::Failed { message }) => assert!(message.contains("FFmpeg"), "{message}"),
+            other => panic!("expected a refusal, got {other:?}"),
+        }
+        assert!(std::fs::read_dir(&dest).unwrap().next().is_none(), "nothing may be written when a format cannot be produced");
+        let mp4_stems = ExportOptions { stems: Some(Codec::Mp4 { aspect: Aspect::Wide, kbps: 192 }), ..Default::default() };
+        assert!(matches!(export_with(&p, &reg, &dir, &dest, true, &mp4_stems), Err(ExportError::Failed { .. })));
+        assert!(std::fs::read_dir(&dest).unwrap().next().is_none());
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn wav_only_at_16_bit_44k_with_no_stems() {
+        let (p, reg, dir) = fixture();
+        let dest = dir.join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+        let opts = ExportOptions { master: Codec::Wav { bits: 16 }, stems: None, sample_rate: 44_100, ..Default::default() };
+        let r = export_with(&p, &reg, &dir, &dest, true, &opts).unwrap();
+        assert_eq!(r.files, vec!["Test Film - master.wav".to_string(), "Test Film - manifest.json".to_string()]);
+        let spec = hound::WavReader::open(PathBuf::from(&r.folder).join("Test Film - master.wav")).unwrap().spec();
+        assert_eq!((spec.bits_per_sample, spec.sample_rate), (16, 44_100));
+        assert!((r.loudness.integrated_lufs.unwrap() + 14.0).abs() < 1.2, "{:?}", r.loudness);
         std::fs::remove_dir_all(dir).ok();
     }
 

@@ -55,6 +55,29 @@ pub fn check(text: &str) -> Option<Refusal> {
     None
 }
 
+const DESIGN_PHRASES: &[&str] = &["impersonat", "imitat", "clone of", "sound exactly like", "sounds exactly like", "in the voice of", "identical to the voice of", "deepfake", "voice of the real"];
+
+/// A designed voice describes a character (age, tone, accent), never a real person. Real-person rules apply to every
+/// project (SAFETY_LICENSING.md section 5), so descriptions that aim at someone are refused before anything is sent.
+pub fn check_design(description: &str) -> Option<Refusal> {
+    let lower = description.to_lowercase();
+    let names_someone = ["sounds like ", "sound like ", "sounding like "].iter().any(|lead| {
+        lower.match_indices(lead).any(|(i, _)| {
+            // Offsets come from the lower-cased copy, so slice the original only where that is valid text.
+            let rest = description.get((i + lead.len()).min(description.len())..).unwrap_or("");
+            rest.split_whitespace().next().is_some_and(|w| w.chars().next().is_some_and(|c| c.is_uppercase()))
+        })
+    });
+    if DESIGN_PHRASES.iter().any(|p| lower.contains(p)) || names_someone {
+        return Some(Refusal {
+            rule: "impersonation".into(),
+            message: "A designed voice cannot be modelled on a real person.".into(),
+            alternative: "Describe the character instead: age, tone, pace and accent, for example \"a calm older woman with a warm Lagos accent\".".into(),
+        });
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -69,6 +92,16 @@ mod tests {
     #[test]
     fn minor_sexual_content_is_refused() {
         assert_eq!(check("an explicit scene with a minor").unwrap().rule, "minors");
+    }
+
+    #[test]
+    fn voice_design_refuses_real_people_and_allows_characters() {
+        for bad in ["sounds like Morgan Freeman", "a voice that sounds exactly like my boss", "Impersonate the president", "in the voice of a famous actor", "clone of her voice", "make a deepfake of him"] {
+            assert_eq!(check_design(bad).unwrap().rule, "impersonation", "{bad}");
+        }
+        for ok in ["a calm older woman with a warm Lagos accent", "a gruff pirate captain, slow and gravelly", "bright young narrator, sounds like a friendly teacher", "energetic child-like robot sidekick", "\u{130}stanbul style: sounds like x"] {
+            assert!(check_design(ok).is_none(), "{ok}");
+        }
     }
 
     #[test]

@@ -4,16 +4,24 @@
 pub mod adapters;
 pub mod audio;
 pub mod consent;
+pub mod decode;
 pub mod direction;
+pub mod engines;
 pub mod exporter;
+pub mod generate;
+pub mod jobs;
 pub mod layout;
 pub mod licence;
 pub mod loudness;
 pub mod mix;
+pub mod net;
+pub mod output;
 pub mod project;
 pub mod providers;
 pub mod render;
 pub mod safety;
 pub mod script;
 pub mod tags;
+#[cfg(test)]
+pub mod testutil;
 pub mod util;

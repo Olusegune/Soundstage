@@ -14,10 +14,12 @@ export interface Prefs {
   welcomed: boolean;
   toured: boolean;
   shortcuts: Partial<Record<ShortcutId, string[]>>;
+  /** A specific ffmpeg.exe the user chose. Empty means look for one automatically. */
+  ffmpegPath: string;
 }
 
 export const DEFAULT_PREFS: Prefs = {
-  theme: "dark", mode: "simple", railCollapsed: false, guideOpen: true, guideWidth: 352, welcomed: false, toured: false, shortcuts: {},
+  theme: "dark", mode: "simple", railCollapsed: false, guideOpen: true, guideWidth: 352, welcomed: false, toured: false, shortcuts: {}, ffmpegPath: "",
 };
 
 const KEY = "soundstage.prefs.v1";
@@ -40,6 +42,7 @@ export function sanitize(raw: unknown): Prefs {
     welcomed: r.welcomed === true,
     toured: r.toured === true,
     shortcuts,
+    ffmpegPath: typeof r.ffmpegPath === "string" && r.ffmpegPath.length < 400 && !/[\r\n\0]/.test(r.ffmpegPath) ? r.ffmpegPath : "",
   };
 }
 

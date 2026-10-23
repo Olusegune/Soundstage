@@ -127,7 +127,7 @@ export const ARTICLES: Article[] = [
     body: [
       { t: "p", text: "The mix has three groups of sound: dialogue, effects and music. Dialogue is laid out in script order with the gaps you choose." },
       { t: "ul", items: [
-        "Import music or effects as WAV files. Soundstage does not make or find music for you in this version.",
+        "Import music or effects (WAV, MP3, FLAC, Ogg or M4A), or create them with AI: describe the sound under Create with AI and choose a generator. Created sounds are labelled AI-generated and start as licence unknown.",
         "Add to timeline places a file at a scene, with an offset, a level and fades. Loop to fill the scene repeats music for the scene's length.",
         "Ducking lowers music and effects while someone is speaking so dialogue stays clear. Turn it off for music that is part of the scene, like a radio.",
         "Where will this play? sets a loudness target. See the glossary for LUFS.",
@@ -139,7 +139,7 @@ export const ARTICLES: Article[] = [
   {
     id: "exporting", title: "Step 6: Export", group: "The steps",
     summary: "Licence checks, the files you get, and the manifest.",
-    tags: ["export", "licence", "license", "commercial", "personal", "stems", "manifest", "master"],
+    tags: ["format", "mp3", "mp4", "flac", "subtitles", "srt", "ffmpeg", "export", "licence", "license", "commercial", "personal", "stems", "manifest", "master"],
     body: [
       { t: "p", text: "Before anything is written, Soundstage checks every voice, engine, music track and effect against your project's target." },
       { t: "ul", items: [
@@ -149,11 +149,13 @@ export const ARTICLES: Article[] = [
       ] },
       { t: "h", text: "What you get" },
       { t: "ul", items: [
-        "A master recording: WAV, 24-bit, 48 kHz.",
+        "A master recording in the format you choose: WAV (16, 24 or 32-bit float), or with FFmpeg installed FLAC, MP3, AAC, Opus, Ogg Vorbis, or an MP4 video with a waveform picture.",
         "Three stems (dialogue, effects, music) of exactly the same length, so they line up in an editor and add back up to the master.",
+        "Optional subtitles (SRT or WebVTT) built from your script and its timings, with speaker names if you like.",
         "A manifest listing every voice, provider, licence decision and file fingerprint, and recording that the dialogue is AI-generated.",
       ] },
       { t: "p", text: "Every export goes into a new folder. Nothing is ever overwritten." },
+      { t: "tip", text: "WAV needs nothing extra. The other formats use FFmpeg, a free program Soundstage does not include. Install it once (for example winget install Gyan.FFmpeg) or choose ffmpeg.exe on the Export screen." },
     ],
   },
   {
@@ -162,7 +164,7 @@ export const ARTICLES: Article[] = [
     tags: ["cost", "price", "paid", "free", "billing", "credits", "elevenlabs"],
     body: [
       { t: "p", text: "Almost everything in Soundstage is free and runs on your computer: writing, casting, directing, rendering with Windows voices, mixing and exporting." },
-      { t: "paid", text: "The only thing that can cost money is a cloud voice (ElevenLabs): rendering a line, or making a sample. It is billed to your account at the provider, under their plan." },
+      { t: "paid", text: "The only things that can cost money are cloud services you connect (ElevenLabs, Kie, fal, OpenRouter): rendering a line, making a sample, designing a voice, or creating music or an effect. Each is billed to your own account at that provider." },
       { t: "ul", items: [
         "Soundstage always asks first and says which provider gets how much text.",
         "It does not show a price, because providers change them and Soundstage will not guess.",
@@ -174,13 +176,17 @@ export const ARTICLES: Article[] = [
   {
     id: "providers", title: "Voices and providers", group: "Understanding",
     summary: "Windows voices, ElevenLabs, keys, and what each can do.",
-    tags: ["provider", "elevenlabs", "key", "windows", "api", "settings", "voices"],
+    tags: ["provider", "elevenlabs", "key", "windows", "api", "settings", "voices", "local", "piper", "comfyui", "suno", "kie", "fal", "openrouter", "ollama", "design"],
     body: [
       { t: "p", text: "Soundstage works with several voice engines behind one set of directions, so changing engine does not mean rewriting your script." },
       { t: "ul", items: [
         "Windows voices: free, offline. Can change pace and loudness for whisper, shout, excited, sad and tired. Cannot laugh, sigh or cough.",
+        "Your own engines: connect a speech server on your computer (Kokoro, LocalAI, Speaches and many others speak the same OpenAI-style language), or Piper. They are free and need no account.",
         "ElevenLabs: cloud. Can perform laugh, sigh, whisper, excited, sarcastic, curious and cry, according to its documentation. Cough, sneeze, sniff, gasp, chuckle, breath, shout, sad, tired and serious are not offered.",
       ] },
+      { t: "p", text: "No account? Open Voice engines and add a local engine or Piper. Ollama runs language models, not speech, so it cannot be a voice engine. ComfyUI works through a workflow you save from it in API format." },
+      { t: "p", text: "Music and effects: ElevenLabs makes both with the same key. Suno songs come through a Kie key. fal models and ComfyUI workflows can be added under Voice engines. Everything made starts as licence unknown." },
+      { t: "p", text: "Design a voice: in the Voice library, describe a character (age, tone, accent), listen to three candidates and keep one. Descriptions that aim at a real person are refused." },
       { t: "p", text: "To use ElevenLabs, open Settings, paste your key, press Save key, then Test connection. Your key is stored in the Windows Credential Manager, not in the project, and Soundstage never shows it again." },
       { t: "p", text: "Soundstage does not list cloned, professional or famous voices from your ElevenLabs account, because using someone's voice requires their recorded consent." },
       { t: "tip", text: "Accent and language quality have not been tested by native speakers yet. Soundstage does not claim a language is supported until that is done." },

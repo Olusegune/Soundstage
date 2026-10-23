@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api, messageOf } from "../api";
 import type { Ctx } from "../ctx";
+import { Flag } from "../flags";
 import { licenceNote } from "../logic";
 import { Confirm, Empty, LicenceChip, PlayButton } from "../ui";
 import type { Voice } from "../types";
@@ -96,7 +97,7 @@ export function CastStep({ ctx }: { ctx: Ctx }) {
             </div>
             {v && (
               <p className="small muted" style={{ marginTop: 8 }}>
-                {v.provider_label} · {v.language} · {v.notes}
+                {v.provider_label} · <Flag locale={v.language} name size={16} /> · {v.notes}
                 {" "}{v.sends_data ? `Each line is sent to ${v.provider_label} to be spoken.` : "Runs on this computer; nothing is sent anywhere."}
               </p>
             )}

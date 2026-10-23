@@ -242,6 +242,19 @@ try {
   await app.shot(`${shotsDir}/light-1280x720-settings.png`);
   await audit("settings (light)");
 
+  // New in v0.2: generators, designers, export formats, library design card, Mix create panel.
+  {
+    const gens = await app.ev("window.__TAURI_INTERNALS__.invoke('list_generators').then(g=>g.map(x=>x.id))");
+    app.check("ElevenLabs music and effects are listed as a generator", Array.isArray(gens) && gens.some((g) => /eleven/i.test(g)), JSON.stringify(gens));
+    const des = await app.ev("window.__TAURI_INTERNALS__.invoke('list_designers').then(g=>g.map(x=>x.id))");
+    app.check("ElevenLabs is offered for voice design", Array.isArray(des) && des.some((g) => /eleven/i.test(g)), JSON.stringify(des));
+    const bad = await app.ev("window.__TAURI_INTERNALS__.invoke('design_voice',{adapterId:'elevenlabs',description:'a voice that sounds exactly like Morgan Freeman, deep and warm',sampleText:null}).then(()=>'allowed',e=>String(e))");
+    app.check("a real-person voice description is refused before anything is sent", /real person|character|Describe/i.test(String(bad)), String(bad).slice(0, 160));
+    await app.press("Ctrl+Shift+V"); await sleep(600);
+    const lib = await app.ev("document.body.textContent");
+    app.check("the Voice library has the Design a voice card", /Design a voice/.test(lib));
+    await app.press("Ctrl+O"); await sleep(500);
+  }
   const screens = [["home", async () => { await app.press("Ctrl+O"); await sleep(600); }], ["library", async () => { await app.press("Ctrl+Shift+V"); await sleep(600); }]];
   for (const [theme, label] of [["light", "Light"], ["dark", "Dark"]]) {
     await app.press("Ctrl+,"); await sleep(400);

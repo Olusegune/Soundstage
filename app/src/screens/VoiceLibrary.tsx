@@ -1,18 +1,45 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, messageOf } from "../api";
 import { licenceNote } from "../logic";
+import { Flag, languageName } from "../flags";
 import { LicenceChip, PlayButton } from "../ui";
-import { NON_VERBAL, type Voice } from "../types";
+import { NON_VERBAL, type DesignerInfo, type DesignPreview, type Voice } from "../types";
 
 const ALL_TAGS = [...NON_VERBAL, "whisper", "shout", "excited", "sad", "tired", "sarcastic", "curious", "serious"];
 
-export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: boolean) => void; onBack: () => void; inProject: boolean; onSettings: () => void }) {
+export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: boolean) => void; onBack: () => void; inProject: boolean; onSettings: () => void; onEngines: () => void; onChanged?: () => void }) {
   const { voices } = props;
   const [q, setQ] = useState("");
   const [lang, setLang] = useState("");
   const [lic, setLic] = useState("");
   const [paths, setPaths] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+
+  const [designers, setDesigners] = useState<DesignerInfo[]>([]);
+  const [des, setDes] = useState({ adapter: "", text: "", busy: false, confirm: false, previews: [] as DesignPreview[], pick: 0, name: "", saving: false });
+  useEffect(() => { void api.listDesigners().then(setDesigners).catch(() => setDesigners([])); }, []);
+  const designer = designers.find((d) => d.id === des.adapter) ?? designers.find((d) => d.ready) ?? designers[0];
+  const designLen = des.text.trim().length;
+
+  const makePreviews = async () => {
+    if (!designer) return;
+    setDes((d) => ({ ...d, busy: true, confirm: false, previews: [] }));
+    try {
+      const previews = await api.designVoice(designer.id, des.text.trim(), null);
+      setDes((d) => ({ ...d, previews, pick: 0 }));
+    } catch (e) { props.toast(messageOf(e), true); } finally { setDes((d) => ({ ...d, busy: false })); }
+  };
+  const keep = async () => {
+    const p = des.previews[des.pick];
+    if (!designer || !p || !des.name.trim()) return;
+    setDes((d) => ({ ...d, saving: true }));
+    try {
+      await api.saveDesignedVoice(designer.id, p.generated_voice_id, des.name.trim(), des.text.trim());
+      props.toast(`${des.name.trim()} is in your library. Its licence is unknown until you record the provider's terms.`);
+      setDes((d) => ({ ...d, previews: [], name: "", text: "" }));
+      props.onChanged?.();
+    } catch (e) { props.toast(messageOf(e), true); } finally { setDes((d) => ({ ...d, saving: false })); }
+  };
 
   const languages = useMemo(() => [...new Set(voices.map((v) => v.language))].sort(), [voices]);
   const shown = voices.filter((v) =>
@@ -35,11 +62,11 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
       <div className="card">
         <div className="row" style={{ alignItems: "end" }}>
           <div><label htmlFor="vq">Search</label><input id="vq" type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or accent" /></div>
-          <div><label htmlFor="vl">Language</label><select id="vl" value={lang} onChange={(e) => setLang(e.target.value)}><option value="">All</option>{languages.map((l) => <option key={l} value={l}>{l === "zxx" ? "zxx (tones only)" : l}</option>)}</select></div>
+          <div><label htmlFor="vl">Language</label><select id="vl" value={lang} onChange={(e) => setLang(e.target.value)}><option value="">All</option>{languages.map((l) => <option key={l} value={l}>{languageName(l)}</option>)}</select></div>
           <div><label htmlFor="vli">Licence</label><select id="vli" value={lic} onChange={(e) => setLic(e.target.value)}><option value="">All</option><option value="commercial">Commercial</option><option value="unknown">Unknown</option><option value="non-commercial">Non-commercial</option></select></div>
         </div>
       </div>
-      {!voices.some((v) => v.sends_data) && <div className="callout small"><strong>Want cloud voices?</strong>Save an ElevenLabs key and their premade and designed voices appear here. Cloned and professional voices from your account are never listed, because they need a consent record.<div className="row" style={{ marginTop: 8 }}><button className="small" onClick={props.onSettings}>Open Settings</button></div></div>}
+      {!voices.some((v) => v.sends_data) && <div className="callout small"><strong>Want cloud voices?</strong>Save an ElevenLabs key, or add a local engine, and more voices appear here. Cloned and professional voices from your account are never listed, because they need a consent record.<div className="row" style={{ marginTop: 8 }}><button className="small" onClick={props.onSettings}>Open Settings</button><button className="small" onClick={props.onEngines}>Add a local engine</button></div></div>}
       {voices.length === 0 && <div className="callout warn"><strong>Looking for voices…</strong>If this stays empty, Windows has no speech voices installed. Add one in Windows Settings under Time &amp; language, then Speech.</div>}
       <div className="card">
         <table>
@@ -48,7 +75,7 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
             {shown.map((v) => (
               <tr key={v.id}>
                 <td><strong>{v.name}</strong><div className="small muted">{v.provider_label}{v.sends_data ? " · sends text online" : " · on this computer"}</div></td>
-                <td>{v.language} · {v.accent}</td>
+                <td><Flag locale={v.language} name /><div className="small muted">{v.accent}</div></td>
                 <td>{v.gender} · {v.age_range}</td>
                 <td><LicenceChip licence={v.licence.licence} note={v.licence.notes} /><div className="small muted">{licenceNote(v.licence)}</div></td>
                 <td className="small" style={{ maxWidth: 260 }}>
@@ -62,10 +89,41 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
         </table>
         {voices.length > 0 && shown.length === 0 && <p className="muted">No voices match those filters.</p>}
       </div>
-      <div className="card">
-        <h2>Voice design and cloning</h2>
-        <p><strong>Voice design</strong> (describe a voice and generate it) needs a provider that supports it. None of the installed voices do, so it is not offered yet.</p>
-        <p style={{ marginBottom: 0 }}><strong>Voice cloning</strong> arrives in a later version. It will only ever work with a verified, revocable consent record from the voice's owner, and it will be impossible without one. Cloning public figures, children and deceased people is refused.</p>
+      <div className="card" role="group" aria-label="Design a voice">
+        <h2>Design a voice</h2>
+        {designers.length === 0 ? (
+          <p className="muted">Describe a voice in words and have it made for you. This needs a provider that supports it. Save an ElevenLabs key in Settings and it appears here.</p>
+        ) : (
+          <>
+            <p className="muted small">Describe the character, not a real person: age, tone, pace, accent. You hear three candidates and keep the one you like.</p>
+            <label htmlFor="d-text">Description <span className="faint small">({designLen}/1000, at least 20)</span></label>
+            <textarea id="d-text" rows={3} maxLength={1000} style={{ width: "100%" }} value={des.text} onChange={(e) => setDes({ ...des, text: e.target.value })} placeholder="A calm older woman with a warm Lagos accent, slow and kind" />
+            <div className="row" style={{ marginTop: 8, alignItems: "end" }}>
+              {designers.length > 1 && <div><label htmlFor="d-src">With</label><select id="d-src" value={designer?.id ?? ""} onChange={(e) => setDes({ ...des, adapter: e.target.value })}>{designers.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}</select></div>}
+              <button className="primary" disabled={des.busy || !designer?.ready || designLen < 20} onClick={() => setDes({ ...des, confirm: true })}>{des.busy ? <><span className="spin" aria-hidden="true" /> Designing</> : "Design 3 voices"}</button>
+              {designer && !designer.ready && <span className="small muted">Save a key for {designer.label} first.</span>}
+            </div>
+            {des.confirm && designer && (
+              <div className="callout" role="alert" style={{ marginTop: 10 }}><strong>Send this description to {designer.label}?</strong>It is sent over the internet and may use credits on your account. Nothing from your projects is sent.
+                <div className="row" style={{ marginTop: 8 }}><button className="primary small" onClick={() => void makePreviews()}>Send and design</button><button className="small" onClick={() => setDes({ ...des, confirm: false })}>Cancel</button></div></div>
+            )}
+            {des.previews.length > 0 && (
+              <div style={{ marginTop: 14 }} role="radiogroup" aria-label="Candidate voices">
+                {des.previews.map((p, i) => (
+                  <div key={p.generated_voice_id} className="row" style={{ marginBottom: 6 }}>
+                    <label className="inline"><input type="radio" name="d-pick" checked={des.pick === i} onChange={() => setDes({ ...des, pick: i })} /> Candidate {i + 1}</label>
+                    <PlayButton path={p.path} label={`candidate ${i + 1}`} bust={p.path} />
+                  </div>
+                ))}
+                <div className="row" style={{ alignItems: "end", marginTop: 8 }}>
+                  <div><label htmlFor="d-name">Name this voice</label><input id="d-name" type="text" maxLength={60} value={des.name} onChange={(e) => setDes({ ...des, name: e.target.value })} /></div>
+                  <button className="primary" disabled={des.saving || !des.name.trim()} onClick={() => void keep()}>{des.saving ? "Keeping…" : "Keep this voice"}</button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+        <p className="small muted" style={{ marginBottom: 0, marginTop: 12 }}><strong>Voice cloning</strong> arrives in a later version. It will only ever work with a verified, revocable consent record from the voice's owner. Cloning public figures, children and deceased people is refused.</p>
       </div>
       <p className="small muted">Accent and non-verbal quality are not rated here. Soundstage lists a language or sound as supported only after native-speaker listening tests show it works.</p>
     </div>

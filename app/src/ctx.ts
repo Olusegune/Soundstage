@@ -9,6 +9,8 @@ export interface Ctx {
   /** Absolute project folder. */
   dir: string;
   mode: Mode;
+  ffmpegPath: string;
+  setFfmpegPath: (p: string) => void;
   /** Apply an edit. Edits with the same `coalesce` key within a second share one undo step. */
   edit: (fn: (p: Project) => Project, coalesce?: string) => void;
   toast: (text: string, bad?: boolean) => void;

@@ -70,6 +70,15 @@ pub enum AssetKind {
     Sfx,
 }
 
+/// How a generated asset was made. Recorded so an export can say so, and so the same sound can be traced and remade.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct GenInfo {
+    pub generator: String,
+    pub provider_version: String,
+    pub prompt: String,
+    pub created: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Asset {
     pub id: String,
@@ -83,6 +92,9 @@ pub struct Asset {
     pub uses_prohibited: Vec<String>,
     #[serde(default)]
     pub source_note: String,
+    /// Set when Soundstage generated this audio. Absent for files the user imported.
+    #[serde(default)]
+    pub generated: Option<GenInfo>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

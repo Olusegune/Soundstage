@@ -7,6 +7,7 @@ import { HelpCenter } from "./help/HelpCenter";
 import * as I from "./icons";
 import { applyTheme, loadPrefs, resolveTheme, savePrefs, type Mode, type Prefs, type Theme } from "./prefs";
 import { Home } from "./screens/Home";
+import { Providers } from "./screens/Providers";
 import { Settings } from "./screens/Settings";
 import { VoiceLibrary } from "./screens/VoiceLibrary";
 import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
@@ -252,8 +253,8 @@ export default function App() {
     } catch (e) { say(messageOf(e), true); }
   }, [openProject, say]);
 
-  const openAux = useCallback((v: "library" | "settings" | "help") => {
-    setReturnTo((r) => (view === "library" || view === "settings" || view === "help" ? r : view));
+  const openAux = useCallback((v: "library" | "settings" | "help" | "providers") => {
+    setReturnTo((r) => (view === "library" || view === "settings" || view === "help" || view === "providers" ? r : view));
     setView(v);
   }, [view]);
   const back = () => setView(returnTo === "project" && project ? "project" : "home");
@@ -410,6 +411,7 @@ export default function App() {
     }
     out.push({ id: "home", group: "Go to", title: "Projects (Home)", icon: <I.Home size={16} />, keys: k("open-project"), run: () => void goHome() });
     out.push({ id: "voices", group: "Go to", title: "Voice library", icon: <I.Voices size={16} />, keys: k("voices"), run: () => openAux("library") });
+    out.push({ id: "engines", group: "Go to", title: "Voice engines (local and custom)", icon: <I.Layers size={16} />, run: () => openAux("providers") });
     out.push({ id: "settings", group: "Go to", title: "Settings", icon: <I.Gear size={16} />, keys: k("settings"), run: () => openAux("settings") });
     out.push({ id: "help", group: "Go to", title: "Help and guide", icon: <I.Book size={16} />, keys: k("help"), run: () => openHelp() });
     out.push({ id: "shortcuts", group: "Go to", title: "Keyboard shortcuts", icon: <I.Keyboard size={16} />, keys: k("shortcuts"), run: () => setShortcutsOpen(true) });
@@ -423,14 +425,14 @@ export default function App() {
 
   /* ---------------------------------------------------------------- render */
   const ctx: Ctx | null = project && g ? {
-    project, analysis, voices, dir, mode: prefs.mode, edit, toast: say, goto: (n) => goStep(n),
+    project, analysis, voices, dir, mode: prefs.mode, ffmpegPath: prefs.ffmpegPath, setFfmpegPath: (p) => setPrefs({ ffmpegPath: p }), edit, toast: say, goto: (n) => goStep(n),
     openLibrary: () => openAux("library"), openHelp, render, confirmSend, renderBatch, batch, errors, busy,
     steps: g.steps, next: g.next, mixPreview, mixBuilding, buildMix, markExported: () => setExported(true), focusKey,
   } : null;
 
   const showGuide = view === "project" && !!g;
   const stepDef = g?.steps[step];
-  const hereLabel = view === "home" ? "Projects" : view === "library" ? "Voice library" : view === "settings" ? "Settings" : view === "help" ? "Help and guide" : (stepDef?.label ?? "");
+  const hereLabel = view === "home" ? "Projects" : view === "library" ? "Voice library" : view === "providers" ? "Voice engines" : view === "settings" ? "Settings" : view === "help" ? "Help and guide" : (stepDef?.label ?? "");
   const nextBlocked = g ? g.steps[Math.min(5, step + 1)]?.status === "blocked" : true;
 
   return (
@@ -439,7 +441,7 @@ export default function App() {
       <a className="skip" href="#stage">Skip to content</a>
       <div className="shell" data-rail={railCollapsed ? "collapsed" : "expanded"} data-guide={showGuide && prefs.guideOpen ? "open" : "closed"} style={{ ["--guide-w" as string]: `${prefs.guideWidth}px` }}>
         <Rail view={view} projectName={project?.name ?? null} steps={project && g ? g.steps : null} step={step} collapsed={railCollapsed}
-          onHome={() => void goHome()} onStep={goStep} onVoices={() => openAux("library")} onHelp={() => openHelp()} onShortcuts={() => setShortcutsOpen(true)}
+          onHome={() => void goHome()} onStep={goStep} onVoices={() => openAux("library")} onEngines={() => openAux("providers")} onHelp={() => openHelp()} onShortcuts={() => setShortcutsOpen(true)}
           onSettings={() => openAux("settings")} onToggle={() => setPrefs({ railCollapsed: !prefs.railCollapsed })} shortcutHint={(id) => keyOf(id as ShortcutId)} />
         <Toolbar hereLabel={hereLabel} project={view === "project" ? project : null} saveState={saved} canUndo={history.current.length > 0} canRedo={future.current.length > 0}
           onUndo={undo} onRedo={redo} mode={prefs.mode} onMode={setMode} onPalette={actions.palette} paletteKey={keyOf("palette")}
@@ -448,9 +450,10 @@ export default function App() {
 
         <main className="stage" id="stage" tabIndex={-1}>
           {view === "home" && <Home onOpen={(id) => void openProject(id)} toast={say} onQuickStart={() => void quickStart()} onHelp={() => openHelp("quick-start")} />}
-          {view === "library" && <VoiceLibrary voices={voices} toast={say} onBack={back} inProject={returnTo === "project" && !!project} onSettings={() => openAux("settings")} />}
+          {view === "library" && <VoiceLibrary onChanged={() => { void api.voices().then(setVoices).catch((e) => say(messageOf(e), true)); }} voices={voices} toast={say} onBack={back} inProject={returnTo === "project" && !!project} onSettings={() => openAux("settings")} onEngines={() => openAux("providers")} />}
+          {view === "providers" && <Providers toast={say} onBack={back} inProject={returnTo === "project" && !!project} onChanged={() => { void api.voices().then(setVoices).catch((e) => say(messageOf(e), true)); }} />}
           {view === "settings" && <Settings info={info} toast={say} onBack={back} inProject={returnTo === "project" && !!project} prefs={prefs} onPrefs={setPrefs} onTheme={setTheme}
-            onKeysChanged={() => { void api.voices().then(setVoices).catch((e) => say(messageOf(e), true)); }} onShortcuts={() => setShortcutsOpen(true)} onTour={() => void startTour()} />}
+            onKeysChanged={() => { void api.voices().then(setVoices).catch((e) => say(messageOf(e), true)); }} onShortcuts={() => setShortcutsOpen(true)} onTour={() => void startTour()} onEngines={() => openAux("providers")} />}
           {view === "help" && <HelpCenter articleId={helpId} onSelect={setHelpId} onBack={back} onShortcuts={() => setShortcutsOpen(true)} onTour={() => void startTour()} />}
           {view === "project" && ctx && stepDef && (
             <div className={`page ${step === 3 || step === 4 ? "wide" : ""}`}>

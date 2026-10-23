@@ -1,7 +1,7 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
-  Analysis, Asset, Destination, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Voice,
+  Analysis, Asset, Destination, DesignPreview, DesignerInfo, EnginesConfig, GeneratorInfo, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Voice, VoiceDef,
 } from "./types";
 
 /** Tauri rejects with a string for plain errors and with an object for structured ones. */
@@ -31,11 +31,24 @@ export const api = {
   destinations: () => invoke<Destination[]>("destinations"),
   mixPreview: (project: Project) => invoke<MixPreview>("mix_preview", { project }),
   checkExport: (project: Project) => invoke<GateReport>("check_export", { project }),
-  exportProject: (project: Project, dest: string, acknowledged: boolean) =>
-    invoke<ExportResult>("export_project", { project, dest, acknowledged }),
+  exportCapabilities: (ffmpegPath: string | null) => invoke<ExportCaps>("export_capabilities", { ffmpegPath }),
+  exportProject: (project: Project, dest: string, acknowledged: boolean, options: ExportOptions) =>
+    invoke<ExportResult>("export_project", { project, dest, acknowledged, options }),
   importAsset: (projectId: string, path: string, kind: "music" | "sfx") =>
     invoke<Asset>("import_asset", { projectId, path, kind }),
+  listGenerators: () => invoke<GeneratorInfo[]>("list_generators"),
+  generateAudio: (projectId: string, generatorId: string, kind: "music" | "sfx", prompt: string, seconds: number | null, instrumental: boolean, name: string | null) =>
+    invoke<Asset>("generate_audio", { projectId, generatorId, kind, prompt, seconds, instrumental, name }),
+  generatorTest: (generatorId: string) => invoke<string>("generator_test", { generatorId }),
+  listDesigners: () => invoke<DesignerInfo[]>("list_designers"),
+  designVoice: (adapterId: string, description: string, sampleText: string | null) => invoke<DesignPreview[]>("design_voice", { adapterId, description, sampleText }),
+  saveDesignedVoice: (adapterId: string, generatedVoiceId: string, name: string, description: string) => invoke<string>("save_designed_voice", { adapterId, generatedVoiceId, name, description }),
   setApiKey: (provider: string, key: string) => invoke<void>("set_api_key", { args: { provider, key } }),
+  enginesGet: () => invoke<EnginesView>("engines_get"),
+  enginesSave: (config: EnginesConfig) => invoke<void>("engines_save", { config }),
+  engineForgetKey: (engineId: string) => invoke<void>("engine_forget_key", { engineId }),
+  engineTest: (engineId: string) => invoke<string>("engine_test", { engineId }),
+  engineDiscoverVoices: (engineId: string) => invoke<VoiceDef[]>("engine_discover_voices", { engineId }),
   testConnection: (provider: string) => invoke<string>("test_connection", { provider }),
   hasApiKey: (provider: string) => invoke<boolean>("has_api_key", { provider }),
   deleteApiKey: (provider: string) => invoke<void>("delete_api_key", { provider }),

@@ -15,13 +15,15 @@
 //!   would bypass the consent gate (SAFETY_LICENSING.md section 2).
 
 use crate::licence::{Licence, LicenceInfo};
+use crate::generate::{clamp_seconds, GenKind, GenLimits, GenOutput, GenRequest, Generator};
+use crate::net::read_limited;
 use crate::providers::*;
+use crate::providers::KeyProvider;
 use crate::tags::Token;
 use std::io::Read;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::Duration;
 
-pub type KeyProvider = Arc<dyn Fn() -> Option<String> + Send + Sync>;
 
 const HOST: &str = "https://api.elevenlabs.io";
 const MODEL: &str = "eleven_v3";
@@ -79,7 +81,7 @@ impl ElevenLabsAdapter {
     }
 
     fn key(&self) -> Result<String, AdapterError> {
-        let k = (self.keys)().ok_or(AdapterError::Auth)?;
+        let k = (self.keys)("elevenlabs").ok_or(AdapterError::Auth)?;
         let k = k.trim().to_string();
         // A key that could smuggle header characters is treated as no key at all.
         if k.is_empty() || k.len() > 512 || !k.bytes().all(|b| b.is_ascii_graphic()) {
@@ -269,7 +271,7 @@ impl Adapter for ElevenLabsAdapter {
         Capabilities {
             languages,
             tags: ["laugh", "sigh", "whisper", "excited", "sarcastic", "curious", "cry"].iter().map(|s| s.to_string()).collect(),
-            voice_design: false,
+            voice_design: true,
             cloning: false,
             // Eleven v3 allows 5,000 characters; leave room for the tags the adapter adds.
             max_chars_per_request: 4500,
@@ -285,8 +287,61 @@ impl Adapter for ElevenLabsAdapter {
     fn sends_data(&self) -> bool {
         true
     }
+    fn ready(&self) -> bool {
+        self.has_key()
+    }
     fn check_connection(&self) -> Result<(), AdapterError> {
         self.call("GET", "/v2/voices?page_size=1", None).map(|_| ())
+    }
+    fn design_voice(&self, req: &DesignRequest) -> Result<Vec<DesignPreview>, AdapterError> {
+        let d = req.description.split_whitespace().collect::<Vec<_>>().join(" ");
+        let n = d.chars().count();
+        if !(20..=1000).contains(&n) || d.chars().any(|c| c.is_control()) {
+            return Err(AdapterError::ProviderError("describe the voice in 20 to 1000 characters".into()));
+        }
+        if let Some(r) = crate::safety::check_design(&d) {
+            return Err(AdapterError::ProviderError(format!("{} {}", r.message, r.alternative)));
+        }
+        let mut body = serde_json::json!({ "voice_description": d, "model_id": "eleven_multilingual_ttv_v2" });
+        match req.sample_text.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+            Some(t) if (100..=1000).contains(&t.chars().count()) && !t.chars().any(|c| c.is_control() && c != '\n') => body["text"] = serde_json::json!(t),
+            Some(_) => return Err(AdapterError::ProviderError("the sample text must be 100 to 1000 characters, or left empty".into())),
+            None => body["auto_generate_text"] = serde_json::json!(true),
+        }
+        let v = crate::net::read_json(self.call("POST", "/v1/text-to-voice/design?output_format=mp3_44100_128", Some(&body))?, 40 << 20)?;
+        let mut out = Vec::new();
+        for p in v["previews"].as_array().into_iter().flatten().take(5) {
+            let id = p["generated_voice_id"].as_str().filter(|i| valid_voice_id(i));
+            let bytes = p["audio_base_64"].as_str().and_then(crate::net::base64_decode);
+            let (Some(id), Some(bytes)) = (id, bytes) else { continue };
+            if bytes.len() > 12 * 1024 * 1024 {
+                continue;
+            }
+            if let Ok(dec) = crate::decode::decode_bytes(&bytes, Some("mp3")) {
+                out.push(DesignPreview { generated_voice_id: id.to_string(), samples: dec.channels.into_iter().next().unwrap_or_default(), sample_rate: dec.rate });
+            }
+        }
+        if out.is_empty() {
+            return Err(AdapterError::ProviderError("the provider returned no usable previews".into()));
+        }
+        Ok(out)
+    }
+    fn save_designed_voice(&self, generated_id: &str, name: &str, description: &str) -> Result<Voice, AdapterError> {
+        let name: String = name.split_whitespace().collect::<Vec<_>>().join(" ");
+        let desc: String = description.split_whitespace().collect::<Vec<_>>().join(" ");
+        if !valid_voice_id(generated_id) || name.is_empty() || name.chars().count() > 80 || name.chars().any(|c| c.is_control()) || !(20..=1000).contains(&desc.chars().count()) {
+            return Err(AdapterError::ProviderError("the name or description is not valid".into()));
+        }
+        let body = serde_json::json!({ "voice_name": name, "voice_description": desc, "generated_voice_id": generated_id });
+        let v = crate::net::read_json(self.call("POST", "/v1/text-to-voice", Some(&body))?, 1 << 20)?;
+        let vid = v["voice_id"].as_str().filter(|i| valid_voice_id(i)).ok_or_else(|| AdapterError::ProviderError("the provider did not confirm the voice".into()))?;
+        // The saved voice is new, so the cached list is stale.
+        *self.voices.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        Ok(Voice {
+            id: format!("elevenlabs:{vid}"), name, provider: "elevenlabs".into(), language: "en".into(), accent: "Designed".into(), gender: "Not stated".into(), age_range: "Not stated".into(),
+            licence: licence(), sample_text: "Good morning. This is how I sound.".into(),
+            notes: "A voice you designed. It uses one voice slot in your ElevenLabs account.".into(),
+        })
     }
     fn render(&self, req: &RenderRequest) -> Result<RenderOutput, AdapterError> {
         // Validate everything locally before any network call.
@@ -353,73 +408,80 @@ impl Adapter for ElevenLabsAdapter {
     }
 }
 
+/// ElevenLabs music (`/v1/music`) and sound effects (`/v1/sound-generation`). Facts verified from the public docs on
+/// 2026-10-23: music length 3 to 600 seconds, effects 0.5 to 30 seconds, output as downloadable audio.
+pub struct ElevenLabsGenerator {
+    inner: ElevenLabsAdapter,
+}
+
+const MAX_GEN_BYTES: usize = 60 * 1024 * 1024;
+const MUSIC: GenLimits = GenLimits { min_s: 3.0, max_s: 300.0, default_s: 30.0, supports_length: true };
+const SFX: GenLimits = GenLimits { min_s: 0.5, max_s: 30.0, default_s: 4.0, supports_length: true };
+
+impl ElevenLabsGenerator {
+    pub fn new(keys: KeyProvider) -> Self {
+        ElevenLabsGenerator { inner: ElevenLabsAdapter::new(keys) }
+    }
+    #[cfg(test)]
+    fn for_test(keys: KeyProvider, base: String) -> Self {
+        ElevenLabsGenerator { inner: ElevenLabsAdapter::for_test(keys, base, MAX_AUDIO_BYTES) }
+    }
+}
+
+impl Generator for ElevenLabsGenerator {
+    fn id(&self) -> &str {
+        "elevenlabs-audio"
+    }
+    fn label(&self) -> &str {
+        "ElevenLabs music and effects"
+    }
+    fn kinds(&self) -> Vec<GenKind> {
+        vec![GenKind::Music, GenKind::Sfx]
+    }
+    fn limits(&self, kind: GenKind) -> GenLimits {
+        if kind == GenKind::Music { MUSIC } else { SFX }
+    }
+    fn licence(&self) -> LicenceInfo {
+        LicenceInfo { licence: Licence::Unknown, source: None, checked: None, notes: "Rights to ElevenLabs music and sound effects depend on your plan. Read their current terms and record your check before a commercial export.".into() }
+    }
+    fn notes(&self) -> String {
+        "Your description is sent to ElevenLabs and uses your plan's credits. Soundstage cannot show the cost in advance.".into()
+    }
+    fn sends_data(&self) -> bool {
+        true
+    }
+    fn ready(&self) -> bool {
+        self.inner.has_key()
+    }
+    fn check_connection(&self) -> Result<(), AdapterError> {
+        self.inner.check_connection()
+    }
+    fn generate(&self, req: &GenRequest) -> Result<GenOutput, AdapterError> {
+        let secs = clamp_seconds(&self.limits(req.kind), req.seconds);
+        let (path, body, version) = match req.kind {
+            GenKind::Music => (
+                "/v1/music?output_format=mp3_44100_128",
+                serde_json::json!({ "prompt": req.prompt, "music_length_ms": (secs * 1000.0).round() as u32, "force_instrumental": req.instrumental }),
+                "elevenlabs/music",
+            ),
+            GenKind::Sfx => ("/v1/sound-generation?output_format=mp3_44100_128", serde_json::json!({ "text": req.prompt, "duration_seconds": secs }), "elevenlabs/sound-generation"),
+        };
+        let bytes = read_limited(self.inner.call("POST", path, Some(&body))?, MAX_GEN_BYTES)?;
+        let audio = crate::decode::to_stereo_48k(&bytes, Some("mp3")).map_err(|_| AdapterError::ProviderError("the provider did not return audio Soundstage could read".into()))?;
+        Ok(GenOutput { audio, provider_version: version.into() })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tags::tokenize;
-    use std::io::Write;
-    use std::net::TcpListener;
+    use std::sync::Arc;
 
-    #[derive(Clone, Debug)]
-    struct Req {
-        method: String,
-        path: String,
-        headers: Vec<(String, String)>,
-        body: String,
-    }
-    type Handler = Box<dyn Fn(&Req, usize) -> (u16, Vec<u8>) + Send + Sync>;
-
-    struct Fake {
-        base: String,
-        hits: Arc<Mutex<Vec<Req>>>,
-    }
-
-    fn start(handler: Handler) -> Fake {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let base = format!("http://{}", listener.local_addr().unwrap());
-        let hits: Arc<Mutex<Vec<Req>>> = Arc::default();
-        let h2 = hits.clone();
-        std::thread::spawn(move || {
-            for stream in listener.incoming() {
-                let Ok(mut s) = stream else { continue };
-                let mut data = Vec::new();
-                let mut chunk = [0u8; 4096];
-                let (head_end, len) = loop {
-                    let n = s.read(&mut chunk).unwrap_or(0);
-                    if n == 0 { break (0, 0) }
-                    data.extend_from_slice(&chunk[..n]);
-                    if let Some(p) = data.windows(4).position(|w| w == b"\r\n\r\n") {
-                        let head = String::from_utf8_lossy(&data[..p]).to_lowercase();
-                        let len = head.lines().find_map(|l| l.strip_prefix("content-length:")).and_then(|v| v.trim().parse().ok()).unwrap_or(0usize);
-                        break (p + 4, len);
-                    }
-                };
-                while head_end > 0 && data.len() < head_end + len {
-                    let n = s.read(&mut chunk).unwrap_or(0);
-                    if n == 0 { break }
-                    data.extend_from_slice(&chunk[..n]);
-                }
-                let head = String::from_utf8_lossy(&data[..head_end.max(1) - 1]).to_string();
-                let mut lines = head.lines();
-                let first = lines.next().unwrap_or("").to_string();
-                let mut parts = first.split_whitespace();
-                let req = Req {
-                    method: parts.next().unwrap_or("").into(),
-                    path: parts.next().unwrap_or("").into(),
-                    headers: lines.filter_map(|l| l.split_once(':')).map(|(k, v)| (k.trim().to_lowercase(), v.trim().to_string())).collect(),
-                    body: String::from_utf8_lossy(&data[head_end.min(data.len())..]).to_string(),
-                };
-                let idx = { let mut g = h2.lock().unwrap(); g.push(req.clone()); g.len() - 1 };
-                let (code, body) = handler(&req, idx);
-                let _ = write!(s, "HTTP/1.1 {code} X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
-                let _ = s.write_all(&body);
-            }
-        });
-        Fake { base, hits }
-    }
+    use crate::testutil::{start, Fake, Handler, Req};
 
     const KEY: &str = "test-key-DO-NOT-LEAK-12345";
-    fn keys() -> KeyProvider { Arc::new(|| Some(KEY.to_string())) }
+    fn keys() -> KeyProvider { Arc::new(|_| Some(KEY.to_string())) }
 
     fn pcm_for(text: &str) -> Vec<u8> {
         let words = text.split_whitespace().filter(|w| !w.starts_with('[') && !w.ends_with(']')).count().max(1);
@@ -476,7 +538,7 @@ mod tests {
     #[test]
     fn no_key_means_no_network_call_and_an_auth_error() {
         let f = start(happy());
-        let a = ElevenLabsAdapter::for_test(Arc::new(|| None), f.base.clone(), MAX_AUDIO_BYTES);
+        let a = ElevenLabsAdapter::for_test(Arc::new(|_| None), f.base.clone(), MAX_AUDIO_BYTES);
         assert!(a.list_voices().is_empty());
         assert_eq!(a.check_connection().unwrap_err(), AdapterError::Auth);
         assert!(f.hits.lock().unwrap().is_empty());
@@ -485,7 +547,7 @@ mod tests {
     #[test]
     fn header_injection_keys_are_refused_locally() {
         let f = start(happy());
-        let a = ElevenLabsAdapter::for_test(Arc::new(|| Some("abc\r\nx-evil: 1".into())), f.base.clone(), MAX_AUDIO_BYTES);
+        let a = ElevenLabsAdapter::for_test(Arc::new(|_| Some("abc\r\nx-evil: 1".into())), f.base.clone(), MAX_AUDIO_BYTES);
         assert_eq!(a.check_connection().unwrap_err(), AdapterError::Auth);
         assert!(f.hits.lock().unwrap().is_empty());
     }
@@ -628,6 +690,103 @@ mod tests {
         let a = ElevenLabsAdapter::new(keys());
         assert_eq!(a.base, "https://api.elevenlabs.io");
         assert!(a.sends_data());
+    }
+
+    fn wav_bytes(secs: f32) -> Vec<u8> {
+        let mut cur = std::io::Cursor::new(Vec::new());
+        {
+            let spec = hound::WavSpec { channels: 1, sample_rate: 44_100, bits_per_sample: 16, sample_format: hound::SampleFormat::Int };
+            let mut w = hound::WavWriter::new(&mut cur, spec).unwrap();
+            for i in 0..(secs * 44_100.0) as usize { w.write_sample((9000.0 * (i as f32 * 0.05).sin()) as i16).unwrap(); }
+            w.finalize().unwrap();
+        }
+        cur.into_inner()
+    }
+
+    #[test]
+    fn music_and_effects_use_the_documented_requests_and_come_back_as_48k_stereo() {
+        let f = start(Box::new(|r, _| if r.path.starts_with("/v1/music") || r.path.starts_with("/v1/sound-generation") { (200, wav_bytes(1.0)) } else { (404, b"{}".to_vec()) }));
+        let g = ElevenLabsGenerator::for_test(keys(), f.base.clone());
+        assert!(g.ready() && g.sends_data());
+        let out = g.generate(&GenRequest { kind: GenKind::Music, prompt: "warm piano".into(), seconds: Some(45.0), instrumental: true }).unwrap();
+        assert!((out.audio.len() as i64 - 48_000).abs() < 100, "{}", out.audio.len());
+        assert_eq!(out.audio.l.len(), out.audio.r.len());
+        g.generate(&GenRequest { kind: GenKind::Sfx, prompt: "door slam".into(), seconds: Some(500.0), instrumental: false }).unwrap();
+        let hits = f.hits.lock().unwrap();
+        let m: serde_json::Value = serde_json::from_str(&hits[0].body).unwrap();
+        assert_eq!((m["prompt"].as_str(), m["music_length_ms"].as_u64(), m["force_instrumental"].as_bool()), (Some("warm piano"), Some(45_000), Some(true)));
+        assert!(hits[0].path.contains("output_format=mp3_44100_128"));
+        let s: serde_json::Value = serde_json::from_str(&hits[1].body).unwrap();
+        assert_eq!((s["text"].as_str(), s["duration_seconds"].as_f64()), (Some("door slam"), Some(30.0)), "effect length is clamped to the documented maximum");
+        for h in hits.iter() {
+            assert!(h.headers.iter().any(|(k, v)| k == "xi-api-key" && v == KEY));
+            assert!(!h.path.contains(KEY) && !h.body.contains(KEY));
+        }
+    }
+
+    #[test]
+    fn generators_without_a_key_make_no_request_and_failures_are_plain() {
+        let f = start(Box::new(|_, _| (402, br#"{"detail":{"code":"insufficient_credits"}}"#.to_vec())));
+        let none = ElevenLabsGenerator::for_test(Arc::new(|_| None), f.base.clone());
+        assert!(!none.ready());
+        let req = GenRequest { kind: GenKind::Music, prompt: "x y z".into(), seconds: None, instrumental: false };
+        assert_eq!(none.generate(&req).unwrap_err(), AdapterError::Auth);
+        assert!(f.hits.lock().unwrap().is_empty());
+        let g = ElevenLabsGenerator::for_test(keys(), f.base.clone());
+        let e = g.generate(&req).unwrap_err();
+        assert_eq!(e, AdapterError::Quota);
+        assert!(!format!("{e:?}").contains(KEY));
+        let junk = start(Box::new(|_, _| (200, b"<html>nope</html>".to_vec())));
+        assert!(matches!(ElevenLabsGenerator::for_test(keys(), junk.base.clone()).generate(&req), Err(AdapterError::ProviderError(_))));
+    }
+
+    #[test]
+    fn voice_design_returns_previews_and_saves_one_as_a_permanent_voice() {
+        let wav = wav_bytes(0.5);
+        let b64 = {
+            const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+            let mut o = String::new();
+            for c in wav.chunks(3) {
+                let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+                o.push(T[(n >> 18) as usize & 63] as char); o.push(T[(n >> 12) as usize & 63] as char);
+                o.push(if c.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' }); o.push(if c.len() > 2 { T[n as usize & 63] as char } else { '=' });
+            }
+            o
+        };
+        let b = b64.clone();
+        let f = start(Box::new(move |r, _| {
+            if r.path.starts_with("/v1/text-to-voice/design") {
+                (200, serde_json::json!({"previews":[{"generated_voice_id":"GenAAA111","audio_base_64":b},{"generated_voice_id":"Gen/bad","audio_base_64":b},{"generated_voice_id":"GenBBB222","audio_base_64":"!!!not base64"},{"generated_voice_id":"GenCCC333","audio_base_64":b}],"text":"x"}).to_string().into_bytes())
+            } else if r.method == "POST" && r.path == "/v1/text-to-voice" {
+                (200, serde_json::json!({"voice_id":"SavedVoice999","category":"generated"}).to_string().into_bytes())
+            } else if r.path.starts_with("/v2/voices") { (200, voices_json()) } else { (404, b"{}".to_vec()) }
+        }));
+        let a = adapter(&f);
+        assert!(a.capabilities().voice_design);
+        let prev = a.design_voice(&DesignRequest { description: "a calm older woman with a warm Lagos accent".into(), sample_text: None }).unwrap();
+        assert_eq!(prev.iter().map(|p| p.generated_voice_id.as_str()).collect::<Vec<_>>(), vec!["GenAAA111", "GenCCC333"], "unsafe ids and undecodable previews are dropped");
+        assert_eq!(prev[0].sample_rate, 44_100);
+        let sent: serde_json::Value = serde_json::from_str(&f.hits.lock().unwrap().iter().find(|h| h.path.starts_with("/v1/text-to-voice/design")).unwrap().body).unwrap();
+        assert_eq!((sent["model_id"].as_str(), sent["auto_generate_text"].as_bool()), (Some("eleven_multilingual_ttv_v2"), Some(true)));
+        assert!(!sent.to_string().contains(KEY));
+        let v = a.save_designed_voice("GenAAA111", "Mama Ade", "a calm older woman with a warm Lagos accent").unwrap();
+        assert_eq!((v.id.as_str(), v.licence.licence), ("elevenlabs:SavedVoice999", Licence::Unknown));
+        let saved: serde_json::Value = serde_json::from_str(&f.hits.lock().unwrap().iter().find(|h| h.method == "POST" && h.path == "/v1/text-to-voice").unwrap().body).unwrap();
+        assert_eq!((saved["voice_name"].as_str(), saved["generated_voice_id"].as_str()), (Some("Mama Ade"), Some("GenAAA111")));
+    }
+
+    #[test]
+    fn voice_design_refuses_bad_input_before_any_request() {
+        let f = start(happy());
+        let a = adapter(&f);
+        let d = |t: &str, s: Option<&str>| DesignRequest { description: t.into(), sample_text: s.map(String::from) };
+        for bad in [d("short", None), d("sounds like Morgan Freeman and speaks slowly", None), d(&"x".repeat(1001), None), d("a calm older woman with a warm accent", Some("too short"))] {
+            assert!(a.design_voice(&bad).is_err());
+        }
+        for (id, name, desc) in [("../x", "Ok", "a calm older woman with a warm accent"), ("GenAAA111", "", "a calm older woman with a warm accent"), ("GenAAA111", "Ok", "short")] {
+            assert!(a.save_designed_voice(id, name, desc).is_err());
+        }
+        assert!(f.hits.lock().unwrap().iter().all(|h| !h.path.contains("text-to-voice")), "nothing was sent");
     }
 
     #[test]

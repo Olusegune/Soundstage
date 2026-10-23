@@ -1,11 +1,11 @@
 {
-  "when": "2026-10-23T16:36:22.251Z",
-  "passed": 124,
-  "total": 124,
+  "when": "2026-10-23T17:14:19.720Z",
+  "passed": 128,
+  "total": 128,
   "failed": [],
   "timings": {
-    "paletteOpenMs": 78,
-    "stepSwitchMs": 433
+    "paletteOpenMs": 103,
+    "stepSwitchMs": 459
   },
   "accessibility": [
     {
