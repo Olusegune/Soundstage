@@ -1,7 +1,7 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
-  Analysis, Asset, Destination, Attestation, CloneEntry, CloneInfo, ClonedVoice, DesignPreview, DesignerInfo, RefReport, EnginesConfig, GeneratorInfo, SystemCheck, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Voice, VoiceDef,
+  Analysis, Asset, Destination, Attestation, CleanOut, SpeakOut, ToolInfo, TranscriptOut, CloneEntry, CloneInfo, ClonedVoice, DesignPreview, DesignerInfo, RefReport, EnginesConfig, GeneratorInfo, SystemCheck, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Voice, VoiceDef,
 } from "./types";
 
 /** Tauri rejects with a string for plain errors and with an object for structured ones. */
@@ -50,6 +50,13 @@ export const api = {
   cloneInfo: () => invoke<CloneInfo>("clone_info"),
   cloneCheckReference: (path: string) => invoke<RefReport>("clone_check_reference", { path }),
   cloneVoice: (adapterId: string, path: string, name: string, attestation: Attestation) => invoke<ClonedVoice>("clone_voice", { adapterId, path, name, attestation }),
+  registerClone: (adapterId: string, name: string, attestation: Attestation) => invoke<ClonedVoice>("register_clone", { adapterId, name, attestation }),
+  speakText: (voiceId: string, text: string, emotion: string | null, pace: number | null) => invoke<SpeakOut>("speak_text", { voiceId, text, emotion, pace }),
+  saveAudioCopy: (src: string, dest: string, ffmpegPath: string | null) => invoke<string>("save_audio_copy", { src, dest, ffmpegPath }),
+  saveTextCopy: (dest: string, content: string) => invoke<void>("save_text_copy", { dest, content }),
+  listAudioTools: () => invoke<ToolInfo[]>("list_audio_tools"),
+  transcribeAudio: (adapterId: string, path: string, language: string | null) => invoke<TranscriptOut>("transcribe_audio", { adapterId, path, language }),
+  cleanAudio: (adapterId: string, path: string) => invoke<CleanOut>("clean_audio", { adapterId, path }),
   consentList: () => invoke<CloneEntry[]>("consent_list"),
   consentRevoke: (consentId: string, deleteRemote: boolean) => invoke<string>("consent_revoke", { consentId, deleteRemote }),
   setApiKey: (provider: string, key: string) => invoke<void>("set_api_key", { args: { provider, key } }),

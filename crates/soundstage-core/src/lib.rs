@@ -24,6 +24,7 @@ pub mod render;
 pub mod safety;
 pub mod script;
 pub mod tags;
+pub mod transcribe;
 #[cfg(test)]
 pub mod testutil;
 pub mod util;

@@ -27,7 +27,7 @@ export function Toolbar(props: {
   return (
     <header className="toolbar" role="banner">
       <button className="ghost icon" onClick={props.onToggleRail} aria-label={props.railCollapsed ? "Show sidebar" : "Hide sidebar"} aria-expanded={!props.railCollapsed}><I.PanelLeft size={18} /></button>
-      <div className="crumbs" aria-label="You are here">
+      <div className="crumbs" role="group" aria-label="You are here">
         {p ? (
           <>
             <button className="proj ghost" onClick={() => setDetails((d) => !d)} aria-expanded={details} aria-haspopup="dialog" data-tip="Project details: name, licence target, rating">{p.name}</button>

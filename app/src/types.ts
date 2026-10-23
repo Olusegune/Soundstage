@@ -330,6 +330,7 @@ export interface SpeechEngine {
   needs_key: boolean;
   licence_note: string;
   notes: string;
+  transcribe_model: string;
 }
 
 export interface PiperConfig { exe: string; voices_dir: string }
@@ -363,7 +364,7 @@ export interface GeneratorInfo {
   licence: LicenceInfo;
   notes: string;
 }
-export interface DesignerInfo { id: string; label: string; ready: boolean; design: boolean; clone: boolean }
+export interface DesignerInfo { id: string; label: string; ready: boolean; design: boolean; clone: boolean; register: boolean }
 export interface DesignPreview { generated_voice_id: string; path: string }
 
 export interface EnginesView { config: EnginesConfig; load_error: string | null; keys: Record<string, boolean> }
@@ -381,6 +382,10 @@ export interface Attestation {
   commercial: boolean;
   expires: string | null;
 }
+export interface SpeakOut { path: string; duration_ms: number; voice_name: string }
+export interface ToolInfo { id: string; label: string; ready: boolean; transcribe: boolean; isolate: boolean; sends_data: boolean }
+export interface TranscriptOut { text: string; language: string; srt: string; vtt: string; seconds: number; has_times: boolean }
+export interface CleanOut { path: string; duration_ms: number }
 export interface CloneInfo { statement: string; min_seconds: number; good_seconds: number; max_seconds: number }
 export interface RefReport { seconds: number; used_seconds: number; peak: number; clipped_pct: number; silence_pct: number; problems: string[]; warnings: string[] }
 export interface ConsentRecord { id: string; voice_subject: string; subject_is_self: boolean; purpose: string; commercial_use_permitted: boolean; expires: string | null; signed_at: string | null; status: "active" | "revoked" | "expired" }

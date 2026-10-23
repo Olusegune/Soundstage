@@ -23,6 +23,24 @@ export function Settings(props: {
   const [key, setKey] = useState("");
   const [removing, setRemoving] = useState(false);
   const [helperKey, setHelperKey] = useState("");
+  const [vk, setVk] = useState({ key: "", user: "", has: false, result: "" as string, bad: false, busy: false });
+  const vkRefresh = () => { void Promise.all([api.hasApiKey("voicekiller"), api.hasApiKey("voicekiller:userid")]).then(([a, b]) => setVk((v) => ({ ...v, has: a && b }))).catch(() => undefined); };
+  useEffect(() => { vkRefresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const vkSave = async () => {
+    setVk((v) => ({ ...v, busy: true, result: "" }));
+    try {
+      if (vk.key.trim()) await api.setApiKey("voicekiller", vk.key);
+      if (vk.user.trim()) await api.setApiKey("voicekiller:userid", vk.user);
+      setVk((v) => ({ ...v, key: "", user: "" })); vkRefresh(); props.onKeysChanged();
+      props.toast("VoiceKiller details saved in the Windows Credential Manager.");
+    } catch (e) { props.toast(messageOf(e), true); } finally { setVk((v) => ({ ...v, busy: false })); }
+  };
+  const vkTest = async () => {
+    setVk((v) => ({ ...v, busy: true, result: "" }));
+    try { await api.testConnection("voicekiller"); setVk((v) => ({ ...v, result: "Connected. The key and user ID work.", bad: false })); props.onKeysChanged(); }
+    catch (e) { setVk((v) => ({ ...v, result: messageOf(e), bad: true })); } finally { setVk((v) => ({ ...v, busy: false })); }
+  };
+  const vkRemove = async () => { try { await api.deleteApiKey("voicekiller"); await api.deleteApiKey("voicekiller:userid"); setVk((v) => ({ ...v, has: false, result: "" })); props.onKeysChanged(); props.toast("VoiceKiller details removed."); } catch (e) { props.toast(messageOf(e), true); } };
   const [checks, setChecks] = useState<SystemCheck[]>([]);
   const [checking, setChecking] = useState(false);
   const runCheck = async () => { setChecking(true); try { setChecks(await api.systemCheck(props.prefs.ffmpegPath || null)); } catch (e) { props.toast(messageOf(e), true); } finally { setChecking(false); } };
@@ -76,6 +94,21 @@ export function Settings(props: {
           <button onClick={props.onShortcuts}><I.Keyboard size={16} /> Keyboard shortcuts…</button>
           <button onClick={props.onTour}><I.Rocket size={16} /> Take the guided tour</button>
           <button className="ghost" onClick={() => { props.onPrefs({ welcomed: false, toured: false }); props.toast("The welcome screen will show next time Soundstage starts."); }}>Show the welcome screen again</button>
+        </div>
+      </div>
+
+      <div className="card" role="group" aria-label="VoiceKiller">
+        <div className="row"><h2 style={{ margin: 0 }}>VoiceKiller</h2>{vk.has ? <span className="chip ok">Saved</span> : <span className="chip">Not set up</span>}<span className="chip gold">Sends text over the internet</span></div>
+        <p className="small muted">About two thousand voices in many languages, and your own voices cloned on voicekiller.com. Find your API key and user ID in the VoiceKiller dashboard under API. Both are kept in the Windows Credential Manager.</p>
+        <div className="grid2" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <div><label htmlFor="vk-key">API key</label><input id="vk-key" type="password" autoComplete="off" style={{ width: "100%" }} maxLength={512} placeholder={vk.has ? "Saved. Paste a new one to replace it" : "Paste your API key"} value={vk.key} onChange={(e) => setVk({ ...vk, key: e.target.value })} /></div>
+          <div><label htmlFor="vk-user">User ID</label><input id="vk-user" type="password" autoComplete="off" style={{ width: "100%" }} maxLength={512} placeholder={vk.has ? "Saved. Paste a new one to replace it" : "Paste your user ID"} value={vk.user} onChange={(e) => setVk({ ...vk, user: e.target.value })} /></div>
+        </div>
+        <div className="row" style={{ marginTop: 10 }}>
+          <button className="primary small" disabled={vk.busy || (!vk.key.trim() && !vk.user.trim())} onClick={() => void vkSave()}>Save</button>
+          <button className="small" disabled={vk.busy || !vk.has} onClick={() => void vkTest()}>{vk.busy ? "Testing…" : "Test connection"}</button>
+          {vk.has && <button className="small danger" onClick={() => void vkRemove()}>Remove</button>}
+          {vk.result && <span className={`chip ${vk.bad ? "bad" : "ok"}`} role="status">{vk.result}</span>}
         </div>
       </div>
 
@@ -149,7 +182,7 @@ export function Settings(props: {
 
       <div className="card">
         <h2>About</h2>
-        <p className="small">Soundstage {props.info?.version ?? ""}. Projects are stored in <span className="mono">{props.info?.projects_root ?? "…"}</span>. Deleting a project removes its folder. The only network host Soundstage contacts is <span className="mono">api.elevenlabs.io</span>, and only when you render or sample an ElevenLabs voice or test the connection.</p>
+        <p className="small">Soundstage {props.info?.version ?? ""}. Projects are stored in <span className="mono">{props.info?.projects_root ?? "…"}</span>. Deleting a project removes its folder. Soundstage contacts the internet only when you use an online service you set up: <span className="mono">api.elevenlabs.io</span>, <span className="mono">voicekiller.com</span>, <span className="mono">api.kie.ai</span>, <span className="mono">queue.fal.run</span>, or an address you add yourself. Each asks before it sends anything.</p>
       </div>
       {removing && <Confirm title="Remove the saved ElevenLabs key?" confirmLabel="Remove key" onCancel={() => setRemoving(false)} body={<p>The key will be deleted from the Windows Credential Manager and ElevenLabs voices will disappear from the library. Projects that use them keep their rendered takes but cannot render new ones until a key is saved again.</p>}
         onConfirm={() => { void api.deleteApiKey("elevenlabs").then(() => { setHas(false); setTest(null); props.onKeysChanged(); props.toast("Key removed."); }).catch((e) => props.toast(messageOf(e), true)); setRemoving(false); }} />}

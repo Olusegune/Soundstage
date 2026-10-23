@@ -39,7 +39,7 @@ fn key_provider() -> KeyProvider {
 
 /// Only names Soundstage itself defines can reach the key store: `elevenlabs`, or `engine:<id>` for an engine the user added.
 fn valid_key_name(name: &str) -> bool {
-    matches!(name, "elevenlabs" | "fal" | "kie" | "assistant") || name.strip_prefix("engine:").is_some_and(valid_engine_id)
+    matches!(name, "elevenlabs" | "fal" | "kie" | "assistant" | "voicekiller" | "voicekiller:userid") || name.strip_prefix("engine:").is_some_and(valid_engine_id)
 }
 
 /// Builds the registry on first use and again after a key is saved or removed.
@@ -465,6 +465,187 @@ async fn clone_voice(state: State<'_, AppState>, adapter_id: String, path: Strin
     Ok(out)
 }
 
+/// Use a voice that was cloned on the provider's own website. Needs the same recorded consent as a clone made here.
+#[derive(Serialize)]
+struct SpeakOut {
+    path: String,
+    duration_ms: u64,
+    voice_name: String,
+}
+
+/// Say some text in one voice, outside any project (the Speak screen). Goes through the same render path as a project
+/// line, so the consent gate, safety rules and tag checks all apply.
+#[tauri::command]
+async fn speak_text(state: State<'_, AppState>, voice_id: String, text: String, emotion: Option<String>, pace: Option<f32>) -> Result<SpeakOut, String> {
+    let (store, reg) = shared(&state);
+    let dir = store.root.join(".preview");
+    blocking(move || {
+        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        if text.is_empty() {
+            return Err("Type something to say.".to_string());
+        }
+        if text.chars().count() > 5000 {
+            return Err("Keep it under 5000 characters. Use a project for longer scripts.".to_string());
+        }
+        let registry = reg.get();
+        let voice_name = registry.voice(&voice_id).map(|v| v.name.clone()).ok_or("That voice is not available.")?;
+        let mut p = Project::new("speak", false);
+        p.script = format!("SAMPLE: {text}");
+        p.characters.insert("SAMPLE".into(), soundstage_core::project::Character { voice_id: Some(voice_id), ..Default::default() });
+        let emotion = emotion.filter(|e| e != "neutral" && soundstage_core::tags::DELIVERY.contains(&e.as_str()));
+        let pace = pace.filter(|x| x.is_finite()).map(|x| x.clamp(0.7, 1.4));
+        if emotion.is_some() || pace.is_some() {
+            p.line_directions.insert("s0-l0".into(), soundstage_core::direction::Direction { emotion, pace, ..Default::default() });
+        }
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let r = render::render_line(&mut p, &registry, &dir, "s0-l0").map_err(|e| e.message)?;
+        let take = p.take(&r.take_id).ok_or("The audio was not created.")?;
+        Ok(SpeakOut { path: dir.join(&take.file).to_string_lossy().to_string(), duration_ms: take.duration_ms, voice_name })
+    })
+    .await?
+}
+
+fn codec_for_extension(ext: &str) -> Option<Codec> {
+    Some(match ext {
+        "wav" => Codec::Wav { bits: 24 },
+        "flac" => Codec::Flac,
+        "mp3" => Codec::Mp3 { kbps: 192 },
+        "m4a" => Codec::Aac { kbps: 192 },
+        "ogg" => Codec::Vorbis { quality: 5 },
+        "opus" => Codec::Opus { kbps: 128 },
+        "mp4" => Codec::Mp4 { aspect: Aspect::Wide, kbps: 192 },
+        _ => return None,
+    })
+}
+
+/// Save a generated audio file where the user chose, in the format its extension names. Only files Soundstage made in
+/// its own preview folder can be copied, so this cannot be used to read other files.
+#[tauri::command]
+async fn save_audio_copy(state: State<'_, AppState>, src: String, dest: String, ffmpeg_path: Option<String>) -> Result<String, String> {
+    let (store, _) = shared(&state);
+    let preview = store.root.join(".preview");
+    blocking(move || {
+        let src = std::fs::canonicalize(&src).map_err(|_| "That audio is no longer available. Make it again.".to_string())?;
+        let preview = std::fs::canonicalize(&preview).map_err(|e| e.to_string())?;
+        if !src.starts_with(&preview) {
+            return Err("Only audio made in Soundstage can be saved from here.".to_string());
+        }
+        let dest = PathBuf::from(dest);
+        let ext = dest.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).unwrap_or_default();
+        let codec = codec_for_extension(&ext).ok_or("Choose a file name ending in .wav, .mp3, .flac, .m4a, .ogg, .opus or .mp4.")?;
+        if dest.parent().map_or(true, |d| !d.is_dir()) {
+            return Err("That folder does not exist.".to_string());
+        }
+        let buf = soundstage_core::audio::to_mix_format(&soundstage_core::decode::decode_file(&src)?);
+        let ff = exporter::ffmpeg_status(ffmpeg_path.as_deref());
+        let stem = dest.with_extension("");
+        let title = dest.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+        soundstage_core::output::write_audio(&buf, &stem, &codec, 48_000, ff.as_ref(), &title, &preview).map(|p| p.to_string_lossy().to_string())
+    })
+    .await?
+}
+
+/// Save a transcript or subtitle file where the user chose.
+#[tauri::command]
+async fn save_text_copy(dest: String, content: String) -> Result<(), String> {
+    blocking(move || {
+        let dest = PathBuf::from(dest);
+        let ext = dest.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).unwrap_or_default();
+        if !["txt", "srt", "vtt"].contains(&ext.as_str()) {
+            return Err("Choose a file name ending in .txt, .srt or .vtt.".to_string());
+        }
+        if content.len() > 5 * 1024 * 1024 {
+            return Err("That text is too large to save.".to_string());
+        }
+        if dest.parent().map_or(true, |d| !d.is_dir()) {
+            return Err("That folder does not exist.".to_string());
+        }
+        std::fs::write(&dest, content).map_err(|e| format!("Could not save: {e}"))
+    })
+    .await?
+}
+
+#[derive(Serialize)]
+struct ToolView {
+    id: String,
+    label: String,
+    ready: bool,
+    transcribe: bool,
+    isolate: bool,
+    sends_data: bool,
+}
+
+#[tauri::command]
+async fn list_audio_tools(state: State<'_, AppState>) -> Result<Vec<ToolView>, String> {
+    let (_, reg) = shared(&state);
+    blocking(move || {
+        reg.get()
+            .adapters
+            .iter()
+            .filter(|a| a.can_transcribe() || a.can_isolate())
+            .map(|a| ToolView { id: a.id().into(), label: a.label().into(), ready: a.ready(), transcribe: a.can_transcribe(), isolate: a.can_isolate(), sends_data: a.sends_data() })
+            .collect()
+    })
+    .await
+}
+
+/// Turn a recording into text and subtitles. The audio is converted on this computer and sent to the engine you chose.
+#[tauri::command]
+async fn transcribe_audio(state: State<'_, AppState>, adapter_id: String, path: String, language: Option<String>) -> Result<soundstage_core::transcribe::TranscriptOut, String> {
+    let (_, reg) = shared(&state);
+    blocking(move || {
+        let audio = load_reference(&path)?;
+        let (wav, seconds) = soundstage_core::transcribe::prepare_audio(&audio)?;
+        let registry = reg.get();
+        let a = registry.adapter(&adapter_id).filter(|a| a.can_transcribe()).ok_or("That engine cannot transcribe speech.")?;
+        let t = a.transcribe(&wav, language.as_deref()).map_err(|e| e.to_string())?;
+        Ok(soundstage_core::transcribe::finish(t, seconds))
+    })
+    .await?
+}
+
+#[derive(Serialize)]
+struct CleanOut {
+    path: String,
+    duration_ms: u64,
+}
+
+/// Keep only the speech in a recording (removes noise and music). The result is a new file; the original is untouched.
+#[tauri::command]
+async fn clean_audio(state: State<'_, AppState>, adapter_id: String, path: String) -> Result<CleanOut, String> {
+    let (store, reg) = shared(&state);
+    let dir = store.root.join(".preview");
+    blocking(move || {
+        let audio = load_reference(&path)?;
+        let wav = soundstage_core::transcribe::prepare_isolation(&audio)?;
+        let registry = reg.get();
+        let a = registry.adapter(&adapter_id).filter(|a| a.can_isolate()).ok_or("That engine cannot clean audio.")?;
+        let (mono, rate) = a.isolate_audio(&wav).map_err(|e| e.to_string())?;
+        let up = soundstage_core::audio::resample(&mono, rate, soundstage_core::audio::SR);
+        let stereo = soundstage_core::audio::Stereo { l: up.clone(), r: up };
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let out = dir.join(format!("{}.wav", new_id("clean")));
+        soundstage_core::output::write_wav(&out, &stereo, soundstage_core::audio::SR, 24)?;
+        Ok(CleanOut { path: out.to_string_lossy().to_string(), duration_ms: stereo.len() as u64 * 1000 / soundstage_core::audio::SR as u64 })
+    })
+    .await?
+}
+
+#[tauri::command]
+async fn register_clone(state: State<'_, AppState>, adapter_id: String, name: String, attestation: soundstage_core::clone::Attestation) -> Result<soundstage_core::clone::ClonedVoice, String> {
+    let (_, reg) = shared(&state);
+    let cell = reg.clone();
+    let out = blocking(move || {
+        let rec = soundstage_core::clone::build_record(&attestation, &soundstage_core::clone::ConsentStore::new_record_id()).map_err(|p| p.join(" "))?;
+        let registry = reg.get();
+        let adapter = registry.adapter(&adapter_id).ok_or("That provider is not available.")?;
+        soundstage_core::clone::register_clone(adapter, &reg.consent_store(), rec, &name)
+    })
+    .await??;
+    cell.reset();
+    Ok(out)
+}
+
 #[tauri::command]
 async fn consent_list(state: State<'_, AppState>) -> Result<Vec<soundstage_core::clone::CloneEntry>, String> {
     let (_, reg) = shared(&state);
@@ -563,13 +744,14 @@ struct DesignerView {
     ready: bool,
     design: bool,
     clone: bool,
+    register: bool,
 }
 
 #[tauri::command]
 async fn list_designers(state: State<'_, AppState>) -> Result<Vec<DesignerView>, String> {
     let (_, reg) = shared(&state);
     blocking(move || {
-        reg.get().adapters.iter().filter(|a| a.capabilities().voice_design || a.capabilities().cloning).map(|a| DesignerView { id: a.id().into(), label: a.label().into(), ready: a.ready(), design: a.capabilities().voice_design, clone: a.capabilities().cloning }).collect()
+        reg.get().adapters.iter().filter(|a| a.capabilities().voice_design || a.capabilities().cloning || a.can_register_clone()).map(|a| DesignerView { id: a.id().into(), label: a.label().into(), ready: a.ready(), design: a.capabilities().voice_design, clone: a.capabilities().cloning, register: a.can_register_clone() }).collect()
     })
     .await
 }
@@ -684,7 +866,7 @@ fn engines_get(state: State<'_, AppState>) -> EnginesView {
     };
     let mut keys: BTreeMap<String, bool> = config.speech.iter().map(|e| (e.id.clone(), matches!(entry(&format!("engine:{}", e.id)).map(|k| k.get_password()), Ok(Ok(_))))).collect();
     // Provider-level keys, shared by every engine of that provider.
-    for p in ["elevenlabs", "fal", "kie"] {
+    for p in ["elevenlabs", "fal", "kie", "voicekiller", "voicekiller:userid"] {
         keys.insert(format!("provider:{p}"), matches!(entry(p).map(|k| k.get_password()), Ok(Ok(_))));
     }
     EnginesView { config, load_error, keys }
@@ -868,6 +1050,8 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .text("step-5", "Step 5: Mix\tCtrl+5")
         .text("step-6", "Step 6: Export\tCtrl+6")
         .separator()
+        .text("speak", "S&peak")
+        .text("tools", "&Audio tools")
         .text("voices", "&Voice library")
         .text("engines", "Voice &engines")
         .text("settings", "Se&ttings\tCtrl+,")
@@ -945,6 +1129,13 @@ pub fn run() {
             clone_info,
             clone_check_reference,
             clone_voice,
+            register_clone,
+            speak_text,
+            save_audio_copy,
+            save_text_copy,
+            list_audio_tools,
+            transcribe_audio,
+            clean_audio,
             consent_list,
             consent_revoke,
             quit_app,

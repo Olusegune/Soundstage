@@ -9,6 +9,9 @@ const EMPTY: Attestation = { subject: "", subject_is_self: true, adult: false, a
 /** Cloning a voice, only with the owner's recorded consent. Nothing is sent until the last confirmation. */
 export function CloneVoice(props: { designers: DesignerInfo[]; toast: (t: string, bad?: boolean) => void; onChanged: () => void }) {
   const cloners = props.designers.filter((d) => d.clone);
+  const registrars = props.designers.filter((d) => d.register);
+  const [regName, setRegName] = useState("");
+  const [regBusy, setRegBusy] = useState(false);
   const [info, setInfo] = useState<CloneInfo | null>(null);
   const [entries, setEntries] = useState<CloneEntry[]>([]);
   const [att, setAtt] = useState<Attestation>(EMPTY);
@@ -51,6 +54,16 @@ export function CloneVoice(props: { designers: DesignerInfo[]; toast: (t: string
     try { props.toast(await api.consentRevoke(e.consent.id, alsoDelete)); reload(); props.onChanged(); } catch (err) { props.toast(messageOf(err), true); }
   };
 
+  const consentReady = att.adult && att.alive && att.not_public_figure && att.agrees && att.subject.trim().length >= 2 && att.purpose.trim().length > 0;
+  const register = async (adapterId: string) => {
+    setRegBusy(true);
+    try {
+      const v = await api.registerClone(adapterId, regName.trim(), { ...att, expires: att.expires?.trim() ? att.expires.trim() : null });
+      props.toast(`${v.name} is in your library. Its consent record is saved on this computer.`);
+      setAtt(EMPTY); setRegName(""); reload(); props.onChanged();
+    } catch (e) { props.toast(messageOf(e), true); } finally { setRegBusy(false); }
+  };
+
   const tick = (k: keyof Attestation, label: string) => (
     <label className="inline" style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
       <input type="checkbox" checked={att[k] as boolean} onChange={(e) => setAtt({ ...att, [k]: e.target.checked })} /> <span className="small">{label}</span>
@@ -60,7 +73,7 @@ export function CloneVoice(props: { designers: DesignerInfo[]; toast: (t: string
   return (
     <div className="card" role="group" aria-label="Clone a voice">
       <h2>Clone a voice</h2>
-      {cloners.length === 0 ? (
+      {cloners.length === 0 && registrars.length === 0 ? (
         <p className="muted">Make a synthetic copy of a voice, with its owner's consent. This needs a provider that supports it. Save an ElevenLabs key in Settings and it appears here.</p>
       ) : (
         <>
@@ -83,6 +96,7 @@ export function CloneVoice(props: { designers: DesignerInfo[]; toast: (t: string
           <blockquote className="small muted" style={{ margin: "12px 0", borderLeft: "3px solid var(--gold-line)", paddingLeft: 12 }}>{info?.statement}</blockquote>
           {tick("agrees", "The owner has read and agrees to this statement.")}
 
+          {cloners.length > 0 && (<>
           <div className="row" style={{ marginTop: 10, alignItems: "center" }}>
             <button onClick={() => void choose()}>{file ? "Choose a different recording…" : "Choose the recording…"}</button>
             {file && <span className="small mono muted">{file.split(/[\\/]/).pop()}</span>}
@@ -100,7 +114,20 @@ export function CloneVoice(props: { designers: DesignerInfo[]; toast: (t: string
             <button className="primary" disabled={!ready || busy || !provider?.ready} onClick={() => setAsk(true)}>{busy ? <><span className="spin" aria-hidden="true" /> Creating</> : "Create the voice"}</button>
             {provider && !provider.ready && <span className="small muted">Save a key for {provider.label} first.</span>}
           </div>
+          </>)}
         </>
+      )}
+
+      {registrars.length > 0 && (
+        <div className="linecard" role="group" aria-label="Use a voice cloned on the provider's website" style={{ marginTop: 14 }}>
+          <strong>Use a voice you cloned on {registrars[0]!.label}'s website</strong>
+          <p className="small muted" style={{ margin: "4px 0 8px" }}>{registrars[0]!.label} makes its clones on its own site. Enter the name exactly as it is saved in your voice library there. The same consent promises as above apply, using the form and statement above.</p>
+          <div className="row" style={{ alignItems: "end" }}>
+            <div><label htmlFor="r-name">Voice name as saved</label><input id="r-name" type="text" maxLength={80} value={regName} onChange={(e) => setRegName(e.target.value)} /></div>
+            <button className="small" disabled={regBusy || !consentReady || regName.trim().length === 0 || !registrars[0]!.ready} onClick={() => void register(registrars[0]!.id)}>{regBusy ? "Saving…" : "Add this voice"}</button>
+            {!registrars[0]!.ready && <span className="small muted">Save your {registrars[0]!.label} details in Settings first.</span>}
+          </div>
+        </div>
       )}
 
       {entries.length > 0 && (

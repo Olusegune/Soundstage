@@ -16,7 +16,7 @@ export interface Preset {
 const v = (id: string, name: string, language: string, accent: string, gender: string): VoiceDef => ({ id, name, language, accent, gender });
 
 const base: Omit<SpeechEngine, "id" | "label" | "base_url" | "model"> = {
-  voices: [], response_format: "wav", tags: [], tag_map: {}, needs_key: false, licence_note: "", notes: "",
+  voices: [], response_format: "wav", tags: [], tag_map: {}, needs_key: false, licence_note: "", notes: "", transcribe_model: "",
 };
 
 export const PRESETS: Preset[] = [

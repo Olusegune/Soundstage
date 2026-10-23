@@ -135,6 +135,26 @@ pub trait Adapter: Send + Sync {
     fn save_designed_voice(&self, _generated_id: &str, _name: &str, _description: &str) -> Result<Voice, AdapterError> {
         Err(AdapterError::ProviderError("this voice engine cannot design voices".into()))
     }
+    /// True when this provider can turn speech into text.
+    fn can_transcribe(&self) -> bool {
+        false
+    }
+    /// Transcribe a 16 kHz mono WAV. `language` is an optional ISO code; `None` lets the provider detect it.
+    fn transcribe(&self, _wav: &[u8], _language: Option<&str>) -> Result<crate::transcribe::Transcript, AdapterError> {
+        Err(AdapterError::ProviderError("this engine cannot transcribe speech".into()))
+    }
+    /// True when this provider can remove noise and music from a recording.
+    fn can_isolate(&self) -> bool {
+        false
+    }
+    /// Keep only the speech in a recording. Returns mono samples and their rate.
+    fn isolate_audio(&self, _wav: &[u8]) -> Result<(Vec<f32>, u32), AdapterError> {
+        Err(AdapterError::ProviderError("this engine cannot clean audio".into()))
+    }
+    /// True when a voice the user cloned elsewhere (on the provider's website) can be registered here by name.
+    fn can_register_clone(&self) -> bool {
+        false
+    }
     /// Tell the provider a voice id outside its own list (a clone the user made) may be rendered.
     fn allow_voice(&self, _id: &str) {}
     /// Create a voice from a recording. Returns the new voice's id. Only some providers can.
@@ -292,6 +312,7 @@ impl Registry {
         let mut adapters: Vec<Box<dyn Adapter>> = vec![
             Box::new(crate::adapters::sapi::SapiAdapter::new()),
             Box::new(crate::adapters::elevenlabs::ElevenLabsAdapter::new(keys.clone())),
+            Box::new(crate::adapters::voicekiller::VoicekillerAdapter::new(keys.clone())),
         ];
         for e in &engines.speech {
             // Engines were validated when saved, so a failure here means a hand-edited file; skip it rather than refuse to start.

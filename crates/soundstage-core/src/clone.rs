@@ -267,6 +267,20 @@ pub fn run_clone(adapter: &dyn crate::providers::Adapter, store: &ConsentStore, 
     Ok(voice)
 }
 
+/// Register a voice cloned on the provider's own website. The consent record is made and saved first, exactly as for a
+/// clone made here. Nothing is uploaded: the provider already holds the voice, and we only remember its name.
+pub fn register_clone(adapter: &dyn crate::providers::Adapter, store: &ConsentStore, rec: ConsentRecord, name: &str) -> Result<ClonedVoice, String> {
+    crate::consent::proof(&rec, &crate::consent::Use::Dialogue, rec.commercial_use_permitted).map_err(|p| p.join(" "))?;
+    let name = clean_line(name, 80).ok_or("Enter the voice's name exactly as it is saved in your library.")?;
+    if !adapter.can_register_clone() {
+        return Err(format!("{} does not support registering a cloned voice by name.", adapter.label()));
+    }
+    store.save_record(&rec)?;
+    let voice = ClonedVoice { voice_id: format!("{}-clone:{name}", adapter.id()), adapter_id: adapter.id().to_string(), name, consent_id: rec.id.clone(), created: iso_now() };
+    store.add_voice(voice.clone())?;
+    Ok(voice)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -5,4 +5,5 @@ pub mod kie;
 pub mod openai_speech;
 pub mod piper;
 pub mod sapi;
+pub mod voicekiller;
 pub mod scratch;

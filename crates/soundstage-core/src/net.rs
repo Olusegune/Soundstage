@@ -313,3 +313,19 @@ mod tests {
         assert_eq!(url_encode("a b/c"), "a%20b%2Fc");
     }
 }
+
+/// A multipart/form-data body with text fields and one file. Field values are ours (never raw user bytes in a header),
+/// and the boundary is random, so nothing in the audio can end a part early.
+pub fn multipart(fields: &[(&str, &str)], file: (&str, &str, &str, &[u8])) -> (String, Vec<u8>) {
+    let boundary = format!("----soundstage{}", crate::util::new_id("b"));
+    let mut b = Vec::new();
+    for (k, v) in fields {
+        let v: String = v.chars().filter(|c| !c.is_control()).collect();
+        b.extend_from_slice(format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n").as_bytes());
+    }
+    let (field, filename, ctype, bytes) = file;
+    b.extend_from_slice(format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"{filename}\"\r\nContent-Type: {ctype}\r\n\r\n").as_bytes());
+    b.extend_from_slice(bytes);
+    b.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+    (boundary, b)
+}

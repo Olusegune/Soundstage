@@ -179,6 +179,37 @@ impl Adapter for OpenAiSpeechAdapter {
             })
             .collect()
     }
+    fn can_transcribe(&self) -> bool {
+        !self.cfg.transcribe_model.trim().is_empty()
+    }
+    fn transcribe(&self, wav: &[u8], language: Option<&str>) -> Result<crate::transcribe::Transcript, AdapterError> {
+        if !self.can_transcribe() {
+            return Err(AdapterError::ProviderError("no transcription model is set for this engine".into()));
+        }
+        if wav.len() < 1000 || wav.len() > MAX_AUDIO_BYTES || !wav.starts_with(b"RIFF") {
+            return Err(AdapterError::ProviderError("the recording is not valid".into()));
+        }
+        let lang = language.map(str::trim).filter(|l| (2..=3).contains(&l.len()) && l.bytes().all(|b| b.is_ascii_lowercase()));
+        let mut fields = vec![("model", self.cfg.transcribe_model.as_str()), ("response_format", "verbose_json"), ("timestamp_granularities[]", "word")];
+        if let Some(l) = lang {
+            fields.push(("language", l));
+        }
+        let (boundary, body) = crate::net::multipart(&fields, ("file", "audio.wav", "audio/wav", wav));
+        let key = self.key()?;
+        let mut req = self.agent.post(&self.url("/audio/transcriptions")).set("content-type", &format!("multipart/form-data; boundary={boundary}"));
+        if let Some(k) = &key {
+            req = req.set("Authorization", &format!("Bearer {k}"));
+        }
+        // One attempt: a local server can take minutes on long audio, and a second copy would only slow it down.
+        let res = match req.send_bytes(&body) {
+            Ok(r) if r.status() == 200 => r,
+            Ok(r) => return Err(AdapterError::ProviderError(format!("unexpected HTTP {}", r.status()))),
+            Err(ureq::Error::Status(code, r)) => return Err(error_from_status(code, r)),
+            Err(ureq::Error::Transport(_)) => return Err(AdapterError::Network),
+        };
+        let v = read_json(res, 32 << 20)?;
+        crate::transcribe::parse_openai(&v).map_err(AdapterError::ProviderError)
+    }
     fn provider_version(&self) -> String {
         format!("openai-compatible/{}/{}", self.cfg.id, self.cfg.model)
     }
@@ -434,5 +465,26 @@ mod tests {
         let c = SpeechEngine { base_url: "http://127.0.0.1:1/v1".into(), ..cfg(&start(happy())) };
         let a = OpenAiSpeechAdapter::new(c, Arc::new(|_| None)).unwrap();
         assert_eq!(a.check_connection().unwrap_err(), AdapterError::Network);
+    }
+
+    #[test]
+    fn transcription_goes_to_the_configured_model_and_parses_word_times() {
+        let f = start(Box::new(|r, _| {
+            if r.path == "/v1/audio/transcriptions" {
+                (200, serde_json::json!({"text":"Hello there","language":"english","words":[{"word":"Hello","start":0.0,"end":0.4},{"word":"there","start":0.5,"end":0.9}]}).to_string().into_bytes())
+            } else { (404, b"{}".to_vec()) }
+        }));
+        let mut cfg = SpeechEngine { id: "local".into(), label: "Local".into(), base_url: format!("{}/v1", f.base), model: "kokoro".into(), voices: vec![], response_format: "wav".into(), ..Default::default() };
+        let plain = OpenAiSpeechAdapter::new(cfg.clone(), Arc::new(|_| None)).unwrap();
+        assert!(!plain.can_transcribe(), "off until a transcription model is named");
+        cfg.transcribe_model = "whisper-1".into();
+        let a = OpenAiSpeechAdapter::new(cfg, Arc::new(|_| None)).unwrap();
+        let mut wav = b"RIFF".to_vec();
+        wav.extend(vec![1u8; 3000]);
+        let t = a.transcribe(&wav, Some("en")).unwrap();
+        assert_eq!((t.text.as_str(), t.words.len()), ("Hello there", 2));
+        let hit = f.hits.lock().unwrap().iter().find(|h| h.path == "/v1/audio/transcriptions").cloned().unwrap();
+        assert!(hit.body.contains("whisper-1") && hit.body.contains("verbose_json") && hit.body.contains("timestamp_granularities[]"));
+        assert!(a.transcribe(b"nope", None).is_err());
     }
 }

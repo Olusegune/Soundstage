@@ -182,6 +182,7 @@ export const ARTICLES: Article[] = [
       { t: "ul", items: [
         "Windows voices: free, offline. Can change pace and loudness for whisper, shout, excited, sad and tired. Cannot laugh, sigh or cough.",
         "Your own engines: connect a speech server on your computer (Kokoro, LocalAI, Speaches and many others speak the same OpenAI-style language), or Piper. They are free and need no account.",
+        "VoiceKiller: cloud, about two thousand voices in many languages, plus voices you cloned on voicekiller.com. Delivery and speed are passed as instructions. Cannot laugh, sigh or cough.",
         "ElevenLabs: cloud. Can perform laugh, sigh, whisper, excited, sarcastic, curious and cry, according to its documentation. Cough, sneeze, sniff, gasp, chuckle, breath, shout, sad, tired and serious are not offered.",
       ] },
       { t: "p", text: "No account? Open Voice engines and add a local engine or Piper. Ollama runs language models, not speech, so it cannot be a voice engine. ComfyUI works through a workflow you save from it in API format." },
@@ -190,6 +191,28 @@ export const ARTICLES: Article[] = [
       { t: "p", text: "To use ElevenLabs, open Settings, paste your key, press Save key, then Test connection. Your key is stored in the Windows Credential Manager, not in the project, and Soundstage never shows it again." },
       { t: "p", text: "Soundstage does not list cloned, professional or famous voices from your ElevenLabs account, because using someone's voice requires their recorded consent." },
       { t: "tip", text: "Accent and language quality have not been tested by native speakers yet. Soundstage does not claim a language is supported until that is done." },
+    ],
+  },
+  {
+    id: "speak-tools", title: "Speak, transcribe and clean audio", group: "Understanding",
+    summary: "Quick ways to use a voice or a recording without making a project.",
+    tags: ["speak", "tts", "text to speech", "transcribe", "speech to text", "subtitles", "srt", "clean", "noise", "isolate", "whisper", "save"],
+    body: [
+      { t: "p", text: "Not everything needs a project. The Speak and Audio tools screens (in the sidebar, the Go menu and the command palette) do one job at a time." },
+      { t: "h", text: "Speak" },
+      { t: "ul", items: [
+        "Search the voice list, type up to 5000 characters, pick a delivery and speed, and press Speak it.",
+        "Play the result, then Save as WAV, MP3, FLAC, M4A, Ogg, Opus or MP4. Choose the format by the file name's ending.",
+        "Online voices ask before sending your text. Audio made here starts as licence unknown, so use a project for anything you will sell.",
+      ] },
+      { t: "h", text: "Speech to text" },
+      { t: "ul", items: [
+        "Choose a recording (up to 25 minutes) and press Transcribe. You get the text and, when the engine gives word times, SRT and WebVTT subtitles.",
+        "Works with ElevenLabs, or with your own server: add a Whisper model name to a local engine under Voice engines.",
+        "The recording is converted on your computer first and sent only to the engine you chose.",
+      ] },
+      { t: "h", text: "Clean audio" },
+      { t: "p", text: "Removes background noise and music and keeps the voice (ElevenLabs). Your original is not changed. Recordings up to 10 minutes." },
     ],
   },
   {

@@ -170,6 +170,10 @@ Shipped but **not live-tested** unless stated. Each one is built from public doc
 | fal (ACE-Step preset: `fal-ai/ace-step/prompt-to-audio`, id from fal's guide, fields unverified) | Cloud | queue.fal.run (approved by Victor 2026-10-23; not yet live-tested) | Queue submit, poll, fetch result; template per model | Field names differ per model; presets are starting points |
 | ComfyUI | Local | Loopback or private address | Submit a user-supplied API-format workflow, poll history, fetch the output file | Behaviour differs by node pack and version |
 
+| VoiceKiller | Cloud | voicekiller.com (host given by the project owner with the API docs, 2026-10-23) | `api-key` and `userid` headers; voice list, text to speech (MP3, max 6000 characters, `instructions` for style and pace), and speech from a voice cloned on their website. Written from their public API page; tested against a fake server only | Live call; the docs do not state rate limits or whether `instructions` is honoured on every voice; clones cannot be created through the API |
+| ElevenLabs speech to text and audio isolation | Cloud | api.elevenlabs.io | `/v1/speech-to-text` (model `scribe_v2`, word timestamps) and `/v1/audio-isolation`, from their public API pages | Live call; the isolation page does not state the response format, so the reply is decoded as audio and refused if it is not |
+| Local transcription | Local or LAN | Address of the engine you set | `/audio/transcriptions` (OpenAI-style) with the transcription model you name | Server and model differences |
+
 Downloads of generated audio from a provider go through a hardened fetcher: https only, public addresses only, at most three validated redirects, a size cap, and no credentials sent.
 
 Not bundled: FFmpeg (user-installed, LGPL/GPL by build), Piper, ComfyUI, any model weights. Bundling an LGPL FFmpeg build (about 70 to 100 MB) is a decision for the project owner.

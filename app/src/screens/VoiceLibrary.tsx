@@ -16,6 +16,7 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
   const [lic, setLic] = useState("");
   const [paths, setPaths] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [limit, setLimit] = useState(100);
 
   const [designers, setDesigners] = useState<DesignerInfo[]>([]);
   const [des, setDes] = useState({ adapter: "", text: "", busy: false, confirm: false, previews: [] as DesignPreview[], pick: 0, name: "", saving: false });
@@ -64,8 +65,8 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
       </div>
       <div className="card">
         <div className="row" style={{ alignItems: "end" }}>
-          <div><label htmlFor="vq">Search</label><input id="vq" type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or accent" /></div>
-          <div><label htmlFor="vl">Language</label><select id="vl" value={lang} onChange={(e) => setLang(e.target.value)}><option value="">All</option>{languages.map((l) => <option key={l} value={l}>{languageName(l)}</option>)}</select></div>
+          <div><label htmlFor="vq">Search</label><input id="vq" type="text" value={q} onChange={(e) => { setQ(e.target.value); setLimit(100); }} placeholder="Name or accent" /></div>
+          <div><label htmlFor="vl">Language</label><select id="vl" value={lang} onChange={(e) => { setLang(e.target.value); setLimit(100); }}><option value="">All</option>{languages.map((l) => <option key={l} value={l}>{languageName(l)}</option>)}</select></div>
           <div><label htmlFor="vli">Licence</label><select id="vli" value={lic} onChange={(e) => setLic(e.target.value)}><option value="">All</option><option value="commercial">Commercial</option><option value="unknown">Unknown</option><option value="non-commercial">Non-commercial</option></select></div>
         </div>
       </div>
@@ -75,7 +76,7 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
         <table>
           <thead><tr><th>Voice</th><th>Language · accent</th><th>Gender · age</th><th>Licence</th><th>Can perform</th><th /></tr></thead>
           <tbody>
-            {shown.map((v) => (
+            {shown.slice(0, limit).map((v) => (
               <tr key={v.id}>
                 <td><strong>{v.name}</strong><div className="small muted">{v.provider_label}{v.sends_data ? " · sends text online" : " · on this computer"}</div></td>
                 <td><Flag locale={v.language} name /><div className="small muted">{v.accent}</div></td>
@@ -90,6 +91,7 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
             ))}
           </tbody>
         </table>
+        {shown.length > limit && <div className="row" style={{ marginTop: 10 }}><span className="small muted">Showing {limit} of {shown.length} voices. Use the search and language filters to narrow them.</span><button className="small" onClick={() => setLimit(limit + 200)}>Show 200 more</button></div>}
         {voices.length > 0 && shown.length === 0 && <p className="muted">No voices match those filters.</p>}
       </div>
       <div className="card" role="group" aria-label="Design a voice">

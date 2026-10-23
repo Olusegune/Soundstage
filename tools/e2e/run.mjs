@@ -298,6 +298,22 @@ try {
     const dg = await app.ev("window.__TAURI_INTERNALS__.invoke('write_diagnostics',{ffmpegPath:null}).then(p=>p,e=>String(e))");
     app.check("the problem report is written", /diagnostics\.txt$/.test(String(dg)), String(dg));
     await app.shot(`${shotsDir}/dark-1280x720-settings.png`);
+    // Speak and Audio tools (v0.2): reachable from the menu, and Speak really makes audio with a free Windows voice.
+    await app.ev("window.__TAURI_INTERNALS__.invoke('plugin:event|emit',{event:'menu',payload:'speak'})"); await sleep(700);
+    app.check("choosing Speak from the menu opens the Speak screen", /Type something, choose a voice|What should it say/.test(await app.ev("document.body.textContent")));
+    await app.shot(`${shotsDir}/dark-1280x720-speak.png`);
+    await audit("speak");
+    const spoke = await app.ev("window.__TAURI_INTERNALS__.invoke('list_voices').then(v=>v.find(x=>!x.sends_data&&x.language!=='zxx')).then(v=>v?window.__TAURI_INTERNALS__.invoke('speak_text',{voiceId:v.id,text:'Hello there, this is a short test.',emotion:null,pace:null}).then(r=>r.duration_ms,e=>String(e)):'no local voice')");
+    app.check("Speak makes audio with a free Windows voice", typeof spoke === "number" && spoke > 500, String(spoke));
+    const tooLong = await app.ev("window.__TAURI_INTERNALS__.invoke('speak_text',{voiceId:'x',text:'a'.repeat(5001),emotion:null,pace:null}).then(()=>'allowed',e=>String(e))");
+    app.check("Speak refuses text over 5000 characters", /5000/.test(String(tooLong)), String(tooLong));
+    const outside = await app.ev("window.__TAURI_INTERNALS__.invoke('save_audio_copy',{src:'C:/Windows/notepad.exe',dest:'C:/Users/Public/x.wav',ffmpegPath:null}).then(()=>'allowed',e=>String(e))");
+    app.check("saving audio cannot copy files Soundstage did not make", !/allowed/.test(String(outside)), String(outside).slice(0, 120));
+    await app.ev("window.__TAURI_INTERNALS__.invoke('plugin:event|emit',{event:'menu',payload:'tools'})"); await sleep(700);
+    app.check("choosing Audio tools from the menu opens it", /Speech to text/.test(await app.ev("document.body.textContent")));
+    await app.shot(`${shotsDir}/dark-1280x720-audio-tools.png`);
+    await audit("audio tools");
+    await app.press("Ctrl+O"); await sleep(500);
     await app.press("Ctrl+O"); await sleep(500);
     await app.clickText("Open"); await sleep(900);
     await goStepByKey(5);

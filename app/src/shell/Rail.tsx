@@ -1,7 +1,7 @@
 import * as I from "../icons";
 import type { GoldenStep, StepId } from "../golden";
 
-export type View = "home" | "project" | "library" | "providers" | "settings" | "help";
+export type View = "home" | "project" | "library" | "providers" | "settings" | "help" | "speak" | "tools";
 
 const STEP_ICON: Record<StepId, (p: { size?: number }) => React.JSX.Element> = {
   script: I.Script, cast: I.Cast, direct: I.Direct, render: I.Render, mix: I.Mix, export: I.Export,
@@ -19,7 +19,7 @@ function statusWord(s: GoldenStep): string {
 
 export function Rail(props: {
   view: View; projectName: string | null; steps: GoldenStep[] | null; step: number;
-  collapsed: boolean; onHome: () => void; onStep: (i: number) => void; onVoices: () => void; onEngines: () => void;
+  collapsed: boolean; onHome: () => void; onStep: (i: number) => void; onVoices: () => void; onEngines: () => void; onSpeak: () => void; onTools: () => void;
   onHelp: () => void; onShortcuts: () => void; onSettings: () => void; onToggle: () => void; shortcutHint: (s: string) => string;
 }) {
   const { view, steps } = props;
@@ -61,6 +61,14 @@ export function Rail(props: {
       <div className="rail-label">Library</div>
       <button className="rail-item" aria-current={view === "library" ? "page" : undefined} onClick={props.onVoices} aria-label={props.collapsed ? "Voices" : undefined} data-tip={props.collapsed ? "Voices" : undefined} data-tip-pos="right">
         <I.Voices size={18} /><span className="grow">Voices</span>
+      </button>
+
+      <button className="rail-item" aria-current={view === "speak" ? "page" : undefined} onClick={props.onSpeak} aria-label={props.collapsed ? "Speak" : undefined} data-tip={props.collapsed ? "Speak" : undefined} data-tip-pos="right">
+        <I.Speaker size={18} /><span className="grow">Speak</span>
+      </button>
+
+      <button className="rail-item" aria-current={view === "tools" ? "page" : undefined} onClick={props.onTools} aria-label={props.collapsed ? "Audio tools" : undefined} data-tip={props.collapsed ? "Audio tools" : undefined} data-tip-pos="right">
+        <I.Wave size={18} /><span className="grow">Audio tools</span>
       </button>
 
       <button className="rail-item" aria-current={view === "providers" ? "page" : undefined} onClick={props.onEngines} aria-label={props.collapsed ? "Voice engines" : undefined} data-tip={props.collapsed ? "Voice engines" : undefined} data-tip-pos="right">

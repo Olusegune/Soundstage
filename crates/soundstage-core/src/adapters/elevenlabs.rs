@@ -34,22 +34,9 @@ const MAX_AUDIO_BYTES: usize = RATE as usize * 2 * 600;
 const MAX_JSON_BYTES: usize = 4 * 1024 * 1024;
 const MAX_VOICE_PAGES: usize = 10;
 const MAX_CLONE_BYTES: usize = 10 * 1024 * 1024;
+const MAX_STT_BYTES: usize = 80 * 1024 * 1024;
 
-/// A multipart/form-data body with text fields and one file. Field values are ours (never raw user bytes in a header),
-/// and the boundary is random, so nothing in the audio can end a part early.
-fn multipart(fields: &[(&str, &str)], file: (&str, &str, &str, &[u8])) -> (String, Vec<u8>) {
-    let boundary = format!("----soundstage{}", crate::util::new_id("b"));
-    let mut b = Vec::new();
-    for (k, v) in fields {
-        let v: String = v.chars().filter(|c| !c.is_control()).collect();
-        b.extend_from_slice(format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n").as_bytes());
-    }
-    let (field, filename, ctype, bytes) = file;
-    b.extend_from_slice(format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"{filename}\"\r\nContent-Type: {ctype}\r\n\r\n").as_bytes());
-    b.extend_from_slice(bytes);
-    b.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
-    (boundary, b)
-}
+use crate::net::multipart;
 const RETRIES: u32 = 3;
 
 /// Canonical tag to Eleven v3 audio tag. Only tags ElevenLabs documents are mapped; the rest
@@ -136,6 +123,18 @@ impl ElevenLabsAdapter {
                 }
                 Err(ureq::Error::Transport(_)) => return Err(AdapterError::Network),
             }
+        }
+    }
+
+    /// One multipart upload, one attempt: a retry after a timeout could be billed or created twice.
+    fn post_form(&self, path: &str, fields: &[(&str, &str)], file: (&str, &str, &str, &[u8])) -> Result<ureq::Response, AdapterError> {
+        let key = self.key()?;
+        let (boundary, body) = multipart(fields, file);
+        match self.agent.request("POST", &format!("{}{}", self.base, path)).set("xi-api-key", &key).set("content-type", &format!("multipart/form-data; boundary={boundary}")).send_bytes(&body) {
+            Ok(r) if r.status() == 200 => Ok(r),
+            Ok(r) => Err(AdapterError::ProviderError(format!("unexpected HTTP {}", r.status()))),
+            Err(ureq::Error::Status(code, r)) => Err(map_status(code, r)),
+            Err(ureq::Error::Transport(_)) => Err(AdapterError::Network),
         }
     }
 
@@ -343,6 +342,33 @@ impl Adapter for ElevenLabsAdapter {
             return Err(AdapterError::ProviderError("the provider returned no usable previews".into()));
         }
         Ok(out)
+    }
+    fn can_transcribe(&self) -> bool {
+        self.has_key()
+    }
+    fn transcribe(&self, wav: &[u8], language: Option<&str>) -> Result<crate::transcribe::Transcript, AdapterError> {
+        if wav.len() < 1000 || wav.len() > MAX_STT_BYTES || !wav.starts_with(b"RIFF") {
+            return Err(AdapterError::ProviderError("the recording is not valid".into()));
+        }
+        let lang = language.map(str::trim).filter(|l| (2..=3).contains(&l.len()) && l.bytes().all(|b| b.is_ascii_lowercase()));
+        let mut fields = vec![("model_id", "scribe_v2"), ("timestamps_granularity", "word")];
+        if let Some(l) = lang {
+            fields.push(("language_code", l));
+        }
+        let v = crate::net::read_json(self.post_form("/v1/speech-to-text", &fields, ("file", "audio.wav", "audio/wav", wav))?, 32 << 20)?;
+        crate::transcribe::parse_elevenlabs(&v).map_err(AdapterError::ProviderError)
+    }
+    fn can_isolate(&self) -> bool {
+        self.has_key()
+    }
+    fn isolate_audio(&self, wav: &[u8]) -> Result<(Vec<f32>, u32), AdapterError> {
+        if wav.len() < 1000 || wav.len() > MAX_STT_BYTES || !wav.starts_with(b"RIFF") {
+            return Err(AdapterError::ProviderError("the recording is not valid".into()));
+        }
+        let bytes = read_limited(self.post_form("/v1/audio-isolation", &[], ("audio", "audio.wav", "audio/wav", wav))?, MAX_AUDIO_BYTES * 8)?;
+        let d = crate::decode::decode_bytes(&bytes, Some("mp3")).map_err(|_| AdapterError::ProviderError("the provider did not return audio Soundstage could read".into()))?;
+        let n = d.channels[0].len();
+        Ok(((0..n).map(|i| d.channels.iter().map(|c| c.get(i).copied().unwrap_or(0.0)).sum::<f32>() / d.channels.len() as f32).collect(), d.rate))
     }
     fn allow_voice(&self, id: &str) {
         let mut g = self.extra.lock().unwrap_or_else(|e| e.into_inner());
@@ -864,6 +890,32 @@ mod tests {
         assert!(bad_proof.is_err(), "a proof cannot be made for a use the record does not permit");
         let tiny = crate::consent::proof(&rec, &crate::consent::Use::Dialogue, false).unwrap();
         assert!(a.clone_voice(&CloneRequest { name: "x".into(), sample_wav: b"nope".to_vec(), proof: tiny }).is_err(), "bad audio never reaches the network");
+    }
+
+    #[test]
+    fn transcription_and_cleaning_upload_audio_only_and_parse_the_answer() {
+        let wav = {
+            let mut w = b"RIFF".to_vec();
+            w.extend(vec![3u8; 4000]);
+            w
+        };
+        let f = start(Box::new(|r, _| match r.path.as_str() {
+            "/v1/speech-to-text" => (200, serde_json::json!({"text":"Hello there","language_code":"eng","words":[{"text":"Hello","type":"word","start":0.0,"end":0.4},{"text":"there","type":"word","start":0.5,"end":0.9}]}).to_string().into_bytes()),
+            "/v1/audio-isolation" => (200, b"not audio".to_vec()),
+            _ => (404, b"{}".to_vec()),
+        }));
+        let a = adapter(&f);
+        assert!(a.can_transcribe() && a.can_isolate());
+        let t = a.transcribe(&wav, Some("en")).unwrap();
+        assert_eq!((t.text.as_str(), t.words.len()), ("Hello there", 2));
+        let hit = f.hits.lock().unwrap().iter().find(|h| h.path == "/v1/speech-to-text").cloned().unwrap();
+        assert!(hit.body.contains("name=\"model_id\"") && hit.body.contains("scribe_v2") && hit.body.contains("name=\"language_code\""));
+        assert!(!hit.body.contains(KEY));
+        assert!(a.transcribe(b"nope", None).is_err(), "bad audio never reaches the network");
+        assert!(a.transcribe(&wav, Some("e n; drop")).is_ok(), "an odd language code is ignored, not sent");
+        assert!(a.isolate_audio(&wav).is_err(), "a non-audio answer is an error, not silence");
+        let none = ElevenLabsAdapter::for_test(Arc::new(|_| None), f.base.clone(), MAX_AUDIO_BYTES);
+        assert!(!none.can_transcribe());
     }
 
     #[test]

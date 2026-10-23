@@ -19,6 +19,7 @@ _Generated from the in-app Help centre (`app/src/help/content.ts`). Edit that fi
 **Understanding**
 - [What is free and what costs money](#what-is-free-and-what-costs-money)
 - [Voices and providers](#voices-and-providers)
+- [Speak, transcribe and clean audio](#speak-transcribe-and-clean-audio)
 - [The prompt helper](#the-prompt-helper)
 - [Consent and voice cloning](#consent-and-voice-cloning)
 - [Saving, undo and recovery](#saving-undo-and-recovery)
@@ -198,6 +199,7 @@ Soundstage works with several voice engines behind one set of directions, so cha
 
 - Windows voices: free, offline. Can change pace and loudness for whisper, shout, excited, sad and tired. Cannot laugh, sigh or cough.
 - Your own engines: connect a speech server on your computer (Kokoro, LocalAI, Speaches and many others speak the same OpenAI-style language), or Piper. They are free and need no account.
+- VoiceKiller: cloud, about two thousand voices in many languages, plus voices you cloned on voicekiller.com. Delivery and speed are passed as instructions. Cannot laugh, sigh or cough.
 - ElevenLabs: cloud. Can perform laugh, sigh, whisper, excited, sarcastic, curious and cry, according to its documentation. Cough, sneeze, sniff, gasp, chuckle, breath, shout, sad, tired and serious are not offered.
 
 No account? Open Voice engines and add a local engine or Piper. Ollama runs language models, not speech, so it cannot be a voice engine. ComfyUI works through a workflow you save from it in API format.
@@ -211,6 +213,31 @@ To use ElevenLabs, open Settings, paste your key, press Save key, then Test conn
 Soundstage does not list cloned, professional or famous voices from your ElevenLabs account, because using someone's voice requires their recorded consent.
 
 > **Tip.** Accent and language quality have not been tested by native speakers yet. Soundstage does not claim a language is supported until that is done.
+
+## Speak, transcribe and clean audio
+
+_Quick ways to use a voice or a recording without making a project._
+
+Not everything needs a project. The Speak and Audio tools screens (in the sidebar, the Go menu and the command palette) do one job at a time.
+
+
+### Speak
+
+- Search the voice list, type up to 5000 characters, pick a delivery and speed, and press Speak it.
+- Play the result, then Save as WAV, MP3, FLAC, M4A, Ogg, Opus or MP4. Choose the format by the file name's ending.
+- Online voices ask before sending your text. Audio made here starts as licence unknown, so use a project for anything you will sell.
+
+
+### Speech to text
+
+- Choose a recording (up to 25 minutes) and press Transcribe. You get the text and, when the engine gives word times, SRT and WebVTT subtitles.
+- Works with ElevenLabs, or with your own server: add a Whisper model name to a local engine under Voice engines.
+- The recording is converted on your computer first and sent only to the engine you chose.
+
+
+### Clean audio
+
+Removes background noise and music and keeps the voice (ElevenLabs). Your original is not changed. Recordings up to 10 minutes.
 
 ## The prompt helper
 
@@ -382,6 +409,12 @@ _Captured from the real app by `tools/e2e/run.mjs`._
 
 ![Design a voice from a description, with the prompt helper.](design/screens/dark-1280x720-voice-design.png)
 *Design a voice from a description, with the prompt helper.*
+
+![Speak: type something, choose a voice, hear it and save it as WAV, MP3, FLAC and more.](design/screens/dark-1280x720-speak.png)
+*Speak: type something, choose a voice, hear it and save it as WAV, MP3, FLAC and more.*
+
+![Audio tools: speech to text with subtitles, and noise and music removal.](design/screens/dark-1280x720-audio-tools.png)
+*Audio tools: speech to text with subtitles, and noise and music removal.*
 
 ![Voice engines: local engines, Piper, music and effects, ComfyUI.](design/screens/dark-1280x720-voice-engines.png)
 *Voice engines: local engines, Piper, music and effects, ComfyUI.*

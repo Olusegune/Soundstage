@@ -43,13 +43,15 @@ pub struct SpeechEngine {
     pub needs_key: bool,
     pub licence_note: String,
     pub notes: String,
+    /// Optional model name for `/audio/transcriptions` on the same server (a Whisper model, for example).
+    pub transcribe_model: String,
 }
 
 impl Default for SpeechEngine {
     fn default() -> Self {
         SpeechEngine {
             id: String::new(), label: String::new(), base_url: String::new(), model: String::new(), voices: vec![], response_format: "wav".into(),
-            tags: vec![], tag_map: BTreeMap::new(), needs_key: false, licence_note: String::new(), notes: String::new(),
+            tags: vec![], tag_map: BTreeMap::new(), needs_key: false, licence_note: String::new(), notes: String::new(), transcribe_model: String::new(),
         }
     }
 }
@@ -198,6 +200,9 @@ impl SpeechEngine {
         parse_base_url(&self.base_url).map_err(|e| format!("{name}: {e}"))?;
         if self.model.trim().is_empty() || !clean_text(&self.model, 120) {
             return Err(format!("{name}: enter the model name the server expects."));
+        }
+        if !self.transcribe_model.is_empty() && !clean_text(&self.transcribe_model, 120) {
+            return Err(format!("{name}: the transcription model name is not valid."));
         }
         if !["wav", "mp3", "flac", "opus", "aac"].contains(&self.response_format.as_str()) {
             return Err(format!("{name}: the audio format must be wav, mp3, flac, opus or aac."));
