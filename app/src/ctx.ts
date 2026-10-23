@@ -12,6 +12,9 @@ export interface Ctx {
   goto: (step: number) => void;
   openLibrary: () => void;
   /** Render lines into takes. Resolves with the outcome, or null if the call itself failed. */
-  render: (keys: string[]) => Promise<RenderOutcome | null>;
+  /** Pass `confirmed` when the caller already asked the user (batch renders ask once). */
+  render: (keys: string[], opts?: { confirmed?: boolean }) => Promise<RenderOutcome | null>;
+  /** Ask before text leaves this computer. Resolves true at once when every voice is local. */
+  confirmSend: (keys: string[]) => Promise<boolean>;
   busy: Set<string>;
 }

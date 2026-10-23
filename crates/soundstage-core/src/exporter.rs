@@ -204,7 +204,14 @@ pub fn export(project: &Project, reg: &Registry, project_dir: &Path, dest: &Path
     let (out, dest_info, layout) = render_mix(project, project_dir)?;
 
     let stamp = iso_now().replace([':', '-'], "").replace('T', "-").replace('Z', "");
-    let folder = dest.join(format!("{} export {}", safe_file_stem(&project.name), stamp));
+    // A fresh folder every time, even for two exports in the same second. Nothing is ever overwritten.
+    let base = format!("{} export {}", safe_file_stem(&project.name), stamp);
+    let mut folder = dest.join(&base);
+    let mut n = 1;
+    while folder.exists() {
+        n += 1;
+        folder = dest.join(format!("{base} ({n})"));
+    }
     std::fs::create_dir(&folder).map_err(|e| failed(format!("Could not create the export folder: {e}")))?;
     let stem = safe_file_stem(&project.name);
     let files = [
@@ -375,6 +382,18 @@ mod tests {
         let dest = dir.join("out");
         std::fs::create_dir_all(&dest).unwrap();
         assert!(matches!(export(&p, &reg, &dir, &dest, true), Err(ExportError::Failed { .. })));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn exports_in_the_same_second_get_separate_folders() {
+        let (p, reg, dir) = fixture();
+        let dest = dir.join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+        let a = export(&p, &reg, &dir, &dest, true).unwrap();
+        let b = export(&p, &reg, &dir, &dest, true).unwrap();
+        assert_ne!(a.folder, b.folder);
+        assert!(PathBuf::from(&a.folder).join("Test Film - master.wav").exists(), "the first export is untouched");
         std::fs::remove_dir_all(dir).ok();
     }
 

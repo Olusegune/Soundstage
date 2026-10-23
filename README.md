@@ -11,15 +11,15 @@ Soundstage orchestrates voice engines behind one consistent interface. It does n
 | Golden path | Script, Cast, Direct, Render, Mix, Export, with step gating | |
 | Script | `NAME:` lines, `#` / `INT.` scenes, canonical tag validation, import of text | Fountain import (v2) |
 | Direction | Project, character, scene and line levels with the resolved source shown per line; pause, pace, emotion | Word-level emphasis markup (designed, not built) |
-| Voices | Windows built-in voices (offline), test tones | **Cloud voices.** Adding ElevenLabs needs your approval as a paid provider and a new network host (CLAUDE.md). The adapter contract and key storage are ready. |
-| Non-verbal sounds | Validated and **flagged as "not supported by this voice"** before render, never silently dropped | Laughs, sighs, coughs and sneezes need a provider that renders them, or a licensed effects library. This is the open product decision in PROVIDERS.md section 2.2. |
+| Voices | Windows built-in voices (offline), ElevenLabs cloud voices (Eleven v3, needs your own key), test tones | ElevenLabs is tested against a fake server only; a live check with a real key is logged in `docs/PROVIDERS.md` section 9. Voice design and cloning are off. |
+| Non-verbal sounds | Validated and **flagged as "not supported by this voice"** before render, never silently dropped. ElevenLabs renders laugh, sigh and cry, per its docs | Cough, sneeze, sniff and gasp are not documented by any shipped provider. They need a provider that renders them, or a licensed effects library. This is the open product decision in PROVIDERS.md section 2.2. |
 | Takes | Every render is a take; side-by-side selection; approve, hold, reject; notes | Read-only review link (v2) |
 | Mix | Dialogue, effects and music buses; ducking; loudness to a destination; preview mix; master plus three stems that sum to the master | Picture reference, ADR, generated music and effects (v2); MP3 export |
 | Licensing | Licence tag per voice, engine, music and effect; commercial export blocks `unknown`, `non-commercial` and checks older than 90 days; user-recorded checks with source and date | Provenance marking such as C2PA (needs your decision, SAFETY_LICENSING 9.1) |
 | Consent | Consent record model and enforcement in the core, tested | Cloning UI and adapters (v2) |
 | Languages | Whatever voices Windows has installed | **No accent or language claim is made.** Nothing is listed as supported without a bake-off result. The bake-off has not been run. |
 
-Windows voices carry an `unknown` licence, so a project marked **Commercial** will not export with them until you read their terms and record the check. That is deliberate.
+ElevenLabs voices and Windows voices both carry an `unknown` licence, so a project marked **Commercial** will not export with them until you read their terms and record the check. That is deliberate.
 
 ## Layout
 
@@ -52,7 +52,7 @@ The Windows speech adapter runs against the real engine in tests when voices are
 1. No clone is created or used without a complete, active consent record.
 2. Commercial export refuses anything not tagged `commercial` with a check in the last 90 days, and names each blocker.
 3. The UI and project files only ever hold canonical tags and voice ids.
-4. Provider keys live in the Windows Credential Manager only.
+4. Provider keys live in the Windows Credential Manager only. The only network host is `api.elevenlabs.io`, and the app asks before sending any text.
 5. A tag a voice cannot perform is shown before render, never dropped.
 6. Loudness that cannot be reached without clipping is flagged, not silently limited.
 

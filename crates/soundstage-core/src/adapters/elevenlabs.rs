@@ -1,0 +1,640 @@
+//! ElevenLabs cloud voices (Eleven v3, raw 24 kHz PCM).
+//!
+//! Facts below were checked against ElevenLabs' public documentation on 2026-10-23 and are
+//! logged in docs/PROVIDERS.md. Sources: /docs/api-reference/text-to-speech/convert,
+//! /docs/api-reference/voices/search, /docs/eleven-api/resources/errors,
+//! /docs/overview/capabilities/text-to-speech/best-practices.
+//!
+//! Security design (decided before coding):
+//! - The host is pinned to https://api.elevenlabs.io and redirects are never followed.
+//! - The API key comes from an injected `KeyProvider`, is read per call, and is never stored,
+//!   logged, put in a URL, or included in an error.
+//! - Voice ids are validated before they reach a URL path.
+//! - Response bodies are size-capped. Errors keep only a short machine code, not the body.
+//! - Voices in the account that are cloned, professional or "famous" are not listed: using them
+//!   would bypass the consent gate (SAFETY_LICENSING.md section 2).
+
+use crate::licence::{Licence, LicenceInfo};
+use crate::providers::*;
+use crate::tags::Token;
+use std::io::Read;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+pub type KeyProvider = Arc<dyn Fn() -> Option<String> + Send + Sync>;
+
+const HOST: &str = "https://api.elevenlabs.io";
+const MODEL: &str = "eleven_v3";
+const FORMAT: &str = "pcm_24000";
+const RATE: u32 = 24_000;
+/// About ten minutes of 16-bit mono audio. Anything larger is refused.
+const MAX_AUDIO_BYTES: usize = RATE as usize * 2 * 600;
+const MAX_JSON_BYTES: usize = 4 * 1024 * 1024;
+const MAX_VOICE_PAGES: usize = 10;
+const RETRIES: u32 = 3;
+
+/// Canonical tag to Eleven v3 audio tag. Only tags ElevenLabs documents are mapped; the rest
+/// (cough, sneeze, sniff, gasp, chuckle, breath, shout, sad, tired, serious) are unsupported.
+pub fn native_tag(canonical: &str) -> Option<&'static str> {
+    Some(match canonical {
+        "laugh" => "[laughs]",
+        "sigh" => "[sighs]",
+        "whisper" => "[whispers]",
+        "excited" => "[excited]",
+        "sarcastic" => "[sarcastic]",
+        "curious" => "[curious]",
+        "cry" => "[crying]",
+        _ => return None,
+    })
+}
+
+pub struct ElevenLabsAdapter {
+    keys: KeyProvider,
+    base: String,
+    agent: ureq::Agent,
+    voices: Mutex<Option<Vec<Voice>>>,
+    retry_delay: Duration,
+    max_audio_bytes: usize,
+}
+
+impl ElevenLabsAdapter {
+    pub fn new(keys: KeyProvider) -> Self {
+        Self::build(keys, HOST.to_string(), Duration::from_secs(1), MAX_AUDIO_BYTES)
+    }
+
+    fn build(keys: KeyProvider, base: String, retry_delay: Duration, max_audio_bytes: usize) -> Self {
+        let agent = ureq::AgentBuilder::new()
+            .redirects(0)
+            .timeout_connect(Duration::from_secs(10))
+            .timeout_write(Duration::from_secs(30))
+            .timeout_read(Duration::from_secs(90))
+            .user_agent("Soundstage")
+            .build();
+        ElevenLabsAdapter { keys, base, agent, voices: Mutex::new(None), retry_delay, max_audio_bytes }
+    }
+
+    #[cfg(test)]
+    fn for_test(keys: KeyProvider, base: String, max_audio_bytes: usize) -> Self {
+        Self::build(keys, base, Duration::ZERO, max_audio_bytes)
+    }
+
+    fn key(&self) -> Result<String, AdapterError> {
+        let k = (self.keys)().ok_or(AdapterError::Auth)?;
+        let k = k.trim().to_string();
+        // A key that could smuggle header characters is treated as no key at all.
+        if k.is_empty() || k.len() > 512 || !k.bytes().all(|b| b.is_ascii_graphic()) {
+            return Err(AdapterError::Auth);
+        }
+        Ok(k)
+    }
+
+    fn has_key(&self) -> bool {
+        self.key().is_ok()
+    }
+
+    fn call(&self, method: &str, path: &str, body: Option<&serde_json::Value>) -> Result<ureq::Response, AdapterError> {
+        let key = self.key()?;
+        let url = format!("{}{}", self.base, path);
+        let mut attempt = 0;
+        loop {
+            let req = self.agent.request(method, &url).set("xi-api-key", &key);
+            let res = match body {
+                Some(b) => req.set("content-type", "application/json").send_string(&b.to_string()),
+                None => req.call(),
+            };
+            match res {
+                Ok(r) if r.status() == 200 => return Ok(r),
+                Ok(r) => return Err(AdapterError::ProviderError(format!("unexpected HTTP {}", r.status()))),
+                Err(ureq::Error::Status(code, r)) => {
+                    let err = map_status(code, r);
+                    if err == AdapterError::RateLimit && attempt < RETRIES {
+                        attempt += 1;
+                        std::thread::sleep(self.retry_delay * 2u32.pow(attempt - 1));
+                        continue;
+                    }
+                    return Err(err);
+                }
+                Err(ureq::Error::Transport(_)) => return Err(AdapterError::Network),
+            }
+        }
+    }
+
+    fn voices(&self) -> Vec<Voice> {
+        let mut g = self.voices.lock().unwrap_or_else(|e| e.into_inner());
+        if g.is_none() {
+            // No key means no network call. A failed fetch is retried on the next registry refresh.
+            *g = Some(if self.has_key() { self.fetch_voices().unwrap_or_default() } else { Vec::new() });
+        }
+        g.clone().unwrap_or_default()
+    }
+
+    fn fetch_voices(&self) -> Result<Vec<Voice>, AdapterError> {
+        let mut out = Vec::new();
+        let mut token: Option<String> = None;
+        for _ in 0..MAX_VOICE_PAGES {
+            let mut path = "/v2/voices?page_size=100".to_string();
+            if let Some(t) = &token {
+                path.push_str(&format!("&next_page_token={}", url_encode(t)));
+            }
+            let v = read_json(self.call("GET", &path, None)?)?;
+            for item in v.get("voices").and_then(|x| x.as_array()).into_iter().flatten() {
+                if let Some(voice) = parse_voice(item) {
+                    out.push(voice);
+                }
+            }
+            token = v.get("next_page_token").and_then(|t| t.as_str()).map(String::from);
+            if !v.get("has_more").and_then(|h| h.as_bool()).unwrap_or(false) || token.is_none() {
+                break;
+            }
+        }
+        Ok(out)
+    }
+
+    fn speak(&self, voice_id: &str, text: &str, pace: f32) -> Result<Vec<f32>, AdapterError> {
+        let mut body = serde_json::json!({ "text": text, "model_id": MODEL });
+        if (pace - 1.0).abs() > 0.01 {
+            body["voice_settings"] = serde_json::json!({ "speed": pace.clamp(0.7, 1.2) });
+        }
+        let path = format!("/v1/text-to-speech/{voice_id}?output_format={FORMAT}");
+        let r = self.call("POST", &path, Some(&body))?;
+        let mut bytes = Vec::new();
+        r.into_reader().take(self.max_audio_bytes as u64 + 1).read_to_end(&mut bytes).map_err(|_| AdapterError::Network)?;
+        if bytes.len() > self.max_audio_bytes {
+            return Err(AdapterError::ProviderError("the audio was larger than expected".into()));
+        }
+        if bytes.len() < 2 || bytes.len() % 2 != 0 {
+            return Err(AdapterError::ProviderError("the provider returned no usable audio".into()));
+        }
+        Ok(bytes.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0).collect())
+    }
+}
+
+/// Short machine code from an error body, limited to a safe alphabet. The body itself is never kept.
+fn error_code(r: ureq::Response) -> String {
+    let mut buf = Vec::new();
+    let _ = r.into_reader().take(16 * 1024).read_to_end(&mut buf);
+    let v: serde_json::Value = serde_json::from_slice(&buf).unwrap_or_default();
+    let d = &v["detail"];
+    let raw = d["code"].as_str().or_else(|| d["status"].as_str()).unwrap_or("");
+    raw.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_').take(60).collect()
+}
+
+fn map_status(code: u16, r: ureq::Response) -> AdapterError {
+    let c = error_code(r);
+    if c.contains("quota") || c.contains("insufficient_credits") || code == 402 {
+        return AdapterError::Quota;
+    }
+    match code {
+        401 | 403 => AdapterError::Auth,
+        404 => AdapterError::UnknownVoice(if c.is_empty() { "voice".into() } else { c }),
+        422 => AdapterError::ProviderError("the text or settings were rejected".into()),
+        429 => AdapterError::RateLimit,
+        _ => AdapterError::ProviderError(format!("HTTP {code} {c}").trim().to_string()),
+    }
+}
+
+fn read_json(r: ureq::Response) -> Result<serde_json::Value, AdapterError> {
+    let mut buf = Vec::new();
+    r.into_reader().take(MAX_JSON_BYTES as u64 + 1).read_to_end(&mut buf).map_err(|_| AdapterError::Network)?;
+    if buf.len() > MAX_JSON_BYTES {
+        return Err(AdapterError::ProviderError("the response was larger than expected".into()));
+    }
+    serde_json::from_slice(&buf).map_err(|_| AdapterError::ProviderError("the response was not understood".into()))
+}
+
+fn url_encode(s: &str) -> String {
+    s.bytes()
+        .map(|b| if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') { (b as char).to_string() } else { format!("%{b:02X}") })
+        .collect()
+}
+
+fn valid_voice_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.bytes().all(|b| b.is_ascii_alphanumeric())
+}
+
+fn primary(lang: &str) -> String {
+    lang.split(['-', '_']).next().unwrap_or("").to_lowercase()
+}
+
+fn parse_voice(v: &serde_json::Value) -> Option<Voice> {
+    let id = v["voice_id"].as_str().filter(|i| valid_voice_id(i))?;
+    // Cloned, professional and famous voices need a consent record we do not have. Never listed.
+    if !matches!(v["category"].as_str(), Some("premade") | Some("generated")) {
+        return None;
+    }
+    let label = |k: &str| v["labels"][k].as_str().map(|s| s.chars().take(40).collect::<String>());
+    let language = label("language")
+        .or_else(|| v["verified_languages"][0]["language"].as_str().map(String::from))
+        .map(|l| primary(&l))
+        .filter(|l| !l.is_empty())
+        .unwrap_or_else(|| "en".into());
+    let name: String = v["name"].as_str().unwrap_or("Voice").chars().take(80).collect();
+    Some(Voice {
+        id: format!("elevenlabs:{id}"),
+        name,
+        provider: "elevenlabs".into(),
+        language,
+        accent: label("accent").unwrap_or_else(|| "Not stated".into()),
+        gender: label("gender").unwrap_or_else(|| "Not stated".into()),
+        age_range: label("age").unwrap_or_else(|| "Not stated".into()),
+        licence: licence(),
+        sample_text: "Good morning. This is how I sound.".into(),
+        notes: "Cloud voice. Script text is sent to ElevenLabs. Tags follow ElevenLabs' documentation and have not yet been listening-tested.".into(),
+    })
+}
+
+fn licence() -> LicenceInfo {
+    LicenceInfo {
+        licence: Licence::Unknown,
+        source: None,
+        checked: None,
+        notes: "Commercial rights depend on your ElevenLabs plan. Read the current terms and record your check.".into(),
+    }
+}
+
+impl Adapter for ElevenLabsAdapter {
+    fn id(&self) -> &'static str {
+        "elevenlabs"
+    }
+    fn label(&self) -> &'static str {
+        "ElevenLabs (cloud)"
+    }
+    fn licence(&self) -> LicenceInfo {
+        licence()
+    }
+    fn capabilities(&self) -> Capabilities {
+        let mut languages: Vec<String> = self.voices().iter().map(|v| v.language.clone()).collect();
+        languages.sort();
+        languages.dedup();
+        Capabilities {
+            languages,
+            tags: ["laugh", "sigh", "whisper", "excited", "sarcastic", "curious", "cry"].iter().map(|s| s.to_string()).collect(),
+            voice_design: false,
+            cloning: false,
+            // Eleven v3 allows 5,000 characters; leave room for the tags the adapter adds.
+            max_chars_per_request: 4500,
+            streaming: false,
+        }
+    }
+    fn list_voices(&self) -> Vec<Voice> {
+        self.voices()
+    }
+    fn provider_version(&self) -> String {
+        format!("elevenlabs/{MODEL}/{FORMAT}")
+    }
+    fn sends_data(&self) -> bool {
+        true
+    }
+    fn check_connection(&self) -> Result<(), AdapterError> {
+        self.call("GET", "/v2/voices?page_size=1", None).map(|_| ())
+    }
+    fn render(&self, req: &RenderRequest) -> Result<RenderOutput, AdapterError> {
+        // Validate everything locally before any network call.
+        precheck(&self.capabilities(), req)?;
+        let bare = req.voice_id.strip_prefix("elevenlabs:").unwrap_or("");
+        let known = self.voices().iter().any(|v| v.id == req.voice_id);
+        if !valid_voice_id(bare) || !known {
+            return Err(AdapterError::UnknownVoice(req.voice_id.chars().take(60).collect()));
+        }
+        // v3 has no SSML breaks, so pauses are exact silence inserted here between segments.
+        let mut current = req.emotion.clone();
+        let mut segs: Vec<Result<String, u32>> = Vec::new();
+        let mut buf = String::new();
+        let mut started = false;
+        let start_style = |current: &str| native_tag(current).map(|t| format!("{t} ")).unwrap_or_default();
+        for t in &req.tokens {
+            match t {
+                Token::Text(s) => {
+                    if !started {
+                        buf.push_str(&start_style(&current));
+                        started = true;
+                    }
+                    buf.push_str(s);
+                    buf.push(' ');
+                }
+                Token::Delivery(d) => {
+                    started = true;
+                    current = d.clone();
+                    buf.push_str(native_tag(d).ok_or_else(|| AdapterError::UnsupportedTag(d.clone()))?);
+                    buf.push(' ');
+                }
+                Token::NonVerbal(n) => {
+                    if !started {
+                        buf.push_str(&start_style(&current));
+                        started = true;
+                    }
+                    buf.push_str(native_tag(n).ok_or_else(|| AdapterError::UnsupportedTag(n.clone()))?);
+                    buf.push(' ');
+                }
+                Token::Pause(ms) => {
+                    if !buf.trim().is_empty() {
+                        segs.push(Ok(buf.trim().to_string()));
+                    }
+                    buf.clear();
+                    started = false;
+                    segs.push(Err(*ms));
+                }
+            }
+        }
+        if !buf.trim().is_empty() {
+            segs.push(Ok(buf.trim().to_string()));
+        }
+        if !segs.iter().any(|s| s.is_ok()) {
+            return Err(AdapterError::ProviderError("there is nothing to say on this line".into()));
+        }
+        let mut samples: Vec<f32> = Vec::new();
+        for s in segs {
+            match s {
+                Ok(text) => samples.extend(self.speak(bare, &text, req.pace)?),
+                Err(ms) => samples.extend(std::iter::repeat(0.0).take((ms as usize * RATE as usize) / 1000)),
+            }
+        }
+        Ok(RenderOutput { samples, sample_rate: RATE, provider_version: self.provider_version() })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tags::tokenize;
+    use std::io::Write;
+    use std::net::TcpListener;
+
+    #[derive(Clone, Debug)]
+    struct Req {
+        method: String,
+        path: String,
+        headers: Vec<(String, String)>,
+        body: String,
+    }
+    type Handler = Box<dyn Fn(&Req, usize) -> (u16, Vec<u8>) + Send + Sync>;
+
+    struct Fake {
+        base: String,
+        hits: Arc<Mutex<Vec<Req>>>,
+    }
+
+    fn start(handler: Handler) -> Fake {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let hits: Arc<Mutex<Vec<Req>>> = Arc::default();
+        let h2 = hits.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut s) = stream else { continue };
+                let mut data = Vec::new();
+                let mut chunk = [0u8; 4096];
+                let (head_end, len) = loop {
+                    let n = s.read(&mut chunk).unwrap_or(0);
+                    if n == 0 { break (0, 0) }
+                    data.extend_from_slice(&chunk[..n]);
+                    if let Some(p) = data.windows(4).position(|w| w == b"\r\n\r\n") {
+                        let head = String::from_utf8_lossy(&data[..p]).to_lowercase();
+                        let len = head.lines().find_map(|l| l.strip_prefix("content-length:")).and_then(|v| v.trim().parse().ok()).unwrap_or(0usize);
+                        break (p + 4, len);
+                    }
+                };
+                while head_end > 0 && data.len() < head_end + len {
+                    let n = s.read(&mut chunk).unwrap_or(0);
+                    if n == 0 { break }
+                    data.extend_from_slice(&chunk[..n]);
+                }
+                let head = String::from_utf8_lossy(&data[..head_end.max(1) - 1]).to_string();
+                let mut lines = head.lines();
+                let first = lines.next().unwrap_or("").to_string();
+                let mut parts = first.split_whitespace();
+                let req = Req {
+                    method: parts.next().unwrap_or("").into(),
+                    path: parts.next().unwrap_or("").into(),
+                    headers: lines.filter_map(|l| l.split_once(':')).map(|(k, v)| (k.trim().to_lowercase(), v.trim().to_string())).collect(),
+                    body: String::from_utf8_lossy(&data[head_end.min(data.len())..]).to_string(),
+                };
+                let idx = { let mut g = h2.lock().unwrap(); g.push(req.clone()); g.len() - 1 };
+                let (code, body) = handler(&req, idx);
+                let _ = write!(s, "HTTP/1.1 {code} X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+                let _ = s.write_all(&body);
+            }
+        });
+        Fake { base, hits }
+    }
+
+    const KEY: &str = "test-key-DO-NOT-LEAK-12345";
+    fn keys() -> KeyProvider { Arc::new(|| Some(KEY.to_string())) }
+
+    fn pcm_for(text: &str) -> Vec<u8> {
+        let words = text.split_whitespace().filter(|w| !w.starts_with('[') && !w.ends_with(']')).count().max(1);
+        (0..(words * 350 * RATE as usize / 1000)).flat_map(|n| ((8000.0 * (n as f32 * 0.07).sin()) as i16).to_le_bytes()).collect()
+    }
+
+    fn voices_json() -> Vec<u8> {
+        serde_json::json!({
+            "voices": [
+                { "voice_id": "VoiceAAA111", "name": "Ada", "category": "premade", "labels": { "accent": "british", "gender": "female", "age": "young", "language": "en" } },
+                { "voice_id": "VoiceBBB222", "name": "Cloned Person", "category": "cloned", "labels": {} },
+                { "voice_id": "Voice/../evil", "name": "Bad Id", "category": "premade", "labels": {} },
+                { "voice_id": "VoiceCCC333", "name": "Famous One", "category": "famous", "labels": {} },
+                { "voice_id": "VoiceDDD444", "name": "Designed", "category": "generated", "labels": { "language": "yo-NG" } }
+            ],
+            "has_more": false, "next_page_token": null
+        }).to_string().into_bytes()
+    }
+
+    fn happy() -> Handler {
+        Box::new(|r, _| {
+            if r.path.starts_with("/v2/voices") { (200, voices_json()) }
+            else if r.path.starts_with("/v1/text-to-speech/") {
+                let v: serde_json::Value = serde_json::from_str(&r.body).unwrap_or_default();
+                (200, pcm_for(v["text"].as_str().unwrap_or("")))
+            } else { (404, b"{}".to_vec()) }
+        })
+    }
+
+    fn adapter(f: &Fake) -> ElevenLabsAdapter { ElevenLabsAdapter::for_test(keys(), f.base.clone(), MAX_AUDIO_BYTES) }
+    fn request(text: &str, emotion: &str, voice: &str) -> RenderRequest {
+        RenderRequest { tokens: tokenize(text).0, voice_id: voice.into(), emotion: emotion.into(), pace: 1.0, language: "en".into() }
+    }
+    fn tts_hits(f: &Fake) -> Vec<Req> { f.hits.lock().unwrap().iter().filter(|r| r.method == "POST").cloned().collect() }
+
+    #[test]
+    fn passes_the_adapter_contract_against_a_fake_server() {
+        let f = start(happy());
+        let a = adapter(&f);
+        let v = a.list_voices().into_iter().find(|v| v.name == "Ada").unwrap();
+        contract::run(&a, &v, "sneeze");
+    }
+
+    #[test]
+    fn only_safe_premade_and_generated_voices_are_listed() {
+        let f = start(happy());
+        let names: Vec<String> = adapter(&f).list_voices().into_iter().map(|v| v.name).collect();
+        assert_eq!(names, vec!["Ada", "Designed"], "cloned, famous and badly-named voices must never appear");
+        let d = adapter(&f).list_voices().into_iter().find(|v| v.name == "Designed").unwrap();
+        assert_eq!(d.language, "yo");
+        assert_eq!(d.licence.licence, Licence::Unknown);
+    }
+
+    #[test]
+    fn no_key_means_no_network_call_and_an_auth_error() {
+        let f = start(happy());
+        let a = ElevenLabsAdapter::for_test(Arc::new(|| None), f.base.clone(), MAX_AUDIO_BYTES);
+        assert!(a.list_voices().is_empty());
+        assert_eq!(a.check_connection().unwrap_err(), AdapterError::Auth);
+        assert!(f.hits.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn header_injection_keys_are_refused_locally() {
+        let f = start(happy());
+        let a = ElevenLabsAdapter::for_test(Arc::new(|| Some("abc\r\nx-evil: 1".into())), f.base.clone(), MAX_AUDIO_BYTES);
+        assert_eq!(a.check_connection().unwrap_err(), AdapterError::Auth);
+        assert!(f.hits.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn key_goes_in_the_header_never_the_url_or_body() {
+        let f = start(happy());
+        let a = adapter(&f);
+        let v = a.list_voices().remove(0);
+        a.render(&request("hello there", "neutral", &v.id)).unwrap();
+        for h in f.hits.lock().unwrap().iter() {
+            assert!(h.headers.iter().any(|(k, val)| k == "xi-api-key" && val == KEY));
+            assert!(!h.path.contains(KEY) && !h.body.contains(KEY));
+        }
+    }
+
+    #[test]
+    fn tags_map_to_v3_audio_tags_and_pauses_become_exact_silence() {
+        let f = start(happy());
+        let a = adapter(&f);
+        let v = a.list_voices().remove(0);
+        let out = a.render(&request("[laugh] hi [whisper] there [pause:500] bye", "neutral", &v.id)).unwrap();
+        let bodies: Vec<serde_json::Value> = tts_hits(&f).iter().map(|r| serde_json::from_str(&r.body).unwrap()).collect();
+        assert_eq!(bodies.len(), 2, "one request per spoken segment");
+        assert_eq!(bodies[0]["text"], "[laughs] hi [whispers] there");
+        assert_eq!(bodies[1]["text"], "[whispers] bye", "the active style carries across a pause");
+        assert_eq!(bodies[0]["model_id"], "eleven_v3");
+        assert!(tts_hits(&f)[0].path.contains("output_format=pcm_24000"));
+        let spoken = bodies.iter().map(|b| pcm_for(b["text"].as_str().unwrap()).len() / 2).sum::<usize>();
+        assert_eq!(out.samples.len(), spoken + RATE as usize / 2);
+    }
+
+    #[test]
+    fn unsupported_tags_are_refused_before_any_request() {
+        let f = start(happy());
+        let a = adapter(&f);
+        let v = a.list_voices().remove(0);
+        for tag in ["sneeze", "cough", "sniff", "gasp", "chuckle", "breath", "shout"] {
+            let e = a.render(&request(&format!("hi [{tag}]"), "neutral", &v.id)).unwrap_err();
+            assert_eq!(e, AdapterError::UnsupportedTag(tag.into()));
+        }
+        assert_eq!(a.render(&request("hi", "sad", &v.id)).unwrap_err(), AdapterError::UnsupportedTag("sad".into()));
+        assert!(tts_hits(&f).is_empty());
+    }
+
+    #[test]
+    fn unknown_or_malformed_voice_ids_never_reach_the_network() {
+        let f = start(happy());
+        let a = adapter(&f);
+        let _ = a.list_voices();
+        for id in ["elevenlabs:VoiceBBB222", "elevenlabs:../../x", "elevenlabs:", "other:VoiceAAA111"] {
+            assert!(matches!(a.render(&request("hi", "neutral", id)), Err(AdapterError::UnknownVoice(_))), "{id}");
+        }
+        assert!(tts_hits(&f).is_empty());
+    }
+
+    fn status_handler(code: u16, body: &'static str) -> Handler {
+        Box::new(move |r, _| if r.path.starts_with("/v2/voices") { (200, voices_json()) } else { (code, body.as_bytes().to_vec()) })
+    }
+
+    #[test]
+    fn provider_errors_map_to_the_common_set_without_leaking_the_key() {
+        for (code, body, want) in [
+            (401, r#"{"detail":{"code":"invalid_api_key","message":"bad"}}"#, AdapterError::Auth),
+            (401, r#"{"detail":{"status":"quota_exceeded","message":"x"}}"#, AdapterError::Quota),
+            (402, r#"{"detail":{"code":"insufficient_credits"}}"#, AdapterError::Quota),
+            (404, r#"{"detail":{"code":"voice_not_found"}}"#, AdapterError::UnknownVoice("voice_not_found".into())),
+        ] {
+            let f = start(status_handler(code, body));
+            let a = adapter(&f);
+            let v = a.list_voices().remove(0);
+            let e = a.render(&request("hi", "neutral", &v.id)).unwrap_err();
+            assert_eq!(e, want, "status {code}");
+            assert!(!format!("{e:?} {e}").contains(KEY));
+        }
+        let f = start(status_handler(422, r#"{"detail":[{"msg":"echo hi secret text"}]}"#));
+        let a = adapter(&f);
+        let v = a.list_voices().remove(0);
+        let e = a.render(&request("hi", "neutral", &v.id)).unwrap_err();
+        assert!(matches!(&e, AdapterError::ProviderError(m) if !m.contains("secret")));
+        let f = start(status_handler(500, "{}"));
+        let a = adapter(&f);
+        let v = a.list_voices().remove(0);
+        assert!(matches!(a.render(&request("hi", "neutral", &v.id)), Err(AdapterError::ProviderError(_))));
+    }
+
+    #[test]
+    fn rate_limits_retry_with_backoff_then_succeed_or_give_up() {
+        let flaky: Handler = Box::new(|r, _| {
+            if r.path.starts_with("/v2/voices") { return (200, voices_json()); }
+            static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+            if N.fetch_add(1, std::sync::atomic::Ordering::SeqCst) < 2 { (429, br#"{"detail":{"code":"system_busy"}}"#.to_vec()) } else { (200, pcm_for("hello")) }
+        });
+        let f = start(flaky);
+        let a = adapter(&f);
+        let v = a.list_voices().remove(0);
+        assert!(a.render(&request("hello", "neutral", &v.id)).is_ok());
+        assert_eq!(tts_hits(&f).len(), 3);
+
+        let f = start(status_handler(429, r#"{"detail":{"code":"rate_limit_exceeded"}}"#));
+        let a = adapter(&f);
+        let v = a.list_voices().remove(0);
+        assert_eq!(a.render(&request("hello", "neutral", &v.id)).unwrap_err(), AdapterError::RateLimit);
+        assert_eq!(tts_hits(&f).len(), 1 + RETRIES as usize, "gives up after the retry budget");
+    }
+
+    #[test]
+    fn redirects_are_never_followed() {
+        let evil = start(happy());
+        let target = evil.base.clone();
+        let f = start(Box::new(move |r, _| {
+            if r.path.starts_with("/v2/voices") { (200, voices_json()) } else { (302, format!("{target}/stolen").into_bytes()) }
+        }));
+        let a = adapter(&f);
+        let v = a.list_voices().remove(0);
+        assert!(a.render(&request("hi", "neutral", &v.id)).is_err());
+        assert!(evil.hits.lock().unwrap().is_empty(), "no request may reach another host");
+    }
+
+    #[test]
+    fn oversized_or_malformed_audio_is_refused() {
+        let f = start(Box::new(|r, _| if r.path.starts_with("/v2/voices") { (200, voices_json()) } else { (200, vec![1u8; 5000]) }));
+        let a = ElevenLabsAdapter::for_test(keys(), f.base.clone(), 4000);
+        let v = a.list_voices().remove(0);
+        assert!(matches!(a.render(&request("hi", "neutral", &v.id)), Err(AdapterError::ProviderError(_))));
+        let f = start(Box::new(|r, _| if r.path.starts_with("/v2/voices") { (200, voices_json()) } else { (200, vec![1u8; 3]) }));
+        let a = adapter(&f);
+        let v = a.list_voices().remove(0);
+        assert!(matches!(a.render(&request("hi", "neutral", &v.id)), Err(AdapterError::ProviderError(_))));
+    }
+
+    #[test]
+    fn unreachable_provider_is_a_network_error() {
+        let a = ElevenLabsAdapter::for_test(keys(), "http://127.0.0.1:1".into(), MAX_AUDIO_BYTES);
+        assert_eq!(a.check_connection().unwrap_err(), AdapterError::Network);
+    }
+
+    #[test]
+    fn production_adapter_is_pinned_to_the_elevenlabs_host() {
+        let a = ElevenLabsAdapter::new(keys());
+        assert_eq!(a.base, "https://api.elevenlabs.io");
+        assert!(a.sends_data());
+    }
+
+    #[test]
+    fn url_encoding_and_voice_id_rules() {
+        assert_eq!(url_encode("a b/c+d=="), "a%20b%2Fc%2Bd%3D%3D");
+        assert!(valid_voice_id("21m00Tcm4TlvDq8ikWAM") && !valid_voice_id("a/b") && !valid_voice_id(""));
+        assert_eq!(native_tag("sneeze"), None);
+        assert_eq!(native_tag("laugh"), Some("[laughs]"));
+    }
+}

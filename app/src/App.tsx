@@ -11,7 +11,7 @@ import { ExportStep } from "./steps/ExportStep";
 import { MixStep } from "./steps/MixStep";
 import { RenderStep } from "./steps/RenderStep";
 import { ScriptStep } from "./steps/ScriptStep";
-import { Logo, PlayerProvider, Toast, type ToastMsg } from "./ui";
+import { Confirm, Logo, PlayerProvider, Toast, type ToastMsg } from "./ui";
 import { STEPS, type Analysis, type Project, type Voice } from "./types";
 
 type View = "home" | "project" | "library" | "settings";
@@ -29,6 +29,7 @@ export default function App() {
   const [toast, setToast] = useState<ToastMsg | null>(null);
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [saved, setSaved] = useState<"saved" | "saving" | "error">("saved");
+  const [sendPrompt, setSendPrompt] = useState<{ provider: string; lines: number; chars: number; resolve: (ok: boolean) => void } | null>(null);
 
   const projectRef = useRef<Project | null>(null);
   const history = useRef<string[]>([]);
@@ -42,7 +43,11 @@ export default function App() {
     void api.voices().then(setVoices).catch((e) => say(messageOf(e), true));
   }, [say]);
 
+  const analysisRef = useRef<Analysis | null>(null);
+  const voicesRef = useRef<Voice[]>([]);
   useEffect(() => { projectRef.current = project; }, [project]);
+  useEffect(() => { analysisRef.current = analysis; }, [analysis]);
+  useEffect(() => { voicesRef.current = voices; }, [voices]);
 
   // Re-check the script, voices and render status whenever the project changes.
   useEffect(() => {
@@ -130,9 +135,23 @@ export default function App() {
 
   const goHome = async () => { await flush(); setProject(null); projectRef.current = null; setAnalysis(null); setView("home"); };
 
-  const render = useCallback(async (keys: string[]) => {
+  /** Ask once before any text is sent over the network. Local voices resolve at once. */
+  const confirmSend = useCallback((keys: string[]): Promise<boolean> => {
+    const a = analysisRef.current;
+    const cloud = (a?.lines ?? [])
+      .filter((l) => keys.includes(l.line.key))
+      .map((l) => ({ l, v: voicesRef.current.find((v) => v.id === l.voice_id) }))
+      .filter((x) => x.v?.sends_data);
+    if (cloud.length === 0) return Promise.resolve(true);
+    const chars = cloud.reduce((n, x) => n + x.l.line.text.replace(/\[[^\]]*\]/g, "").length, 0);
+    const provider = [...new Set(cloud.map((x) => x.v?.provider_label ?? "a cloud provider"))].join(" and ");
+    return new Promise((resolve) => setSendPrompt({ provider, lines: cloud.length, chars, resolve }));
+  }, []);
+
+  const render = useCallback(async (keys: string[], opts?: { confirmed?: boolean }) => {
     const cur = projectRef.current;
     if (!cur) return null;
+    if (!opts?.confirmed && !(await confirmSend(keys))) return null;
     setBusy((b) => new Set([...b, ...keys]));
     try {
       const out = await api.renderLines(cur, keys);
@@ -145,13 +164,13 @@ export default function App() {
       return out;
     } catch (e) { say(messageOf(e), true); return null; }
     finally { setBusy((b) => { const n = new Set(b); keys.forEach((k) => n.delete(k)); return n; }); }
-  }, [edit, say]);
+  }, [edit, say, confirmSend]);
 
   const openAux = (v: "library" | "settings") => { setReturnTo(view === "library" || view === "settings" ? returnTo : view); setView(v); };
   const back = () => setView(returnTo === "project" && project ? "project" : "home");
 
   const ctx: Ctx | null = project ? {
-    project, analysis, voices, dir, edit, toast: say, render, busy,
+    project, analysis, voices, dir, edit, toast: say, render, confirmSend, busy,
     goto: (n) => setStep(n),
     openLibrary: () => openAux("library"),
   } : null;
@@ -205,7 +224,7 @@ export default function App() {
         <main className="main" id="main">
           {view === "home" && <Home onOpen={(id) => void openProject(id)} toast={say} />}
           {view === "library" && <VoiceLibrary voices={voices} toast={say} onBack={back} inProject={returnTo === "project" && !!project} />}
-          {view === "settings" && <Settings info={info} toast={say} onBack={back} inProject={returnTo === "project" && !!project} />}
+          {view === "settings" && <Settings info={info} toast={say} onKeysChanged={() => { void api.voices().then(setVoices).catch((e) => say(messageOf(e), true)); }} onBack={back} inProject={returnTo === "project" && !!project} />}
           {view === "project" && ctx && (
             <>
               {step === 0 && <ScriptStep ctx={ctx} />}
@@ -224,6 +243,12 @@ export default function App() {
           )}
         </main>
         <Toast toast={toast} onClose={() => setToast(null)} />
+        {sendPrompt && (
+          <Confirm title={`Send text to ${sendPrompt.provider}?`} confirmLabel="Send and render"
+            body={<p>{sendPrompt.lines} line{sendPrompt.lines === 1 ? "" : "s"} ({sendPrompt.chars} characters of dialogue) will be sent over the internet to {sendPrompt.provider} to be spoken. It is billed to your account there, and Soundstage cannot show the cost in advance. Their copy follows their own retention policy.</p>}
+            onCancel={() => { sendPrompt.resolve(false); setSendPrompt(null); }}
+            onConfirm={() => { sendPrompt.resolve(true); setSendPrompt(null); }} />
+        )}
       </div>
     </PlayerProvider>
   );

@@ -8,20 +8,44 @@ use soundstage_core::layout::{self, Layout};
 use soundstage_core::licence::{GateReport, LicenceInfo};
 use soundstage_core::loudness::{Destination, DESTINATIONS};
 use soundstage_core::project::{Asset, AssetKind, Project, Store, Summary, Take};
+use soundstage_core::adapters::elevenlabs::KeyProvider;
 use soundstage_core::providers::{Registry, Voice};
 use soundstage_core::render::{self, Analysis, RenderResult};
 use soundstage_core::util::{new_id, safe_file_stem};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 struct AppState {
     store: Arc<Store>,
-    registry: Arc<OnceLock<Registry>>,
+    registry: Arc<RegistryCell>,
 }
 
-type Shared = (Arc<Store>, Arc<OnceLock<Registry>>);
+type Shared = (Arc<Store>, Arc<RegistryCell>);
+
+/// Credentials come from the Windows Credential Manager, read on every call. Adapters never touch the store.
+fn key_provider() -> KeyProvider {
+    Arc::new(|| keyring::Entry::new("Soundstage", "elevenlabs").ok()?.get_password().ok())
+}
+
+/// Builds the registry on first use and again after a key is saved or removed.
+struct RegistryCell {
+    inner: Mutex<Option<Arc<Registry>>>,
+}
+
+impl RegistryCell {
+    fn new() -> Self {
+        RegistryCell { inner: Mutex::new(None) }
+    }
+    fn get(&self) -> Arc<Registry> {
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        g.get_or_insert_with(|| Arc::new(Registry::standard(key_provider()))).clone()
+    }
+    fn reset(&self) {
+        *self.inner.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+}
 
 fn shared(s: &State<'_, AppState>) -> Shared {
     (s.store.clone(), s.registry.clone())
@@ -81,13 +105,16 @@ struct VoiceView {
     /// Canonical tags this voice can perform (pauses always work).
     tags: Vec<String>,
     provider_label: String,
+    /// True when the line's text is sent over the network to render it.
+    sends_data: bool,
 }
 
 #[tauri::command]
 async fn list_voices(state: State<'_, AppState>) -> Result<Vec<VoiceView>, String> {
     let (_, reg) = shared(&state);
     blocking(move || {
-        let reg = reg.get_or_init(Registry::standard);
+        let reg = reg.get();
+        let reg = &*reg;
         reg.voices
             .iter()
             .map(|v| {
@@ -96,6 +123,7 @@ async fn list_voices(state: State<'_, AppState>) -> Result<Vec<VoiceView>, Strin
                     voice: v.clone(),
                     tags: a.map(|a| a.capabilities().tags).unwrap_or_default(),
                     provider_label: a.map(|a| a.label().to_string()).unwrap_or_default(),
+                    sends_data: a.map(|a| a.sends_data()).unwrap_or(false),
                 }
             })
             .collect()
@@ -114,7 +142,8 @@ async fn preview_voice(state: State<'_, AppState>, voice_id: String, text: Strin
     let (store, reg) = shared(&state);
     let dir = store.root.join(".preview");
     blocking(move || {
-        let reg = reg.get_or_init(Registry::standard);
+        let reg = reg.get();
+        let reg = &*reg;
         let mut p = Project::new("preview", false);
         p.script = format!("SAMPLE: {}", text.chars().take(300).collect::<String>().replace(['\n', '\r'], " "));
         p.characters.insert("SAMPLE".into(), soundstage_core::project::Character { voice_id: Some(voice_id), ..Default::default() });
@@ -167,7 +196,7 @@ async fn mix_preview(state: State<'_, AppState>, project: Project) -> Result<Mix
 #[tauri::command]
 async fn analyze_project(state: State<'_, AppState>, project: Project) -> Result<Analysis, String> {
     let (_, reg) = shared(&state);
-    blocking(move || render::analyze(&project, reg.get_or_init(Registry::standard))).await
+    blocking(move || render::analyze(&project, &reg.get())).await
 }
 
 #[derive(Serialize)]
@@ -194,7 +223,8 @@ async fn render_lines(app: AppHandle, state: State<'_, AppState>, project: Proje
     let (store, reg) = shared(&state);
     let dir = store.dir(&project.id)?;
     blocking(move || {
-        let reg = reg.get_or_init(Registry::standard);
+        let reg = reg.get();
+        let reg = &*reg;
         let mut p = project;
         let before = p.takes.len();
         let mut selected = BTreeMap::new();
@@ -233,14 +263,14 @@ fn destinations() -> Vec<Destination> {
 #[tauri::command]
 async fn check_export(state: State<'_, AppState>, project: Project) -> Result<GateReport, String> {
     let (_, reg) = shared(&state);
-    blocking(move || exporter::check(&project, reg.get_or_init(Registry::standard))).await
+    blocking(move || exporter::check(&project, &reg.get())).await
 }
 
 #[tauri::command]
 async fn export_project(state: State<'_, AppState>, project: Project, dest: String, acknowledged: bool) -> Result<ExportResult, ExportError> {
     let (store, reg) = shared(&state);
     let dir = store.dir(&project.id).map_err(|m| ExportError::Failed { message: m })?;
-    blocking(move || exporter::export(&project, reg.get_or_init(Registry::standard), &dir, &PathBuf::from(dest), acknowledged))
+    blocking(move || exporter::export(&project, &reg.get(), &dir, &PathBuf::from(dest), acknowledged))
         .await
         .map_err(|m| ExportError::Failed { message: m })?
 }
@@ -293,12 +323,14 @@ struct KeyArgs {
 }
 
 #[tauri::command]
-fn set_api_key(args: KeyArgs) -> Result<(), String> {
+fn set_api_key(state: State<'_, AppState>, args: KeyArgs) -> Result<(), String> {
     let k = args.key.trim();
     if k.is_empty() || k.len() > 512 || k.chars().any(|c| c.is_control()) {
         return Err("That does not look like a valid key.".into());
     }
-    entry(&args.provider)?.set_password(k).map_err(|e| format!("Could not store the key: {e}"))
+    entry(&args.provider)?.set_password(k).map_err(|e| format!("Could not store the key: {e}"))?;
+    state.registry.reset();
+    Ok(())
 }
 
 #[tauri::command]
@@ -311,11 +343,29 @@ fn has_api_key(provider: String) -> Result<bool, String> {
 }
 
 #[tauri::command]
-fn delete_api_key(provider: String) -> Result<(), String> {
+fn delete_api_key(state: State<'_, AppState>, provider: String) -> Result<(), String> {
     match entry(&provider)?.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Ok(()) | Err(keyring::Error::NoEntry) => {
+            state.registry.reset();
+            Ok(())
+        }
         Err(e) => Err(format!("Could not remove the key: {e}")),
     }
+}
+
+/// Cheap authenticated call so Settings can say whether a saved key works.
+#[tauri::command]
+async fn test_connection(state: State<'_, AppState>, provider: String) -> Result<String, String> {
+    if !KEY_PROVIDERS.contains(&provider.as_str()) {
+        return Err("Unknown provider.".into());
+    }
+    let (_, reg) = shared(&state);
+    blocking(move || {
+        let reg = reg.get();
+        let a = reg.adapter(&provider).ok_or("That provider is not available.")?;
+        a.check_connection().map(|_| "Connected. The key works.".to_string()).map_err(|e| e.to_string())
+    })
+    .await?
 }
 
 pub fn run() {
@@ -328,11 +378,11 @@ pub fn run() {
             std::fs::create_dir_all(&root)?;
             // Previews are throwaway; start each session clean.
             let _ = std::fs::remove_dir_all(root.join(".preview"));
-            let registry: Arc<OnceLock<Registry>> = Arc::new(OnceLock::new());
+            let registry: Arc<RegistryCell> = Arc::new(RegistryCell::new());
             // Find the installed voices in the background so the first screen opens at once.
             let warm = registry.clone();
             std::thread::spawn(move || {
-                warm.get_or_init(Registry::standard);
+                warm.get();
             });
             app.manage(AppState { store: Arc::new(Store::new(root)), registry });
             Ok(())
@@ -355,6 +405,7 @@ pub fn run() {
             check_export,
             export_project,
             import_asset,
+            test_connection,
             set_api_key,
             has_api_key,
             delete_api_key,

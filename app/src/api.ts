@@ -35,6 +35,7 @@ export const api = {
   importAsset: (projectId: string, path: string, kind: "music" | "sfx") =>
     invoke<Asset>("import_asset", { projectId, path, kind }),
   setApiKey: (provider: string, key: string) => invoke<void>("set_api_key", { args: { provider, key } }),
+  testConnection: (provider: string) => invoke<string>("test_connection", { provider }),
   hasApiKey: (provider: string) => invoke<boolean>("has_api_key", { provider }),
   deleteApiKey: (provider: string) => invoke<void>("delete_api_key", { provider }),
   onRenderProgress: (fn: (p: { key: string; status: string }) => void) =>

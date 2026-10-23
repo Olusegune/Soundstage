@@ -6,7 +6,7 @@ Status: research snapshot dated 2026-10-23, from public search results. Anything
 
 | Provider | Type | Expressive tags | Languages (claimed) | Licence | Status |
 |---|---|---|---|---|---|
-| ElevenLabs (Eleven v3) | Cloud | Yes: inline tags such as laughs, whispers, sighs, excited | 70+ | Commercial plan terms. VERIFY output rights and API resale terms | Candidate, M0 |
+| ElevenLabs (Eleven v3) | Cloud | Yes: inline tags such as laughs, whispers, sighs, excited | 70+ | Commercial plan terms. VERIFY output rights and API resale terms | **Adapter shipped in v0.1** (`adapters/elevenlabs.rs`). Approved by Victor as a paid provider and network host. Tested against a fake server only; live check pending (section 9) |
 | ElevenLabs Voice Design v3 | Cloud | Yes, via text | Multilingual. VERIFY | Same as above. VERIFY | Candidate, M0 |
 | OmniVoice | Open model (self-hosted) | Yes: [laughter], [sigh], [sniff], [surprise-*], [question-*] (per its README) | Claims 600+ (treat as unverified until tested) | VERIFY. Non-commercial terms are common in this category | Candidate, M0 |
 | Qwen3-TTS (Alibaba) | Open model | Style control via instructions | At least 10, including Chinese, English, Japanese, Korean | Apache 2.0 per announcement. VERIFY the specific checkpoints | Candidate, M0 |
@@ -46,6 +46,32 @@ Rules:
 | sniff | not confirmed | `[sniff]` | VERIFY |
 
 The sneeze and cough rows are the critical gap. If no cloud or open provider produces them convincingly, the fallback is a licensed sound-effect library placed on the timeline, with the line split around it. That is a product decision (see PRD section 12), not a silent fallback.
+
+### 2.3 ElevenLabs as implemented (verified from public docs, 2026-10-23)
+
+Sources: `elevenlabs.io/docs/api-reference/text-to-speech/convert`, `.../voices/search`, `.../eleven-api/resources/errors`, `.../overview/models`, `.../overview/capabilities/text-to-speech/best-practices`.
+
+| Item | Value used |
+|---|---|
+| Host | `https://api.elevenlabs.io` only. Redirects are never followed |
+| Auth | `xi-api-key` header, injected by the core from the Windows Credential Manager |
+| Render | `POST /v1/text-to-speech/{voice_id}?output_format=pcm_24000`, body `text`, `model_id: eleven_v3`, optional `voice_settings.speed` (0.7 to 1.2) |
+| Voices | `GET /v2/voices?page_size=100`, paged with `next_page_token` while `has_more` |
+| Limit | Eleven v3: 5,000 characters per request. The adapter splits at 4,500 |
+| Errors | `detail.code`: `invalid_api_key` and `missing_api_key` (401), `rate_limit_exceeded`, `concurrent_limit_exceeded`, `system_busy` (429), `voice_not_found` (404), `insufficient_credits` (402), 422 for rejected input. Mapped to the common error set. 429 retries with backoff, 3 times |
+| Pauses | Eleven v3 does not support SSML `<break>`. The adapter renders segments and inserts exact silence |
+| Voices listed | `premade` and `generated` only. `cloned`, `professional`, `famous` and other categories are never listed, because they need a consent record |
+
+Canonical tag mapping (only tags ElevenLabs documents):
+
+| Canonical | Eleven v3 | Canonical | Eleven v3 |
+|---|---|---|---|
+| laugh | `[laughs]` | curious | `[curious]` |
+| sigh | `[sighs]` | cry | `[crying]` |
+| whisper | `[whispers]` | sarcastic | `[sarcastic]` |
+| excited | `[excited]` | | |
+
+Not mapped, so reported as "not supported by this voice": cough, sneeze, sniff, gasp, chuckle, breath, shout, sad, tired, serious. The docs list `[exhales]` and `[happy gasp]` but not as general tags, so they are left out until the bake-off shows they work. **The sneeze and cough gap remains open** (section 2.2).
 
 ## 3. Routing policy
 
@@ -120,3 +146,14 @@ Used for the v2 performance reference feature (PRD FR-15). Nothing here is verif
 - Requirement: take an actor's guide take and output the chosen voice with the actor's timing, stress, and emotional contour.
 - Candidates, to be checked per provider (VERIFY): whether speech-to-speech conversion is offered, which languages it covers, its licence for commercial output, and whether it needs the source performer's consent record.
 - Fallback if no provider passes: direction through tags and the performer's notes, with the reference used only for timing.
+
+## 9. VERIFY log (owner: Victor unless stated)
+Logged 2026-10-23 when the ElevenLabs adapter shipped.
+1. **Live call.** The adapter has only run against a local fake server built from the docs. Run a real render and voice list with a real key, and record the result here.
+2. **`pcm_24000` and plan.** The docs name plan limits for 192 kbps MP3 and 44.1 kHz PCM but none for `pcm_24000`. Confirm it works on the plan in use.
+3. **Tag list for v3.** The tag list comes from the current prompting page, which says it also applies to v3. Confirm each mapped tag on `eleven_v3` by listening. Until the bake-off passes, the UI says tags are "not yet listening-tested".
+4. **`eleven_v4`.** The docs now list `eleven_v4` (90+ languages, 10,000 characters). Decide whether to move to it.
+5. **Commercial terms per plan.** Voices are `licence unknown` until a user records their own check. Read the current terms and decide whether Soundstage should ship a default.
+6. **Retention.** `enable_logging` defaults to true (zero-retention is Enterprise only). The UI says text is sent and billed. Decide whether to say more about retention.
+7. **Pricing.** Not recorded and not estimated. Record verified prices with a date.
+8. **Regional hosts.** The docs list US, EU, India and Singapore residency hosts. Only the default host is allowed. Adding one needs approval.

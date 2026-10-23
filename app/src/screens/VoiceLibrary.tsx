@@ -20,6 +20,7 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
     (!q || `${v.name} ${v.accent} ${v.provider_label}`.toLowerCase().includes(q.toLowerCase())));
 
   const sample = async (v: Voice) => {
+    if (v.sends_data && !window.confirm(`This sends a short sample line to ${v.provider_label} and uses your account's credits. Continue?`)) return;
     setBusy(v.id);
     try { const r = await api.previewVoice(v.id, v.sample_text); setPaths((s) => ({ ...s, [v.id]: r.path })); }
     catch (e) { props.toast(messageOf(e), true); } finally { setBusy(null); }
@@ -38,6 +39,7 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
           <div><label htmlFor="vli">Licence</label><select id="vli" value={lic} onChange={(e) => setLic(e.target.value)}><option value="">All</option><option value="commercial">Commercial</option><option value="unknown">Unknown</option><option value="non-commercial">Non-commercial</option></select></div>
         </div>
       </div>
+      {!voices.some((v) => v.sends_data) && <div className="callout small"><strong>Want cloud voices?</strong>Save an ElevenLabs key in Settings and their premade and designed voices appear here. Cloned and professional voices from your account are never listed, because they need a consent record.</div>}
       {voices.length === 0 && <div className="callout warn"><strong>Looking for voices…</strong>If this stays empty, Windows has no speech voices installed. Add one in Windows Settings under Time &amp; language, then Speech.</div>}
       <div className="card">
         <table>
@@ -45,7 +47,7 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
           <tbody>
             {shown.map((v) => (
               <tr key={v.id}>
-                <td><strong>{v.name}</strong><div className="small muted">{v.provider_label}</div></td>
+                <td><strong>{v.name}</strong><div className="small muted">{v.provider_label}{v.sends_data ? " · sends text online" : " · on this computer"}</div></td>
                 <td>{v.language} · {v.accent}</td>
                 <td>{v.gender} · {v.age_range}</td>
                 <td><LicenceChip licence={v.licence.licence} note={v.licence.notes} /><div className="small muted">{licenceNote(v.licence)}</div></td>

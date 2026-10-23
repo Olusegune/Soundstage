@@ -95,6 +95,14 @@ pub trait Adapter: Send + Sync {
     fn estimate_cost(&self, _req: &RenderRequest) -> Option<Cost> {
         None
     }
+    /// True when script text leaves this computer to be rendered. The UI asks before sending.
+    fn sends_data(&self) -> bool {
+        false
+    }
+    /// A cheap authenticated call for the Settings "Test connection" button.
+    fn check_connection(&self) -> Result<(), AdapterError> {
+        Ok(())
+    }
 }
 
 /// Canonical tags a request needs that the adapter cannot render.
@@ -175,10 +183,11 @@ impl Registry {
         r
     }
 
-    /// The adapters shipped in this build.
-    pub fn standard() -> Self {
+    /// The adapters shipped in this build. `keys` supplies credentials; adapters never read the key store themselves.
+    pub fn standard(keys: crate::adapters::elevenlabs::KeyProvider) -> Self {
         Registry::new(vec![
             Box::new(crate::adapters::sapi::SapiAdapter::new()),
+            Box::new(crate::adapters::elevenlabs::ElevenLabsAdapter::new(keys)),
             Box::new(crate::adapters::scratch::ScratchAdapter),
         ])
     }

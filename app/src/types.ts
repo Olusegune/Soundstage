@@ -137,6 +137,8 @@ export interface Voice {
   sample_text: string;
   notes: string;
   tags: string[];
+  /** True when script text is sent over the network to render this voice. */
+  sends_data: boolean;
 }
 
 export interface TagIssue {

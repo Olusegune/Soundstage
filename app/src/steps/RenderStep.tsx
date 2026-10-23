@@ -29,12 +29,13 @@ export function RenderStep({ ctx }: { ctx: Ctx }) {
 
   const run = async (keys: string[]) => {
     if (keys.length === 0) return;
+    if (!(await ctx.confirmSend(keys))) return;
     setProgress({ done: 0, total: keys.length });
     setErrors((e) => { const n = { ...e }; keys.forEach((k) => delete n[k]); return n; });
     // One line at a time keeps the progress bar honest and lets the UI stay responsive.
     let done = 0;
     for (const k of keys) {
-      const out = await ctx.render([k]);
+      const out = await ctx.render([k], { confirmed: true });
       done += 1;
       setProgress({ done, total: keys.length });
       const bad = out?.results.find((r) => !r.ok);
@@ -57,7 +58,9 @@ export function RenderStep({ ctx }: { ctx: Ctx }) {
       return { ...p, notes: text.trim() ? [...others, { id: `note-${target}`, target, text, created: new Date().toISOString() }] : others };
     }, `note-${target}`);
 
-  const providers = [...new Set(analysis.lines.map((l) => l.voice_id).filter((v): v is string => !!v).map((id) => ctx.voices.find((v) => v.id === id)?.provider_label ?? "Unknown"))];
+  const used = [...new Set(analysis.lines.map((l) => l.voice_id).filter((v): v is string => !!v))].map((id) => ctx.voices.find((v) => v.id === id));
+  const providers = [...new Set(used.map((v) => v?.provider_label ?? "Unknown"))];
+  const cloud = [...new Set(used.filter((v) => v?.sends_data).map((v) => v?.provider_label ?? "a cloud provider"))];
 
   return (
     <div className="page">
@@ -72,7 +75,7 @@ export function RenderStep({ ctx }: { ctx: Ctx }) {
         </div>
         {progress && <div className="bar" style={{ marginTop: 10 }} role="progressbar" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.done}><div style={{ width: `${(100 * progress.done) / progress.total}%` }} /></div>}
         <p className="small muted" style={{ marginTop: 10, marginBottom: 0 }}>
-          Voices in use: {providers.join(", ") || "none yet"}. These voices run on this computer, so no script text or audio leaves it and nothing is charged. Lines that have not changed are reused, not rendered again.
+          Voices in use: {providers.join(", ") || "none yet"}. {cloud.length > 0 ? `Lines using ${cloud.join(" and ")} are sent over the internet and billed to your account there; you will be asked first. Other voices run on this computer.` : "These voices run on this computer, so no script text or audio leaves it and nothing is charged."} Lines that have not changed are reused, not rendered again.
         </p>
       </div>
       {blocked.length > 0 && <div className="callout warn"><strong>{blocked.length} line{blocked.length === 1 ? " needs" : "s need"} attention before rendering</strong>Open Direct to see what to fix.<div className="row" style={{ marginTop: 6 }}><button className="small" onClick={() => ctx.goto(2)}>Go to Direct</button></div></div>}

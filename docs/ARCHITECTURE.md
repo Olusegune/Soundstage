@@ -14,7 +14,7 @@ soundstage-core (Rust)          every decision about what is allowed, rendered a
   tags      canonical vocabulary; unknown tags are errors and never reach a provider
   direction project -> character -> scene -> line, field by field, with the source recorded
   providers Adapter trait, capability checks before any work, request splitting, Registry
-  adapters  windows-speech (SAPI via PowerShell), scratch-tone (test fake)
+  adapters  windows-speech (SAPI via PowerShell), elevenlabs (cloud, pinned host), scratch-tone (test fake)
   render    analyze() for status and issues; render_line() for takes and the cache
   layout    places selected takes on one timeline
   mix       buses, ducking, one shared master gain so stems sum to the master
@@ -51,5 +51,7 @@ All buses are built at 48 kHz stereo float. Dialogue is built first; its activit
 - Project ids and relative file paths are validated before use; exports never trust a path from the UI.
 - Imported audio is size- and duration-limited and decoded in-process.
 - The only subprocess is PowerShell for Windows speech. Its script is a constant sent as `-EncodedCommand`; user text travels in a JSON file in a private temp folder; the voice name must match the installed-voice list.
-- Keys are stored with `keyring` (Windows Credential Manager) and are never returned to the UI.
+- Keys are stored with `keyring` (Windows Credential Manager) and are never returned to the UI. The shell passes the core a key provider; adapters read the key per call and never store or log it.
+- The ElevenLabs adapter is pinned to `https://api.elevenlabs.io`, never follows redirects, validates voice ids before putting them in a URL, caps response sizes, and reports only short error codes. Cloned and professional voices are never listed.
+- The UI asks before any text is sent over the network and says which provider receives it.
 - The webview CSP allows no remote origins, and the asset protocol is scoped to the Soundstage documents folder.

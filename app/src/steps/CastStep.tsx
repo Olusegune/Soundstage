@@ -42,6 +42,7 @@ export function CastStep({ ctx }: { ctx: Ctx }) {
   const sample = async (speaker: string, v: Voice) => {
     const first = analysis.lines.find((l) => l.line.speaker === speaker);
     const text = (first && stripTags(first.line.text)) || v.sample_text;
+    if (v.sends_data && !window.confirm(`This sends the sample line (${text.length} characters) to ${v.provider_label} and uses your account's credits. Continue?`)) return;
     setLoading(speaker);
     try {
       const r = await api.previewVoice(v.id, text);
@@ -95,7 +96,7 @@ export function CastStep({ ctx }: { ctx: Ctx }) {
             {v && (
               <p className="small muted" style={{ marginTop: 8 }}>
                 {v.provider_label} · {v.language} · {v.notes}
-                {" "}Runs on this computer; nothing is sent anywhere.
+                {" "}{v.sends_data ? `Each line is sent to ${v.provider_label} to be spoken.` : "Runs on this computer; nothing is sent anywhere."}
               </p>
             )}
             {missing.length > 0 && (
