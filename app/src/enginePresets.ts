@@ -113,6 +113,12 @@ export const JOB_PRESETS: JobPreset[] = [
     job: { ...jobBase, label: "Suno (Kie)", provider: "kie", kind: "music", model: "ai-music-api/generate", template: '{"custom_mode":false,"instrumental":"{{instrumental}}","model":"V6","prompt":"{{prompt}}"}', licence_note: "Suno output terms depend on your Suno or Kie plan. Read them before commercial use.", min_s: 30, max_s: 240, default_s: 120 },
   },
   {
+    key: "fal-acestep", label: "ACE-Step music through fal",
+    blurb: "An open music model hosted on fal. The model id is from fal's own guide; check the field names on its page.",
+    help: "Save your fal key above. Open fal.ai/models/fal-ai/ace-step/prompt-to-audio and confirm the input names match the template.",
+    job: { ...jobBase, label: "ACE-Step (fal)", provider: "fal", kind: "music", model: "fal-ai/ace-step/prompt-to-audio", template: '{"prompt":"{{prompt}}","duration":"{{seconds}}"}', licence_note: "ACE-Step is an open model; fal's terms and the model's licence both apply. Check before commercial use.", min_s: 5, max_s: 240, default_s: 60 },
+  },
+  {
     key: "fal-music", label: "Music through fal",
     blurb: "Any fal music model. Enter its model id and match the template to the fields on its fal page.",
     help: "Save your fal key above, then open the model's page on fal and copy its input field names into the template.",
