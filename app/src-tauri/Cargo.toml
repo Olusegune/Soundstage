@@ -1,0 +1,23 @@
+[package]
+name = "soundstage"
+version = "0.1.0"
+description = "Soundstage: the whole sound side of a film, in one desktop app"
+authors = ["Wheelbarrow Studios"]
+edition = "2021"
+publish = false
+
+[lib]
+name = "soundstage_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+keyring = { version = "3", features = ["windows-native"] }
+soundstage-core = { path = "../../crates/soundstage-core" }
