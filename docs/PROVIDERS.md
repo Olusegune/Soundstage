@@ -166,8 +166,8 @@ Shipped but **not live-tested** unless stated. Each one is built from public doc
 | Piper | Local | None (subprocess, argument list only) | Reads `.onnx` voices from a folder; uses `--output_file` and `--length-scale` | Confirm the CLI flags against the installed Piper release; each voice has its own licence |
 | ElevenLabs music and sound effects | Cloud | api.elevenlabs.io (already approved) | `/v1/music`, `/v1/sound-generation` | Live call, plan limits, commercial terms |
 | ElevenLabs voice design | Cloud | api.elevenlabs.io | `/v1/text-to-voice/design`, `/v1/text-to-voice` | Live call; credits per preview |
-| Kie (Suno and other jobs) | Cloud | api.kie.ai (**needs approval before first live use**) | Create-task then poll; template per model; Suno template `{"custom_mode":false,"instrumental":"{{instrumental}}","model":"V6","prompt":"{{prompt}}"}` on `ai-music-api/generate` | Endpoint, model names and output terms |
-| fal | Cloud | queue.fal.run (**needs approval before first live use**) | Queue submit, poll, fetch result; template per model | Field names differ per model; presets are starting points |
+| Kie (Suno and other jobs) | Cloud | api.kie.ai (approved by Victor 2026-10-23; not yet live-tested) | Create-task then poll; template per model; Suno template `{"custom_mode":false,"instrumental":"{{instrumental}}","model":"V6","prompt":"{{prompt}}"}` on `ai-music-api/generate` | Endpoint, model names and output terms |
+| fal | Cloud | queue.fal.run (approved by Victor 2026-10-23; not yet live-tested) | Queue submit, poll, fetch result; template per model | Field names differ per model; presets are starting points |
 | ComfyUI | Local | Loopback or private address | Submit a user-supplied API-format workflow, poll history, fetch the output file | Behaviour differs by node pack and version |
 
 Downloads of generated audio from a provider go through a hardened fetcher: https only, public addresses only, at most three validated redirects, a size cap, and no credentials sent.
