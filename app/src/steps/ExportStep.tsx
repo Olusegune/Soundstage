@@ -254,7 +254,7 @@ export function ExportStep({ ctx }: { ctx: Ctx }) {
         <div className="row"><h2 style={{ margin: 0 }}>FFmpeg</h2><span className="spacer" />
           {caps?.ffmpeg ? <span className="chip ok"><I.Check size={12} /> Found</span> : <span className="chip warn"><I.Alert size={12} /> Not found</span>}
         </div>
-        <p className="small muted" style={{ margin: "8px 0" }}>WAV is always available. FLAC, MP3, AAC, Opus, Ogg Vorbis and MP4 are written by FFmpeg, a free open-source tool. Soundstage runs it on this computer and never sends your audio anywhere.</p>
+        <p className="small muted" style={{ margin: "8px 0" }}>WAV is always available. FLAC, MP3, AAC, Opus, Ogg Vorbis and MP4 are written by FFmpeg, a free open-source tool that comes with Soundstage. It runs on this computer and never sends your audio anywhere.</p>
         {caps?.ffmpeg ? (
           <p className="small mono faint" style={{ margin: 0 }}>{caps.ffmpeg.version}<br />{caps.ffmpeg.path}</p>
         ) : (

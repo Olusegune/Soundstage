@@ -171,7 +171,7 @@ Before anything is written, Soundstage checks every voice, engine, music track a
 
 Every export goes into a new folder. Nothing is ever overwritten.
 
-> **Tip.** WAV needs nothing extra. The other formats use FFmpeg, a free program Soundstage does not include. Install it once (for example winget install Gyan.FFmpeg) or choose ffmpeg.exe on the Export screen.
+> **Tip.** Every format works out of the box: Soundstage includes FFmpeg (LGPL build) to write MP3, FLAC, AAC, Opus, Ogg Vorbis and MP4. To use your own copy instead, choose its ffmpeg.exe on the Export screen.
 
 ---
 

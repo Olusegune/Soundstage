@@ -1,0 +1,13 @@
+FFmpeg is included with Soundstage as a separate program (ffmpeg.exe). Soundstage starts it to write MP3, FLAC, AAC,
+Opus, Ogg Vorbis and MP4 files. It is not linked into Soundstage.
+
+Version:  FFmpeg n8.1 (release branch build 20261023)
+Build:    BtbN/FFmpeg-Builds, "win64-lgpl" variant, configured with --enable-version3 and without --enable-gpl
+          or --enable-nonfree, so it is licensed under the GNU Lesser General Public License version 3 (see
+          FFMPEG-LICENSE.txt).
+Source:   FFmpeg source code: https://ffmpeg.org/download.html (tag n8.1)
+          Build scripts and the exact configuration: https://github.com/BtbN/FFmpeg-Builds
+          You may replace ffmpeg.exe with another build of FFmpeg: choose it on Soundstage's Export screen.
+
+FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project. Some codecs inside the build are covered
+by third-party patents and licences; you are responsible for using them lawfully where you live.

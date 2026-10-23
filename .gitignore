@@ -12,3 +12,4 @@ app/icon-source.png
 *.key
 .DS_Store
 Thumbs.db
+app/src-tauri/resources/ffmpeg.exe

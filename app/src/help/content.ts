@@ -155,7 +155,7 @@ export const ARTICLES: Article[] = [
         "A manifest listing every voice, provider, licence decision and file fingerprint, and recording that the dialogue is AI-generated.",
       ] },
       { t: "p", text: "Every export goes into a new folder. Nothing is ever overwritten." },
-      { t: "tip", text: "WAV needs nothing extra. The other formats use FFmpeg, a free program Soundstage does not include. Install it once (for example winget install Gyan.FFmpeg) or choose ffmpeg.exe on the Export screen." },
+      { t: "tip", text: "Every format works out of the box: Soundstage includes FFmpeg (LGPL build) to write MP3, FLAC, AAC, Opus, Ogg Vorbis and MP4. To use your own copy instead, choose its ffmpeg.exe on the Export screen." },
     ],
   },
   {

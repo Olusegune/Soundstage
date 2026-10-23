@@ -14,8 +14,8 @@ _A summary of the main components. Before a public release, generate the complet
 | flag-icons | Language flags | MIT |
 | axe-core, Vitest (development only, not shipped) | Accessibility and unit tests | MPL-2.0, MIT |
 
-## Not included, used if you install them
-- **FFmpeg** is not bundled. Soundstage runs the `ffmpeg.exe` you install or choose. Its licence (LGPL or GPL, depending on the build) is yours to review. If Soundstage later bundles FFmpeg, use an LGPL build, ship its licence text and source offer, and update this file.
+## Bundled and separate programs
+- **FFmpeg** is bundled as a separate program (`resourcesfmpeg.exe`), an LGPL v3 build (n8.1, from BtbN/FFmpeg-Builds, no GPL or non-free parts). Its licence text and source pointers ship beside it (`FFMPEG-LICENSE.txt`, `FFMPEG-NOTICE.txt`). You may replace it with your own build on the Export screen. H.264 video in MP4 uses OpenH264 inside this build; codec patents are the user's responsibility where they apply. When updating the bundled build, keep it an LGPL build, ship its licence text and source pointers, and update this file.
 - **Piper, ComfyUI, Ollama and any speech or music models** are separate programs with their own licences. Every voice and model has its own terms, which Soundstage cannot read for you.
 
 ## Online services

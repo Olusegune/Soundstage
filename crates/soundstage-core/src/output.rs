@@ -81,7 +81,8 @@ impl Codec {
             Codec::Aac { .. } => &["aac"],
             Codec::Vorbis { .. } => &["libvorbis"],
             Codec::Opus { .. } => &["libopus"],
-            Codec::Mp4 { .. } => &["libx264", "aac"],
+            // The video encoder is chosen at run time (see `Ffmpeg::video_encoder`), so only the audio one is fixed here.
+            Codec::Mp4 { .. } => &["aac"],
         }
     }
     pub fn lossless(&self) -> bool {
@@ -247,11 +248,22 @@ impl Ffmpeg {
         Some(Ffmpeg { path: path.to_path_buf(), version: first.chars().take(120).collect(), encoders })
     }
 
+    /// `ffmpeg.exe` installed next to the app (in `resources\\`), if any.
+    pub fn bundled() -> Option<PathBuf> {
+        let exe = std::env::current_exe().ok()?;
+        let dir = exe.parent()?;
+        [dir.join("resources").join("ffmpeg.exe"), dir.join("ffmpeg.exe")].into_iter().find(|p| p.is_file())
+    }
+
     /// Find FFmpeg. If the user chose a file, only that file is tried, so a wrong choice fails loudly
     /// instead of quietly using another copy.
     pub fn detect(configured: Option<&str>) -> Option<Ffmpeg> {
         if let Some(c) = configured.filter(|c| !c.trim().is_empty()) {
             return Ffmpeg::probe(Path::new(c.trim()));
+        }
+        // The copy shipped with Soundstage comes first, so exports behave the same on every computer.
+        if let Some(found) = Ffmpeg::bundled().and_then(|p| Ffmpeg::probe(&p)) {
+            return Some(found);
         }
         let mut dirs: Vec<PathBuf> = std::env::var_os("PATH").map(|p| std::env::split_paths(&p).collect()).unwrap_or_default();
         if let Some(local) = std::env::var_os("LOCALAPPDATA") {
@@ -266,11 +278,17 @@ impl Ffmpeg {
     }
 
     pub fn supports(&self, codec: &Codec) -> bool {
-        codec.encoders().iter().all(|e| self.has(e))
+        codec.encoders().iter().all(|e| self.has(e)) && (!matches!(codec, Codec::Mp4 { .. }) || self.video_encoder().is_some())
+    }
+
+    /// The best H.264-or-better-compatible video encoder this build has. x264 comes with GPL builds, OpenH264 with the
+    /// bundled LGPL build, and MPEG-4 part 2 is the last resort that every build has.
+    pub fn video_encoder(&self) -> Option<&'static str> {
+        ["libx264", "libopenh264", "mpeg4"].into_iter().find(|e| self.has(e))
     }
 
     pub fn encode(&self, input_wav: &Path, out: &Path, codec: &Codec, title: &str) -> Result<(), String> {
-        let args = args_for(codec, input_wav, out, title);
+        let args = args_for_video(codec, input_wav, out, title, self.video_encoder().unwrap_or("libx264"));
         let (_, err, ok) = run_capture(&self.path, &args, Duration::from_secs(900))?;
         if !ok || !out.is_file() {
             let line = err.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("the encoder failed");
@@ -286,6 +304,20 @@ fn clean_meta(s: &str) -> String {
 
 /// The exact FFmpeg arguments for a format. Pure, so it can be tested without running FFmpeg.
 pub fn args_for(codec: &Codec, input: &Path, out: &Path, title: &str) -> Vec<String> {
+    args_for_video(codec, input, out, title, "libx264")
+}
+
+/// Video encoder settings differ: x264 takes a quality factor, OpenH264 and MPEG-4 take a rate or quality number.
+fn video_args(encoder: &str) -> Vec<String> {
+    let s = |x: &str| x.to_string();
+    match encoder {
+        "libx264" => vec![s("-c:v"), s("libx264"), s("-preset"), s("medium"), s("-crf"), s("20")],
+        "libopenh264" => vec![s("-c:v"), s("libopenh264"), s("-b:v"), s("2500k"), s("-profile:v"), s("high")],
+        _ => vec![s("-c:v"), s("mpeg4"), s("-q:v"), s("3")],
+    }
+}
+
+pub fn args_for_video(codec: &Codec, input: &Path, out: &Path, title: &str, vcodec: &str) -> Vec<String> {
     let s = |x: &str| x.to_string();
     let mut a = vec![s("-hide_banner"), s("-loglevel"), s("error"), s("-y"), s("-i"), input.to_string_lossy().to_string()];
     match codec {
@@ -301,7 +333,9 @@ pub fn args_for(codec: &Codec, input: &Path, out: &Path, title: &str) -> Vec<Str
                 s("-filter_complex"),
                 format!("[0:a]showwaves=s={w}x{h}:mode=cline:colors=0xE9B85C:rate=30,format=yuv420p[v]"),
                 s("-map"), s("[v]"), s("-map"), s("0:a"),
-                s("-c:v"), s("libx264"), s("-preset"), s("medium"), s("-crf"), s("20"),
+            ]);
+            a.extend(video_args(vcodec));
+            a.extend([
                 s("-c:a"), s("aac"), s("-b:a"), format!("{kbps}k"),
                 s("-shortest"), s("-movflags"), s("+faststart"),
             ]);
@@ -511,6 +545,28 @@ mod tests {
             tried += 1;
         }
         assert!(tried >= 1);
+        std::fs::remove_dir_all(d).ok();
+    }
+
+    /// The LGPL build that ships in the installer must write every format, with no GPL encoder (x264) to lean on.
+    #[test]
+    fn bundled_lgpl_ffmpeg_writes_every_format() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../app/src-tauri/resources/ffmpeg.exe");
+        let Some(ff) = path.is_file().then(|| Ffmpeg::detect(Some(path.to_str().unwrap()))).flatten() else {
+            eprintln!("bundled ffmpeg.exe not fetched (run tools/fetch-ffmpeg.mjs); skipping");
+            return;
+        };
+        assert!(!ff.has("libx264"), "the bundled build must not rely on GPL x264");
+        assert!(ff.video_encoder().is_some());
+        let d = tmp();
+        let t = tone(1.0, 0.3);
+        for c in [Codec::Flac, Codec::Mp3 { kbps: 192 }, Codec::Aac { kbps: 192 }, Codec::Vorbis { quality: 5 }, Codec::Opus { kbps: 128 }, Codec::Mp4 { aspect: Aspect::Square, kbps: 192 }] {
+            assert!(ff.supports(&c), "{} is not supported by the bundled build", c.label());
+            let out = write_audio(&t, &d.join("o"), &c, 48_000, Some(&ff), "Test", &d).unwrap();
+            let (_, err, ok) = run_capture(&ff.path, &["-v".into(), "error".into(), "-i".into(), out.to_string_lossy().to_string(), "-f".into(), "null".into(), "-".into()], Duration::from_secs(60)).unwrap();
+            assert!(ok && err.trim().is_empty(), "{} does not decode cleanly: {err}", c.label());
+            std::fs::remove_file(&out).ok();
+        }
         std::fs::remove_dir_all(d).ok();
     }
 

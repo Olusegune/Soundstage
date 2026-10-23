@@ -3,6 +3,7 @@
 ## 0.2.0 (2026-10-23)
 
 ### Added
+- **FFmpeg is now included** (LGPL build), so MP3, FLAC, AAC, Opus, Ogg Vorbis and MP4 export work with nothing to install.
 - **Voices:** any OpenAI-compatible speech server (Kokoro, LocalAI, Speaches, OpenRouter and others), Piper, and your own ComfyUI workflows. Local engines need no account.
 - **Music and sound effects:** create them in the Mix step with ElevenLabs, Suno through Kie, fal models (including ACE-Step) or ComfyUI. Everything generated is labelled AI-generated and starts as licence unknown.
 - **Voice design:** describe a character and keep one of three candidate voices (ElevenLabs). Descriptions that aim at a real person are refused.
@@ -21,7 +22,7 @@
 ### Known limits
 - Kie, fal, OpenRouter, ComfyUI, Piper, Ollama and ElevenLabs music and design were tested against local fakes only. See `docs/PROVIDERS.md` section 10.
 - The installer is not code-signed, so Windows SmartScreen shows a warning.
-- FFmpeg is not bundled.
+- MP4 video uses the encoder inside the bundled LGPL FFmpeg (OpenH264), which may differ slightly from x264 output.
 
 ## 0.1.0 (2026-10-23)
 First release: script, cast, direct, render, mix and export with Windows voices and ElevenLabs, licence and consent gates, and an export manifest.
