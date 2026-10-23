@@ -193,6 +193,21 @@ export const ARTICLES: Article[] = [
     ],
   },
   {
+    id: "prompt-helper", title: "The prompt helper", group: "Understanding",
+    summary: "How to describe music, effects and voices, even if you have never written a prompt.",
+    tags: ["prompt", "helper", "describe", "ai", "ollama", "improve", "write", "beginner"],
+    body: [
+      { t: "p", text: "A prompt is just a short description of what you want. Wherever you describe music, a sound effect or a designed voice, press Help me write this." },
+      { t: "ul", items: [
+        "Tap the choices that fit (mood, style, speed, place, accent). Your description fills in, and you can keep editing it.",
+        "A hint under the box tells you when the description is clear enough. It never blocks you.",
+        "Start from an example if you are stuck.",
+        "Improve with AI rewrites your description more clearly. It is optional: set a chat server such as Ollama in Settings. Ollama on your own computer sends nothing out. You read the result before anything is made.",
+      ] },
+      { t: "tip", text: "Describe the feeling, the sound and the moment in the film. For voices, describe a character (age, accent, tone), never a real person." },
+    ],
+  },
+  {
     id: "consent", title: "Consent and voice cloning", group: "Understanding",
     summary: "Why cloning is off, and the rules it will follow.",
     tags: ["consent", "clone", "cloning", "safety", "rights", "voice", "permission"],

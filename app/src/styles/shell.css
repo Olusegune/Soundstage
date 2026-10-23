@@ -128,8 +128,10 @@
 .splash { position: fixed; inset: 0; z-index: var(--z-splash); background: #010304 center / cover no-repeat; display: grid; align-items: end; justify-items: center; transition: opacity 500ms var(--ease); }
 .splash.leaving { opacity: 0; pointer-events: none; }
 .splash .loading { margin-bottom: 5vh; color: #d7c19d; font-size: 12px; letter-spacing: 0.3em; text-transform: uppercase; display: flex; gap: 10px; align-items: center; }
-.welcome { position: fixed; inset: 0; z-index: var(--z-dialog); background: #010304 center / cover no-repeat; display: grid; place-items: center; }
-.welcome::after { content: ""; position: absolute; inset: 0; background: radial-gradient(900px 500px at 50% 60%, rgba(5, 8, 11, 0.55), rgba(5, 8, 11, 0.9)); }
+.welcome { position: fixed; inset: 0; z-index: var(--z-dialog); background: #010304; display: grid; place-items: center; overflow: hidden; }
+/* Ambient glow made in CSS. The supplied artwork has its own wordmark baked in, so it is used only on the splash, never behind text. */
+.welcome::before { content: ""; position: absolute; inset: 0; background: radial-gradient(600px 380px at 50% 30%, rgba(233, 184, 92, 0.16), transparent 70%), radial-gradient(900px 500px at 20% 80%, rgba(60, 170, 170, 0.12), transparent 70%), radial-gradient(900px 500px at 85% 70%, rgba(233, 184, 92, 0.08), transparent 70%); }
+.welcome::after { content: ""; position: absolute; inset: 0; background: radial-gradient(900px 500px at 50% 55%, rgba(5, 8, 11, 0.35), rgba(5, 8, 11, 0.85)); }
 .welcome-card { position: relative; z-index: 1; width: min(720px, 92vw); padding: var(--s6); text-align: center; color: #f2ece0; }
 .welcome-card h1 { font-size: 34px; letter-spacing: 0.1em; text-transform: uppercase; color: #f7ebd3; }
 .welcome-card p { color: #d6d0c4; font-size: var(--fs-lg); }

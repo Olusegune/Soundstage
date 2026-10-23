@@ -20,6 +20,7 @@ export function Settings(props: {
   const [has, setHas] = useState<boolean | null>(null);
   const [key, setKey] = useState("");
   const [removing, setRemoving] = useState(false);
+  const [helperKey, setHelperKey] = useState("");
   const [testing, setTesting] = useState(false);
   const [test, setTest] = useState<{ ok: boolean; text: string; at: string } | null>(null);
 
@@ -69,6 +70,19 @@ export function Settings(props: {
           <button onClick={props.onShortcuts}><I.Keyboard size={16} /> Keyboard shortcuts…</button>
           <button onClick={props.onTour}><I.Rocket size={16} /> Take the guided tour</button>
           <button className="ghost" onClick={() => { props.onPrefs({ welcomed: false, toured: false }); props.toast("The welcome screen will show next time Soundstage starts."); }}>Show the welcome screen again</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2>AI prompt helper <span className="chip info" style={{ verticalAlign: "middle" }}>Optional</span></h2>
+        <p className="small muted">The “Help me write this” panels always work offline. To also get an “Improve with AI” button, point Soundstage at a chat server. Ollama running on this computer is free and sends nothing out. Ollama writes descriptions only; it cannot make sound.</p>
+        <div className="grid2" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <div><label htmlFor="a-url">Server address</label><input id="a-url" type="text" style={{ width: "100%" }} spellCheck={false} value={props.prefs.assistantUrl} onChange={(e) => props.onPrefs({ assistantUrl: e.target.value.trim() })} /></div>
+          <div><label htmlFor="a-model">Model name</label><input id="a-model" type="text" style={{ width: "100%" }} spellCheck={false} placeholder="for example llama3.2" value={props.prefs.assistantModel} onChange={(e) => props.onPrefs({ assistantModel: e.target.value.trim() })} /></div>
+        </div>
+        <div className="row" style={{ marginTop: 8, alignItems: "end" }}>
+          <div style={{ flex: 1, minWidth: 240 }}><label htmlFor="a-key">Key (only if the server asks for one)</label><input id="a-key" type="password" autoComplete="off" style={{ width: "100%" }} maxLength={512} value={helperKey} onChange={(e) => setHelperKey(e.target.value)} placeholder="Paste a key" /></div>
+          <button disabled={!helperKey.trim()} onClick={() => { void api.setApiKey("assistant", helperKey).then(() => { setHelperKey(""); props.toast("Helper key saved in the Windows Credential Manager."); }).catch((e) => props.toast(messageOf(e), true)); }}>Save key</button>
         </div>
       </div>
 

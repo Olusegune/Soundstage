@@ -7,6 +7,7 @@ import { fmtMs, licenceNote } from "../logic";
 import { Confirm, Empty, Help, LicenceChip, PeaksView, PlayButton, Waveform } from "../ui";
 import type { Asset, Cue, Destination, GeneratorInfo, Layout } from "../types";
 import { LicenceEditor } from "./LicenceEditor";
+import { PromptHelper } from "../shell/PromptHelper";
 
 const lufs = (v: number | null) => (v === null ? "n/a" : `${v.toFixed(1)} LUFS`);
 
@@ -124,6 +125,7 @@ export function MixStep({ ctx }: { ctx: Ctx }) {
                 </div>
                 <label htmlFor="g-prompt" style={{ marginTop: 8 }}>Describe it</label>
                 <textarea id="g-prompt" rows={2} maxLength={1000} style={{ width: "100%" }} value={gen.prompt} onChange={(e) => setGen({ ...gen, prompt: e.target.value })} placeholder={gen.kind === "music" ? "Warm piano and soft strings, slow, hopeful" : "Heavy wooden door creaking open"} />
+                <PromptHelper kind={gen.kind} value={gen.prompt} onChange={(v) => setGen((g) => ({ ...g, prompt: v }))} toast={ctx.toast} />
                 <div className="row" style={{ marginTop: 8 }}>
                   {gen.kind === "music" && <label className="inline"><input type="checkbox" checked={gen.instrumental} onChange={(e) => setGen({ ...gen, instrumental: e.target.checked })} /> No singing</label>}
                   <span className="spacer" />

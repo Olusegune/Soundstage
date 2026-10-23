@@ -255,6 +255,46 @@ try {
     app.check("the Voice library has the Design a voice card", /Design a voice/.test(lib));
     await app.press("Ctrl+O"); await sleep(500);
   }
+  // Prompt helper, Voice engines and Settings screens (v0.2).
+  {
+    await app.resize(1280, 720);
+    await app.press("Ctrl+,"); await sleep(400);
+    await app.clickText("Dark"); await sleep(400);
+    const tidy = (id) => app.ev(`(()=>{document.querySelectorAll('[role=status].toast, .toast').forEach(t=>t.remove());document.getElementById(${JSON.stringify(id)})?.scrollIntoView({block:'center'})})()`);
+    await app.press("Ctrl+Shift+V"); await sleep(600);
+    await app.clickText("Help me write this"); await sleep(300);
+    await app.clickText("Older"); await app.clickText("Woman"); await app.clickText("Nigerian English"); await app.clickText("Warm and kind"); await sleep(300);
+    const v = await app.ev("document.getElementById('d-text')?.value ?? ''");
+    app.check("the prompt helper fills in the voice description from taps", /older woman/i.test(v) && /Nigerian English accent/.test(v), v);
+    const st = await app.ev("document.querySelector('.prompt-helper [role=status]')?.textContent ?? ''");
+    app.check("the helper says the description is clear", /clear description/i.test(st), st);
+    app.check("Improve with AI is disabled until a helper is set up", await app.ev("[...document.querySelectorAll('.prompt-helper button')].find(b=>/Improve with AI/.test(b.textContent))?.disabled === true"));
+    await tidy("d-text"); await sleep(250);
+    await app.shot(`${shotsDir}/dark-1280x720-voice-design.png`);
+    await audit("voice library with the prompt helper");
+    await app.clickText("Voice engines"); await sleep(700);
+    app.check("the Voice engines screen lists the music, effects and ComfyUI section", /Music, sound effects and more/.test(await app.ev("document.body.textContent")));
+    await tidy("j-label"); await app.ev("[...document.querySelectorAll('h2')].find(h=>/Music, sound effects/.test(h.textContent))?.scrollIntoView({block:'start'})"); await sleep(250);
+    await app.shot(`${shotsDir}/dark-1280x720-voice-engines.png`);
+    await audit("voice engines");
+    await app.press("Ctrl+,"); await sleep(500);
+    app.check("Settings has the AI prompt helper section", /AI prompt helper/.test(await app.ev("document.body.textContent")));
+    await app.shot(`${shotsDir}/dark-1280x720-settings.png`);
+    await app.press("Ctrl+O"); await sleep(500);
+    await app.clickText("Open"); await sleep(900);
+    await goStepByKey(5);
+    await app.clickText("Help me write this"); await sleep(300);
+    await app.clickText("Hopeful"); await app.clickText("Solo piano"); await app.clickText("Slow"); await sleep(300);
+    const mp = await app.ev("document.getElementById('g-prompt')?.value ?? ''");
+    app.check("the Mix prompt helper builds a music description", /solo piano/i.test(mp) && /hopeful/i.test(mp), mp);
+    await tidy("g-prompt"); await sleep(250);
+    await app.shot(`${shotsDir}/dark-1280x720-mix-create.png`);
+    await audit("mix with the prompt helper");
+    await goStepByKey(6); await sleep(500);
+    await app.shot(`${shotsDir}/dark-1280x720-export-formats.png`);
+    await app.press("Ctrl+O"); await sleep(500);
+    await app.resetSize();
+  }
   const screens = [["home", async () => { await app.press("Ctrl+O"); await sleep(600); }], ["library", async () => { await app.press("Ctrl+Shift+V"); await sleep(600); }]];
   for (const [theme, label] of [["light", "Light"], ["dark", "Dark"]]) {
     await app.press("Ctrl+,"); await sleep(400);

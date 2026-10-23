@@ -3,6 +3,7 @@ import { api, messageOf } from "../api";
 import { licenceNote } from "../logic";
 import { Flag, languageName } from "../flags";
 import { LicenceChip, PlayButton } from "../ui";
+import { PromptHelper } from "../shell/PromptHelper";
 import { NON_VERBAL, type DesignerInfo, type DesignPreview, type Voice } from "../types";
 
 const ALL_TAGS = [...NON_VERBAL, "whisper", "shout", "excited", "sad", "tired", "sarcastic", "curious", "serious"];
@@ -98,6 +99,7 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
             <p className="muted small">Describe the character, not a real person: age, tone, pace, accent. You hear three candidates and keep the one you like.</p>
             <label htmlFor="d-text">Description <span className="faint small">({designLen}/1000, at least 20)</span></label>
             <textarea id="d-text" rows={3} maxLength={1000} style={{ width: "100%" }} value={des.text} onChange={(e) => setDes({ ...des, text: e.target.value })} placeholder="A calm older woman with a warm Lagos accent, slow and kind" />
+            <PromptHelper kind="voice" value={des.text} onChange={(v) => setDes((d) => ({ ...d, text: v }))} toast={props.toast} />
             <div className="row" style={{ marginTop: 8, alignItems: "end" }}>
               {designers.length > 1 && <div><label htmlFor="d-src">With</label><select id="d-src" value={designer?.id ?? ""} onChange={(e) => setDes({ ...des, adapter: e.target.value })}>{designers.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}</select></div>}
               <button className="primary" disabled={des.busy || !designer?.ready || designLen < 20} onClick={() => setDes({ ...des, confirm: true })}>{des.busy ? <><span className="spin" aria-hidden="true" /> Designing</> : "Design 3 voices"}</button>

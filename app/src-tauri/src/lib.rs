@@ -39,7 +39,7 @@ fn key_provider() -> KeyProvider {
 
 /// Only names Soundstage itself defines can reach the key store: `elevenlabs`, or `engine:<id>` for an engine the user added.
 fn valid_key_name(name: &str) -> bool {
-    matches!(name, "elevenlabs" | "fal" | "kie") || name.strip_prefix("engine:").is_some_and(valid_engine_id)
+    matches!(name, "elevenlabs" | "fal" | "kie" | "assistant") || name.strip_prefix("engine:").is_some_and(valid_engine_id)
 }
 
 /// Builds the registry on first use and again after a key is saved or removed.
@@ -389,6 +389,16 @@ struct GeneratorView {
     notes: String,
 }
 
+/// Rewrite a rough idea as a clear description, using the chat server the user set up. Returns text only.
+#[tauri::command]
+async fn improve_prompt(base_url: String, model: String, kind: soundstage_core::assistant::AssistKind, draft: String) -> Result<String, String> {
+    blocking(move || {
+        let key = key_provider()("assistant");
+        soundstage_core::assistant::improve(&base_url, &model, key.as_deref(), kind, &draft)
+    })
+    .await?
+}
+
 #[tauri::command]
 async fn list_generators(state: State<'_, AppState>) -> Result<Vec<GeneratorView>, String> {
     let (_, reg) = shared(&state);
@@ -680,6 +690,7 @@ pub fn run() {
             export_project,
             import_asset,
             test_connection,
+            improve_prompt,
             list_generators,
             generate_audio,
             generator_test,

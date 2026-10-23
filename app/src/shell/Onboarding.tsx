@@ -19,7 +19,7 @@ export function Splash({ ready, onDone }: { ready: boolean; onDone: () => void }
     return () => clearTimeout(t);
   }, [leaving, onDone]);
   return (
-    <div className={`splash ${leaving ? "leaving" : ""}`} style={{ backgroundImage: "url(/brand/splash.webp)" }} role="img" aria-label="Soundstage. Voice. Sound. Music. Mix.">
+    <div className={`splash ${leaving ? "leaving" : ""}`} role="img" aria-label="Soundstage. Voice. Sound. Music. Mix.">
       <div className="loading" aria-live="polite"><span className="spin" aria-hidden="true" /> Finding your voices</div>
     </div>
   );
@@ -34,7 +34,7 @@ const PANELS = [
 export function Welcome({ onTour, onExplore }: { onTour: () => void; onExplore: () => void }) {
   const ref = useDialog(onExplore);
   return (
-    <div className="welcome" style={{ backgroundImage: "url(/brand/splash.webp)" }}>
+    <div className="welcome">
       <div className="welcome-card" role="dialog" aria-modal="true" aria-labelledby="welcome-h" ref={ref}>
         <img className="welcome-art" src="/brand/logo-256.png" alt="" aria-hidden="true" />
         <h1 id="welcome-h">Welcome to Soundstage</h1>

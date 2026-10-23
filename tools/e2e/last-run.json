@@ -1,11 +1,11 @@
 {
-  "when": "2026-10-23T17:14:19.720Z",
-  "passed": 128,
-  "total": 128,
+  "when": "2026-10-23T19:00:16.834Z",
+  "passed": 137,
+  "total": 137,
   "failed": [],
   "timings": {
-    "paletteOpenMs": 103,
-    "stepSwitchMs": 459
+    "paletteOpenMs": 77,
+    "stepSwitchMs": 434
   },
   "accessibility": [
     {
@@ -22,6 +22,18 @@
     },
     {
       "screen": "settings (light)",
+      "violations": []
+    },
+    {
+      "screen": "voice library with the prompt helper",
+      "violations": []
+    },
+    {
+      "screen": "voice engines",
+      "violations": []
+    },
+    {
+      "screen": "mix with the prompt helper",
       "violations": []
     },
     {

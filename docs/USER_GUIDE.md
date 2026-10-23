@@ -19,6 +19,7 @@ _Generated from the in-app Help centre (`app/src/help/content.ts`). Edit that fi
 **Understanding**
 - [What is free and what costs money](#what-is-free-and-what-costs-money)
 - [Voices and providers](#voices-and-providers)
+- [The prompt helper](#the-prompt-helper)
 - [Consent and voice cloning](#consent-and-voice-cloning)
 - [Saving, undo and recovery](#saving-undo-and-recovery)
 - [Simple and Advanced mode](#simple-and-advanced-mode)
@@ -141,7 +142,7 @@ _Music, effects, ducking and loudness._
 
 The mix has three groups of sound: dialogue, effects and music. Dialogue is laid out in script order with the gaps you choose.
 
-- Import music or effects as WAV files. Soundstage does not make or find music for you in this version.
+- Import music or effects (WAV, MP3, FLAC, Ogg or M4A), or create them with AI: describe the sound under Create with AI and choose a generator. Created sounds are labelled AI-generated and start as licence unknown.
 - Add to timeline places a file at a scene, with an offset, a level and fades. Loop to fill the scene repeats music for the scene's length.
 - Ducking lowers music and effects while someone is speaking so dialogue stays clear. Turn it off for music that is part of the scene, like a radio.
 - Where will this play? sets a loudness target. See the glossary for LUFS.
@@ -163,11 +164,14 @@ Before anything is written, Soundstage checks every voice, engine, music track a
 
 ### What you get
 
-- A master recording: WAV, 24-bit, 48 kHz.
+- A master recording in the format you choose: WAV (16, 24 or 32-bit float), or with FFmpeg installed FLAC, MP3, AAC, Opus, Ogg Vorbis, or an MP4 video with a waveform picture.
 - Three stems (dialogue, effects, music) of exactly the same length, so they line up in an editor and add back up to the master.
+- Optional subtitles (SRT or WebVTT) built from your script and its timings, with speaker names if you like.
 - A manifest listing every voice, provider, licence decision and file fingerprint, and recording that the dialogue is AI-generated.
 
 Every export goes into a new folder. Nothing is ever overwritten.
+
+> **Tip.** WAV needs nothing extra. The other formats use FFmpeg, a free program Soundstage does not include. Install it once (for example winget install Gyan.FFmpeg) or choose ffmpeg.exe on the Export screen.
 
 ---
 
@@ -179,7 +183,7 @@ _A plain account of what can use your provider account._
 
 Almost everything in Soundstage is free and runs on your computer: writing, casting, directing, rendering with Windows voices, mixing and exporting.
 
-> **Uses your provider account.** The only thing that can cost money is a cloud voice (ElevenLabs): rendering a line, or making a sample. It is billed to your account at the provider, under their plan.
+> **Uses your provider account.** The only things that can cost money are cloud services you connect (ElevenLabs, Kie, fal, OpenRouter): rendering a line, making a sample, designing a voice, or creating music or an effect. Each is billed to your own account at that provider.
 
 - Soundstage always asks first and says which provider gets how much text.
 - It does not show a price, because providers change them and Soundstage will not guess.
@@ -193,13 +197,33 @@ _Windows voices, ElevenLabs, keys, and what each can do._
 Soundstage works with several voice engines behind one set of directions, so changing engine does not mean rewriting your script.
 
 - Windows voices: free, offline. Can change pace and loudness for whisper, shout, excited, sad and tired. Cannot laugh, sigh or cough.
+- Your own engines: connect a speech server on your computer (Kokoro, LocalAI, Speaches and many others speak the same OpenAI-style language), or Piper. They are free and need no account.
 - ElevenLabs: cloud. Can perform laugh, sigh, whisper, excited, sarcastic, curious and cry, according to its documentation. Cough, sneeze, sniff, gasp, chuckle, breath, shout, sad, tired and serious are not offered.
+
+No account? Open Voice engines and add a local engine or Piper. Ollama runs language models, not speech, so it cannot be a voice engine. ComfyUI works through a workflow you save from it in API format.
+
+Music and effects: ElevenLabs makes both with the same key. Suno songs come through a Kie key. fal models and ComfyUI workflows can be added under Voice engines. Everything made starts as licence unknown.
+
+Design a voice: in the Voice library, describe a character (age, tone, accent), listen to three candidates and keep one. Descriptions that aim at a real person are refused.
 
 To use ElevenLabs, open Settings, paste your key, press Save key, then Test connection. Your key is stored in the Windows Credential Manager, not in the project, and Soundstage never shows it again.
 
 Soundstage does not list cloned, professional or famous voices from your ElevenLabs account, because using someone's voice requires their recorded consent.
 
 > **Tip.** Accent and language quality have not been tested by native speakers yet. Soundstage does not claim a language is supported until that is done.
+
+## The prompt helper
+
+_How to describe music, effects and voices, even if you have never written a prompt._
+
+A prompt is just a short description of what you want. Wherever you describe music, a sound effect or a designed voice, press Help me write this.
+
+- Tap the choices that fit (mood, style, speed, place, accent). Your description fills in, and you can keep editing it.
+- A hint under the box tells you when the description is clear enough. It never blocks you.
+- Start from an example if you are stuck.
+- Improve with AI rewrites your description more clearly. It is optional: set a chat server such as Ollama in Settings. Ollama on your own computer sends nothing out. You read the result before anything is made.
+
+> **Tip.** Describe the feeling, the sound and the moment in the film. For voices, describe a character (age, accent, tone), never a real person.
 
 ## Consent and voice cloning
 
@@ -304,6 +328,72 @@ The installer is not code-signed yet, so Windows SmartScreen may warn. Choose Mo
 ### A project will not open
 
 If it was saved by a newer version of Soundstage, update Soundstage. If its file is damaged, Soundstage tries the last good copy automatically.
+
+---
+
+## Screen gallery
+
+_Captured from the real app by `tools/e2e/run.mjs`._
+
+![The welcome screen on first launch.](design/screens/dark-welcome.png)
+*The welcome screen on first launch.*
+
+![Projects: start a new scene, or pick up where you left off.](design/screens/dark-1280x720-home.png)
+*Projects: start a new scene, or pick up where you left off.*
+
+![Step 1, Script: write or import dialogue with speaker names.](design/screens/dark-1280x720-script.png)
+*Step 1, Script: write or import dialogue with speaker names.*
+
+![Step 2, Cast: choose a voice for each speaker.](design/screens/dark-1280x720-cast.png)
+*Step 2, Cast: choose a voice for each speaker.*
+
+![Step 3, Direct: set the feeling and pauses for each line.](design/screens/dark-1280x720-direct.png)
+*Step 3, Direct: set the feeling and pauses for each line.*
+
+![Step 4, Render: make the audio. Cloud voices ask first.](design/screens/dark-1280x720-render.png)
+*Step 4, Render: make the audio. Cloud voices ask first.*
+
+![Step 5, Mix: dialogue, effects and music on one timeline.](design/screens/dark-1280x720-mix.png)
+*Step 5, Mix: dialogue, effects and music on one timeline.*
+
+![Create music or an effect with AI, with the prompt helper open.](design/screens/dark-1280x720-mix-create.png)
+*Create music or an effect with AI, with the prompt helper open.*
+
+![Step 6, Export: licence checks, then the files.](design/screens/dark-1280x720-export.png)
+*Step 6, Export: licence checks, then the files.*
+
+![Export formats, subtitles and the optional FFmpeg setting.](design/screens/dark-1280x720-export-formats.png)
+*Export formats, subtitles and the optional FFmpeg setting.*
+
+![A commercial export blocked until licences are recorded.](design/screens/dark-1280x720-export-blocked.png)
+*A commercial export blocked until licences are recorded.*
+
+![The voice library, with languages shown by flag.](design/screens/dark-1280x720-library.png)
+*The voice library, with languages shown by flag.*
+
+![Design a voice from a description, with the prompt helper.](design/screens/dark-1280x720-voice-design.png)
+*Design a voice from a description, with the prompt helper.*
+
+![Voice engines: local engines, Piper, music and effects, ComfyUI.](design/screens/dark-1280x720-voice-engines.png)
+*Voice engines: local engines, Piper, music and effects, ComfyUI.*
+
+![Settings, including the optional AI prompt helper.](design/screens/dark-1280x720-settings.png)
+*Settings, including the optional AI prompt helper.*
+
+![The command palette (Ctrl+K).](design/screens/dark-1280x720-palette.png)
+*The command palette (Ctrl+K).*
+
+![The shortcut reference, with rebinding.](design/screens/dark-1280x720-shortcuts.png)
+*The shortcut reference, with rebinding.*
+
+![The built-in help centre.](design/screens/dark-1280x720-help.png)
+*The built-in help centre.*
+
+![The guided tour.](design/screens/dark-1280x720-tour.png)
+*The guided tour.*
+
+![The light theme.](design/screens/light-1280x720-mix.png)
+*The light theme.*
 
 ---
 

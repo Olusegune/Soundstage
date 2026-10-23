@@ -2,6 +2,7 @@
 //! exported. The desktop shell stays thin and calls into this crate.
 
 pub mod adapters;
+pub mod assistant;
 pub mod audio;
 pub mod consent;
 pub mod decode;
