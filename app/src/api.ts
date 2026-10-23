@@ -44,6 +44,7 @@ export const api = {
   designVoice: (adapterId: string, description: string, sampleText: string | null) => invoke<DesignPreview[]>("design_voice", { adapterId, description, sampleText }),
   saveDesignedVoice: (adapterId: string, generatedVoiceId: string, name: string, description: string) => invoke<string>("save_designed_voice", { adapterId, generatedVoiceId, name, description }),
   improvePrompt: (baseUrl: string, model: string, kind: "music" | "sfx" | "voice", draft: string) => invoke<string>("improve_prompt", { baseUrl, model, kind, draft }),
+  quit: () => invoke<void>("quit_app"),
   setApiKey: (provider: string, key: string) => invoke<void>("set_api_key", { args: { provider, key } }),
   enginesGet: () => invoke<EnginesView>("engines_get"),
   enginesSave: (config: EnginesConfig) => invoke<void>("engines_save", { config }),

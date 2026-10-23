@@ -650,6 +650,78 @@ async fn test_connection(state: State<'_, AppState>, provider: String) -> Result
     .await?
 }
 
+/// The Windows menu bar. Item text carries the shortcut after a tab so it is shown but not handled by the menu, because
+/// the app already handles those keys itself (and a second handler would run every action twice). Choosing an item sends
+/// its id to the page, which runs the same action as the shortcut or the command palette.
+fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use tauri::menu::{AboutMetadataBuilder, MenuBuilder, SubmenuBuilder};
+    let file = SubmenuBuilder::new(app, "&File")
+        .text("new-project", "&New project\tCtrl+N")
+        .text("open-project", "&Open project…\tCtrl+O")
+        .separator()
+        .text("save", "&Save\tCtrl+S")
+        .text("export", "&Export…\tCtrl+6")
+        .separator()
+        .text("show-folder", "Show projects &folder")
+        .separator()
+        .text("exit", "E&xit\tAlt+F4")
+        .build()?;
+    let edit = SubmenuBuilder::new(app, "&Edit")
+        .text("undo", "&Undo\tCtrl+Z")
+        .text("redo", "&Redo\tCtrl+Shift+Z")
+        .separator()
+        .cut()
+        .copy()
+        .paste()
+        .select_all()
+        .separator()
+        .text("palette", "&Search or run a command…\tCtrl+K")
+        .build()?;
+    let view = SubmenuBuilder::new(app, "&View")
+        .text("toggle-mode", "&Simple or Advanced\tCtrl+Shift+M")
+        .text("toggle-rail", "Show or hide the &sidebar\tCtrl+B")
+        .text("toggle-guide", "Show or hide the &guide panel\tCtrl+J")
+        .separator()
+        .text("theme-dark", "&Dark theme")
+        .text("theme-light", "&Light theme")
+        .text("theme-system", "&Match Windows theme")
+        .separator()
+        .fullscreen()
+        .build()?;
+    let go = SubmenuBuilder::new(app, "&Go")
+        .text("step-1", "Step 1: Script\tCtrl+1")
+        .text("step-2", "Step 2: Cast\tCtrl+2")
+        .text("step-3", "Step 3: Direct\tCtrl+3")
+        .text("step-4", "Step 4: Render\tCtrl+4")
+        .text("step-5", "Step 5: Mix\tCtrl+5")
+        .text("step-6", "Step 6: Export\tCtrl+6")
+        .separator()
+        .text("voices", "&Voice library")
+        .text("engines", "Voice &engines")
+        .text("settings", "Se&ttings\tCtrl+,")
+        .build()?;
+    let about = AboutMetadataBuilder::new()
+        .name(Some("Soundstage"))
+        .version(Some(env!("CARGO_PKG_VERSION")))
+        .comments(Some("The sound side of your film: voices, music, effects and the final mix. Dialogue is AI-generated and labelled as such in every export."))
+        .build();
+    let help = SubmenuBuilder::new(app, "&Help")
+        .text("help", "Help and &guide\tF1")
+        .text("shortcuts", "&Keyboard shortcuts\tCtrl+/")
+        .text("tour", "Take the guided &tour")
+        .text("prompt-help", "Writing &prompts")
+        .text("troubleshooting", "&Troubleshooting")
+        .separator()
+        .about(Some(about))
+        .build()?;
+    MenuBuilder::new(app).items(&[&file, &edit, &view, &go, &help]).build()
+}
+
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -667,6 +739,11 @@ pub fn run() {
                 warm.get();
             });
             app.manage(AppState { store: Arc::new(Store::new(root)), registry });
+            let menu = build_menu(app.handle())?;
+            app.set_menu(menu)?;
+            app.on_menu_event(|app, event| {
+                let _ = app.emit("menu", event.id().as_ref().to_string());
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -691,6 +768,7 @@ pub fn run() {
             import_asset,
             test_connection,
             improve_prompt,
+            quit_app,
             list_generators,
             generate_audio,
             generator_test,

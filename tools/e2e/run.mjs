@@ -250,6 +250,14 @@ try {
     app.check("ElevenLabs is offered for voice design", Array.isArray(des) && des.some((g) => /eleven/i.test(g)), JSON.stringify(des));
     const bad = await app.ev("window.__TAURI_INTERNALS__.invoke('design_voice',{adapterId:'elevenlabs',description:'a voice that sounds exactly like Morgan Freeman, deep and warm',sampleText:null}).then(()=>'allowed',e=>String(e))");
     app.check("a real-person voice description is refused before anything is sent", /real person|character|Describe/i.test(String(bad)), String(bad).slice(0, 160));
+    // The native menu sends an event with the item id; emitting it from the page proves the page acts on it.
+    await app.ev("window.__TAURI_INTERNALS__.invoke('plugin:event|emit',{event:'menu',payload:'settings'})"); await sleep(600);
+    app.check("choosing Settings from the menu opens Settings", /AI prompt helper/.test(await app.ev("document.body.textContent")));
+    await app.ev("window.__TAURI_INTERNALS__.invoke('plugin:event|emit',{event:'menu',payload:'engines'})"); await sleep(600);
+    app.check("choosing Voice engines from the menu opens it", /Bring your own engine/.test(await app.ev("document.body.textContent")));
+    await app.ev("window.__TAURI_INTERNALS__.invoke('plugin:event|emit',{event:'menu',payload:'prompt-help'})"); await sleep(600);
+    app.check("choosing Writing prompts from the Help menu opens that article", /Help me write this/.test(await app.ev("document.body.textContent")));
+    await app.press("Ctrl+O"); await sleep(500);
     await app.press("Ctrl+Shift+V"); await sleep(600);
     const lib = await app.ev("document.body.textContent");
     app.check("the Voice library has the Design a voice card", /Design a voice/.test(lib));

@@ -1,3 +1,5 @@
+import { listen } from "@tauri-apps/api/event";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, messageOf } from "./api";
 import type { Ctx } from "./ctx";
@@ -372,6 +374,27 @@ export default function App() {
   }), [newProject, goHome, flush, say, undo, redo, goStep, step, doNext, setPrefs, prefs.railCollapsed, prefs.guideOpen, prefs.mode, setMode, openAux, openHelp, startTour]);
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
+
+  // The native Windows menu sends the id of the item that was chosen.
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    void listen<string>("menu", (ev) => {
+      const id = ev.payload;
+      const a = actionsRef.current;
+      const direct: Record<string, () => void> = {
+        export: () => a["step-6"](),
+        engines: () => openAux("providers"),
+        "theme-dark": () => setTheme("dark"), "theme-light": () => setTheme("light"), "theme-system": () => setTheme("system"),
+        "prompt-help": () => openHelp("prompt-helper"),
+        troubleshooting: () => openHelp("troubleshooting"),
+        "show-folder": () => { void api.info().then((i) => revealItemInDir(i.projects_root)).catch((e) => say(messageOf(e), true)); },
+        exit: () => { void flush().finally(() => void api.quit()); },
+      };
+      if (direct[id]) { direct[id](); return; }
+      if (id in a) a[id as ShortcutId]();
+    }).then((u) => { off = u; });
+    return () => off?.();
+  }, [openAux, setTheme, openHelp, say, flush]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
