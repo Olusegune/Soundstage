@@ -1,7 +1,9 @@
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
 import { api, messageOf } from "../api";
 import * as I from "../icons";
 import type { Prefs, Theme } from "../prefs";
+import type { SystemCheck } from "../types";
 import { Confirm } from "../ui";
 
 export function Settings(props: {
@@ -21,6 +23,10 @@ export function Settings(props: {
   const [key, setKey] = useState("");
   const [removing, setRemoving] = useState(false);
   const [helperKey, setHelperKey] = useState("");
+  const [checks, setChecks] = useState<SystemCheck[]>([]);
+  const [checking, setChecking] = useState(false);
+  const runCheck = async () => { setChecking(true); try { setChecks(await api.systemCheck(props.prefs.ffmpegPath || null)); } catch (e) { props.toast(messageOf(e), true); } finally { setChecking(false); } };
+  useEffect(() => { void runCheck(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [testing, setTesting] = useState(false);
   const [test, setTest] = useState<{ ok: boolean; text: string; at: string } | null>(null);
 
@@ -71,6 +77,20 @@ export function Settings(props: {
           <button onClick={props.onTour}><I.Rocket size={16} /> Take the guided tour</button>
           <button className="ghost" onClick={() => { props.onPrefs({ welcomed: false, toured: false }); props.toast("The welcome screen will show next time Soundstage starts."); }}>Show the welcome screen again</button>
         </div>
+      </div>
+
+      <div className="card" role="group" aria-label="System check">
+        <div className="row"><h2 style={{ margin: 0 }}>System check</h2><span className="spacer" />
+          <button className="small" onClick={() => void runCheck()}>{checking ? "Checking…" : "Check again"}</button>
+          <button className="small" onClick={() => { void api.writeDiagnostics(props.prefs.ffmpegPath || null).then((p) => { props.toast("Report saved. Attach it when you ask for help. It holds no keys or script text."); void revealItemInDir(p); }).catch((e) => props.toast(messageOf(e), true)); }}>Report a problem…</button></div>
+        <p className="small muted">What this computer has. Nothing here is required: every missing piece has a free alternative.</p>
+        {checks.map((c) => (
+          <div key={c.id} className="linecard">
+            <div className="row"><span className={`chip ${c.status === "ok" ? "ok" : c.status === "warn" ? "warn" : "info"}`}>{c.status === "ok" ? "Ready" : c.status === "warn" ? "Needs attention" : "Optional"}</span><strong>{c.label}</strong></div>
+            <div className="small muted" style={{ marginTop: 4 }}>{c.detail}</div>
+            {c.fix && <div className="small" style={{ marginTop: 4 }}>{c.fix}</div>}
+          </div>
+        ))}
       </div>
 
       <div className="card">

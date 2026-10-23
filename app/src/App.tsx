@@ -387,6 +387,8 @@ export default function App() {
         "theme-dark": () => setTheme("dark"), "theme-light": () => setTheme("light"), "theme-system": () => setTheme("system"),
         "prompt-help": () => openHelp("prompt-helper"),
         troubleshooting: () => openHelp("troubleshooting"),
+        "system-check": () => openAux("settings"),
+        "report-problem": () => { void api.writeDiagnostics(prefs.ffmpegPath || null).then((p) => { say("Report saved. Attach it when you ask for help. It holds no keys or script text."); void revealItemInDir(p); }).catch((e) => say(messageOf(e), true)); },
         "show-folder": () => { void api.info().then((i) => revealItemInDir(i.projects_root)).catch((e) => say(messageOf(e), true)); },
         exit: () => { void flush().finally(() => void api.quit()); },
       };
@@ -394,7 +396,7 @@ export default function App() {
       if (id in a) a[id as ShortcutId]();
     }).then((u) => { off = u; });
     return () => off?.();
-  }, [openAux, setTheme, openHelp, say, flush]);
+  }, [openAux, setTheme, openHelp, say, flush, prefs.ffmpegPath]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {

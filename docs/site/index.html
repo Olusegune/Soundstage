@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Soundstage: the sound side of your film</title>
+<meta name="description" content="Write dialogue, cast voices, direct performances, add music and effects, and export a finished mix. Free with Windows voices. Bring your own keys for online voices.">
+<style>
+  :root { --bg:#05080b; --panel:#0c1217; --text:#f2ece0; --muted:#b9b3a6; --gold:#e9b85c; --gold-hi:#f7d68e; --on-gold:#1b1305; --line:rgba(242,236,224,.16); }
+  @media (prefers-color-scheme: light) { :root { --bg:#f4f0e6; --panel:#fffdf7; --text:#1b1e22; --muted:#4a4f57; --gold:#b8801a; --gold-hi:#8a5c0c; --on-gold:#fff; --line:rgba(40,30,10,.2); } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:17px/1.55 "Segoe UI", system-ui, sans-serif; }
+  .wrap { max-width:1040px; margin:0 auto; padding:0 16px; }
+  header.hero { padding:72px 0 40px; text-align:center; }
+  h1 { font-weight:300; letter-spacing:.12em; text-transform:uppercase; font-size:clamp(30px,6vw,54px); margin:0 0 12px; }
+  .tag { color:var(--muted); font-size:clamp(17px,2.4vw,22px); max-width:640px; margin:0 auto 28px; }
+  .btn { display:inline-block; background:var(--gold); color:var(--on-gold); font-weight:600; padding:12px 22px; border-radius:10px; text-decoration:none; }
+  .btn:focus-visible, a:focus-visible { outline:3px solid var(--gold-hi); outline-offset:3px; }
+  .note { color:var(--muted); font-size:14px; margin-top:12px; }
+  img.shot { width:100%; height:auto; border-radius:14px; border:1px solid var(--line); display:block; }
+  .grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); margin:32px 0; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; }
+  .card h2 { margin:0 0 6px; font-size:19px; color:var(--gold-hi); }
+  .card p { margin:0; color:var(--muted); font-size:15px; }
+  section { margin:48px 0; }
+  section > h2 { font-weight:400; font-size:28px; }
+  figure { margin:0 0 32px; } figcaption { color:var(--muted); font-size:14px; margin-top:8px; }
+  footer { border-top:1px solid var(--line); padding:28px 0 48px; color:var(--muted); font-size:14px; }
+  footer a { color:var(--gold-hi); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="hero">
+    <h1>Soundstage</h1>
+    <p class="tag">The whole sound side of your film: voices, music, effects and the final mix, with a guide beside you from the first line.</p>
+    <a class="btn" href="#get">Get Soundstage for Windows</a>
+    <p class="note">Free with the voices already on your computer. Online voices use your own accounts.</p>
+  </header>
+  <img class="shot" src="shots/dark-1280x720-home.png" alt="The Soundstage Projects screen with a Quick start button.">
+
+  <div class="grid" aria-label="Highlights">
+    <div class="card"><h2>A path that guides you</h2><p>Script, Cast, Direct, Render, Mix, Export. Always one clear next step, in plain language.</p></div>
+    <div class="card"><h2>Local first</h2><p>Windows voices, Piper and your own speech servers need no account and send nothing out.</p></div>
+    <div class="card"><h2>Online when you want it</h2><p>ElevenLabs, OpenRouter, Suno through Kie and fal models, each asking before it sends anything.</p></div>
+    <div class="card"><h2>Music and effects</h2><p>Describe a sound, or tap a few choices and let the prompt helper write it for you.</p></div>
+    <div class="card"><h2>Rights you can trust</h2><p>Every voice and generated sound is tracked. Commercial export is blocked until its licence is recorded.</p></div>
+    <div class="card"><h2>Export anywhere</h2><p>WAV, FLAC, MP3, AAC, Opus, MP4, stems and subtitles, with a manifest that labels AI audio.</p></div>
+  </div>
+
+  <section aria-labelledby="tour">
+    <h2 id="tour">A look around</h2>
+    <figure><img class="shot" src="shots/dark-1280x720-cast.png" alt="The Cast step, choosing a voice for each speaker."><figcaption>Choose a voice for each speaker, with languages shown by flag.</figcaption></figure>
+    <figure><img class="shot" src="shots/dark-1280x720-mix-create.png" alt="Creating music with the prompt helper open."><figcaption>Create music or an effect, with the prompt helper beside you.</figcaption></figure>
+    <figure><img class="shot" src="shots/dark-1280x720-voice-design.png" alt="Designing a voice from a description."><figcaption>Design a voice from a description and keep the one you like.</figcaption></figure>
+    <figure><img class="shot" src="shots/dark-1280x720-voice-engines.png" alt="The Voice engines screen."><figcaption>Bring your own engines: local servers, Piper, ComfyUI, fal and Kie.</figcaption></figure>
+    <figure><img class="shot" src="shots/dark-1280x720-export-formats.png" alt="The Export step with formats and subtitles."><figcaption>Export in the format you need, with subtitles built from your script.</figcaption></figure>
+  </section>
+
+  <section id="get" aria-labelledby="get-h">
+    <h2 id="get-h">Get it</h2>
+    <p>Soundstage runs on Windows 10 and 11. <!-- Replace the link below with the real download URL at release. --> <a href="#get">Download link to be added at release</a>.</p>
+    <p class="note">Early builds are not yet code-signed, so Windows may show a SmartScreen warning.</p>
+  </section>
+</main>
+<footer><div class="wrap">Soundstage is not affiliated with ElevenLabs, Suno, Kie, fal, OpenRouter or the makers of any voice model. Dialogue made with AI is labelled as AI-generated in every export. See the <a href="../../PRIVACY.md">privacy notice</a> and <a href="../../THIRD_PARTY_NOTICES.md">third-party notices</a>.</div></footer>
+</body>
+</html>

@@ -1,6 +1,6 @@
 [package]
 name = "soundstage"
-version = "0.1.0"
+version = "0.2.0"
 description = "Soundstage: the whole sound side of a film, in one desktop app"
 authors = ["Wheelbarrow Studios"]
 edition = "2021"

@@ -650,6 +650,80 @@ async fn test_connection(state: State<'_, AppState>, provider: String) -> Result
     .await?
 }
 
+#[derive(Serialize)]
+struct Check {
+    id: &'static str,
+    label: &'static str,
+    /// `ok`, `info` or `warn`. Nothing here is fatal: every part of Soundstage that is missing has a free alternative.
+    status: &'static str,
+    detail: String,
+    fix: String,
+}
+
+fn run_checks(state: &AppState, config: &std::path::Path, ffmpeg_path: Option<&str>) -> Vec<Check> {
+    let reg = state.registry.get();
+    let sends = |v: &soundstage_core::providers::Voice| reg.adapter(&v.provider).is_some_and(|a| a.sends_data());
+    let local = reg.voices.iter().filter(|v| !sends(v) && v.language != "zxx").count();
+    let cloud = reg.voices.iter().filter(|v| sends(v)).count();
+    let mut out = vec![];
+    out.push(if local > 0 {
+        Check { id: "voices", label: "Voices on this computer", status: "ok", detail: format!("{local} voice{} found. Rendering with them is free.", if local == 1 { "" } else { "s" }), fix: String::new() }
+    } else {
+        Check { id: "voices", label: "Voices on this computer", status: "warn", detail: "No Windows speech voices were found.".into(), fix: "Add one in Windows Settings under Time & language, then Speech. Or connect a local engine or Piper under Voice engines.".into() }
+    });
+    out.push(match exporter::ffmpeg_status(ffmpeg_path) {
+        Some(f) => Check { id: "ffmpeg", label: "FFmpeg (MP3, FLAC, AAC, Opus, MP4 export)", status: "ok", detail: f.version, fix: String::new() },
+        None => Check { id: "ffmpeg", label: "FFmpeg (MP3, FLAC, AAC, Opus, MP4 export)", status: "info", detail: "Not found. WAV export works without it.".into(), fix: "To export MP3, FLAC, AAC, Opus or MP4, install FFmpeg (for example run: winget install Gyan.FFmpeg) or choose ffmpeg.exe on the Export screen.".into() },
+    });
+    let saved: Vec<&str> = ["elevenlabs", "fal", "kie"].into_iter().filter(|n| matches!(entry(n).map(|k| k.get_password()), Ok(Ok(_)))).collect();
+    out.push(Check {
+        id: "keys",
+        label: "Online services",
+        status: if saved.is_empty() { "info" } else { "ok" },
+        detail: if saved.is_empty() { "No keys saved. That is fine: local voices need none.".into() } else { format!("Keys saved for: {}. {cloud} online voice{} available.", saved.join(", "), if cloud == 1 { "" } else { "s" }) },
+        fix: if saved.is_empty() { "Add an ElevenLabs key in Settings for online voices, music and effects, or a Kie or fal key under Voice engines.".into() } else { String::new() },
+    });
+    let (sp, jb) = EnginesConfig::load(config).map(|c| (c.speech.len() + usize::from(c.piper.is_some()), c.jobs.len())).unwrap_or((0, 0));
+    out.push(Check { id: "engines", label: "Your own engines", status: "info", detail: format!("{sp} speech engine{} and {jb} music, effects or workflow engine{} set up.", if sp == 1 { "" } else { "s" }, if jb == 1 { "" } else { "s" }), fix: if sp + jb == 0 { "Optional. Add one under Voice engines.".into() } else { String::new() } });
+    let probe = state.store.root.join(".write-test");
+    let writable = std::fs::write(&probe, b"ok").is_ok();
+    let _ = std::fs::remove_file(&probe);
+    out.push(if writable {
+        Check { id: "folder", label: "Projects folder", status: "ok", detail: state.store.root.to_string_lossy().to_string(), fix: String::new() }
+    } else {
+        Check { id: "folder", label: "Projects folder", status: "warn", detail: "Soundstage cannot write to its projects folder.".into(), fix: "Check that Documents\\Soundstage is not read-only and that your disk has space.".into() }
+    });
+    out
+}
+
+/// A quick look at what this computer has, so a new user can see what works and what is optional.
+#[tauri::command]
+async fn system_check(state: State<'_, AppState>, ffmpeg_path: Option<String>) -> Result<Vec<Check>, String> {
+    let config = config_path(&state);
+    let st = AppState { store: state.store.clone(), registry: state.registry.clone() };
+    blocking(move || run_checks(&st, &config, ffmpeg_path.as_deref())).await
+}
+
+/// Write a plain-text report the user can attach to a bug report. It holds versions and the checks above and nothing
+/// private: no keys, no script text, no project names, no file paths other than the projects folder.
+#[tauri::command]
+async fn write_diagnostics(app: tauri::AppHandle, state: State<'_, AppState>, ffmpeg_path: Option<String>) -> Result<String, String> {
+    let config = config_path(&state);
+    let st = AppState { store: state.store.clone(), registry: state.registry.clone() };
+    let version = app.package_info().version.to_string();
+    blocking(move || {
+        let mut t = format!("Soundstage {version}\nWindows: {} {}\nGenerated: {}\n\n", std::env::consts::OS, std::env::consts::ARCH, soundstage_core::util::iso_now());
+        for c in run_checks(&st, &config, ffmpeg_path.as_deref()) {
+            t.push_str(&format!("[{}] {}: {}\n", c.status, c.label, c.detail.replace(&st.store.root.to_string_lossy().to_string(), "<projects folder>")));
+        }
+        t.push_str("\nNo keys, script text or project names are included in this report.\n");
+        let path = st.store.root.join("diagnostics.txt");
+        std::fs::write(&path, t).map_err(|e| format!("Could not write the report: {e}"))?;
+        Ok(path.to_string_lossy().to_string())
+    })
+    .await?
+}
+
 /// The Windows menu bar. Item text carries the shortcut after a tab so it is shown but not handled by the menu, because
 /// the app already handles those keys itself (and a second handler would run every action twice). Choosing an item sends
 /// its id to the page, which runs the same action as the shortcut or the command palette.
@@ -711,6 +785,8 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .text("tour", "Take the guided &tour")
         .text("prompt-help", "Writing &prompts")
         .text("troubleshooting", "&Troubleshooting")
+        .text("system-check", "&System check")
+        .text("report-problem", "&Report a problem…")
         .separator()
         .about(Some(about))
         .build()?;
@@ -769,6 +845,8 @@ pub fn run() {
             test_connection,
             improve_prompt,
             quit_app,
+            system_check,
+            write_diagnostics,
             list_generators,
             generate_audio,
             generator_test,

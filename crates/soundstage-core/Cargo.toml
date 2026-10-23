@@ -1,6 +1,6 @@
 [package]
 name = "soundstage-core"
-version = "0.1.0"
+version = "0.2.0"
 description = "Soundstage core: script, direction, licence gate, mix, loudness, export"
 edition = "2021"
 publish = false

@@ -64,3 +64,5 @@ Loudness targets and true-peak ceilings are starting points marked VERIFY in [`d
 - Voice design from a text description (ElevenLabs).
 - Export: WAV (16, 24, 32-bit float), and with a user-installed FFmpeg FLAC, MP3, AAC, Opus, Ogg Vorbis and MP4 (waveform video); SRT and WebVTT subtitles; stems; manifest.
 See `docs/PROVIDERS.md` section 10 for what is and is not live-tested.
+
+See also: `CHANGELOG.md`, `PRIVACY.md`, `THIRD_PARTY_NOTICES.md`, `docs/QA.md`, and the landing page draft in `docs/site/`.

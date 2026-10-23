@@ -1,7 +1,7 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
-  Analysis, Asset, Destination, DesignPreview, DesignerInfo, EnginesConfig, GeneratorInfo, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Voice, VoiceDef,
+  Analysis, Asset, Destination, DesignPreview, DesignerInfo, EnginesConfig, GeneratorInfo, SystemCheck, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Voice, VoiceDef,
 } from "./types";
 
 /** Tauri rejects with a string for plain errors and with an object for structured ones. */
@@ -45,6 +45,8 @@ export const api = {
   saveDesignedVoice: (adapterId: string, generatedVoiceId: string, name: string, description: string) => invoke<string>("save_designed_voice", { adapterId, generatedVoiceId, name, description }),
   improvePrompt: (baseUrl: string, model: string, kind: "music" | "sfx" | "voice", draft: string) => invoke<string>("improve_prompt", { baseUrl, model, kind, draft }),
   quit: () => invoke<void>("quit_app"),
+  systemCheck: (ffmpegPath: string | null) => invoke<SystemCheck[]>("system_check", { ffmpegPath }),
+  writeDiagnostics: (ffmpegPath: string | null) => invoke<string>("write_diagnostics", { ffmpegPath }),
   setApiKey: (provider: string, key: string) => invoke<void>("set_api_key", { args: { provider, key } }),
   enginesGet: () => invoke<EnginesView>("engines_get"),
   enginesSave: (config: EnginesConfig) => invoke<void>("engines_save", { config }),

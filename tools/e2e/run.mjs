@@ -287,6 +287,11 @@ try {
     await audit("voice engines");
     await app.press("Ctrl+,"); await sleep(500);
     app.check("Settings has the AI prompt helper section", /AI prompt helper/.test(await app.ev("document.body.textContent")));
+    await sleep(600);
+    const sc = await app.ev("document.body.textContent");
+    app.check("Settings shows the System check with voices and FFmpeg", /System check/.test(sc) && /Voices on this computer/.test(sc) && /FFmpeg/.test(sc));
+    const dg = await app.ev("window.__TAURI_INTERNALS__.invoke('write_diagnostics',{ffmpegPath:null}).then(p=>p,e=>String(e))");
+    app.check("the problem report is written", /diagnostics\.txt$/.test(String(dg)), String(dg));
     await app.shot(`${shotsDir}/dark-1280x720-settings.png`);
     await app.press("Ctrl+O"); await sleep(500);
     await app.clickText("Open"); await sleep(900);

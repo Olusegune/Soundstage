@@ -367,3 +367,5 @@ export interface DesignerInfo { id: string; label: string; ready: boolean }
 export interface DesignPreview { generated_voice_id: string; path: string }
 
 export interface EnginesView { config: EnginesConfig; load_error: string | null; keys: Record<string, boolean> }
+
+export interface SystemCheck { id: string; label: string; status: "ok" | "info" | "warn"; detail: string; fix: string }
