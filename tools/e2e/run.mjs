@@ -400,6 +400,23 @@ try {
     await app.ev("window.__TAURI_INTERNALS__.invoke('list_projects').then(l=>Promise.all(l.filter(p=>/e2e-scene-auto/.test(p.id)).map(p=>window.__TAURI_INTERNALS__.invoke('delete_project',{id:p.id}))))");
     await app.press("Ctrl+O"); await sleep(600);
   }
+  // Back up a project to one file and open it again as a new project.
+  {
+    const tmpFile = `${process.env.TEMP}/e2e-backup-test.soundstage`.replace(/\\/g, "/");
+    const src = await app.ev("window.__TAURI_INTERNALS__.invoke('list_projects').then(l=>l.find(p=>/^e2e-scene/.test(p.id)&&p.lines>0)).then(p=>p&&p.id)");
+    if (src) {
+      const bytes = await app.ev(`window.__TAURI_INTERNALS__.invoke('backup_project',{id:${JSON.stringify(src)},dest:${JSON.stringify(tmpFile)}}).then(n=>n,e=>String(e))`);
+      app.check("a project can be backed up to one file", typeof bytes === "number" && bytes > 1000, String(bytes));
+      const newId = await app.ev(`window.__TAURI_INTERNALS__.invoke('open_project_file',{path:${JSON.stringify(tmpFile)}}).then(i=>i,e=>'ERR '+String(e))`);
+      app.check("the backup opens as a new project", typeof newId === "string" && !/^ERR/.test(newId) && newId !== src, String(newId));
+      if (typeof newId === "string" && !/^ERR/.test(newId)) await app.ev(`window.__TAURI_INTERNALS__.invoke('delete_project',{id:${JSON.stringify(newId)}})`);
+    }
+    const wrongExt = await app.ev("window.__TAURI_INTERNALS__.invoke('open_project_file',{path:'C:/Windows/notepad.exe'}).then(()=>'allowed',e=>String(e))");
+    app.check("only .soundstage files can be opened", !/allowed/.test(String(wrongExt)));
+    const inside = await app.ev("window.__TAURI_INTERNALS__.invoke('app_info').then(i=>window.__TAURI_INTERNALS__.invoke('backup_project',{id:'nope',dest:i.projects_root+'/x.soundstage'}).then(()=>'allowed',e=>String(e)))");
+    app.check("a backup cannot be written inside the projects folder", !/allowed/.test(String(inside)));
+    try { (await import("node:fs")).rmSync(tmpFile, { force: true }); } catch { /* best effort */ }
+  }
   const screens = [["home", async () => { await app.press("Ctrl+O"); await sleep(600); }], ["library", async () => { await app.press("Ctrl+Shift+V"); await sleep(600); }]];
   for (const [theme, label] of [["light", "Light"], ["dark", "Dark"]]) {
     await app.press("Ctrl+,"); await sleep(400);

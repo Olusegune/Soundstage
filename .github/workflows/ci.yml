@@ -1,4 +1,5 @@
-name: CI
+name: checks
+
 on:
   push:
     branches: [main]
@@ -10,20 +11,54 @@ permissions:
 jobs:
   test:
     runs-on: windows-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Core tests (includes the adapter contract suite)
-        run: cargo test -p soundstage-core
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: app/package-lock.json
-      - name: UI type-check and tests
-        working-directory: app
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # The installer bundles FFmpeg and Whisper, which are large and only needed to build a release. The build wants the
+      # files to exist, so empty stand-ins are enough here. (Tests that need the real programs skip themselves.)
+      - name: Stand-ins for the bundled programs
+        shell: pwsh
         run: |
-          npm ci
-          npx tsc --noEmit
-          npm test
+          New-Item -ItemType Directory -Force app/src-tauri/resources/whisper | Out-Null
+          foreach ($f in "ffmpeg.exe", "FFMPEG-LICENSE.txt", "FFMPEG-NOTICE.txt") {
+            if (-not (Test-Path "app/src-tauri/resources/$f")) { Set-Content "app/src-tauri/resources/$f" "stand-in" }
+          }
+          Set-Content app/src-tauri/resources/whisper/stand-in.txt "stand-in"
+
+      - name: Install front-end packages
+        working-directory: app
+        run: npm ci
+
+      - name: Type check
+        working-directory: app
+        run: npx tsc --noEmit
+
+      - name: Front-end tests
+        working-directory: app
+        run: npx vitest run
+
+      - name: Build the front end
+        working-directory: app
+        run: npm run build
+
+      - name: Rust tests
+        run: cargo test --workspace
+
+      - name: Rust lint (advice only)
+        run: cargo clippy --workspace --all-targets
+        continue-on-error: true
+
+      - name: Known vulnerabilities in shipped packages
+        working-directory: app
+        run: npm audit --omit=dev --audit-level=high

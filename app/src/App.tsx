@@ -463,6 +463,7 @@ export default function App() {
         troubleshooting: () => openHelp("troubleshooting"),
         "system-check": () => openAux("settings"),
         "report-problem": () => { void api.writeDiagnostics(prefs.ffmpegPath || null).then((p) => { say("Report saved. Attach it when you ask for help. It holds no keys or script text."); void revealItemInDir(p); }).catch((e) => say(messageOf(e), true)); },
+        "open-file": () => { void goHome(); setTimeout(() => (document.querySelector("button[data-open-file]") as HTMLButtonElement | null)?.click(), 300); },
         "show-folder": () => { void api.info().then((i) => revealItemInDir(i.projects_root)).catch((e) => say(messageOf(e), true)); },
         exit: () => { void flush().finally(() => void api.quit()); },
       };

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { api, messageOf } from "../api";
 import * as I from "../icons";
 import { Confirm, Empty } from "../ui";
@@ -44,6 +45,22 @@ export function Home(props: { onTools: () => void; onEditor: () => void; onSpeak
       if (script !== undefined) await api.saveProject({ ...p, script });
       props.onOpen(p.id);
     } catch (e) { props.toast(messageOf(e), true); }
+  };
+
+  const openFile = async () => {
+    const p = await open({ multiple: false, title: "Open a Soundstage project file", filters: [{ name: "Soundstage project", extensions: ["soundstage"] }] });
+    if (typeof p !== "string") return;
+    try {
+      const id = await api.openProjectFile(p);
+      props.toast("Opened as a new project. Voices cloned on another computer need their consent set up again here.");
+      props.onOpen(id);
+    } catch (e) { props.toast(messageOf(e), true); }
+  };
+  const backUp = async (s: Summary) => {
+    const dest = await save({ title: "Back up this project", defaultPath: `${s.name.replace(/[\\/:*?"<>|]/g, "_")}.soundstage`, filters: [{ name: "Soundstage project", extensions: ["soundstage"] }] });
+    if (typeof dest !== "string") return;
+    try { const n = await api.backupProject(s.id, dest); props.toast(`Backed up (${(n / 1_000_000).toFixed(1)} MB). The file holds the script, takes and imported audio, not keys or consent records.`); }
+    catch (e) { props.toast(messageOf(e), true); }
   };
 
   const importScript = async (f: File | undefined) => {
@@ -107,6 +124,7 @@ export function Home(props: { onTools: () => void; onEditor: () => void; onSpeak
           <label className="inline"><input type="checkbox" checked={sample} onChange={(e) => setSample(e.target.checked)} /> Start with a sample script</label>
           <button className="primary" type="submit"><I.Plus size={16} /> Create project</button>
           <label className="inline"><input type="file" accept=".txt,.fountain,text/plain" style={{ display: "none" }} onChange={(e) => void importScript(e.target.files?.[0])} /><span className="chipbtn"><I.Upload size={16} /> Import a script</span></label>
+        <button type="button" data-open-file onClick={() => void openFile()}><I.Folder size={16} /> Open a project file…</button>
         </form>
       </div>
 
@@ -149,7 +167,7 @@ export function Home(props: { onTools: () => void; onEditor: () => void; onSpeak
                   {s.licence_target === "personal" ? "Personal" : attention[s.id] === undefined ? "Commercial target" : attention[s.id] === 0 ? "Commercial, cleared" : `Commercial, ${attention[s.id]} item${attention[s.id] === 1 ? "" : "s"} need attention`}
                 </span>
               </p>
-              <div className="row tight"><button className="primary small" onClick={() => props.onOpen(s.id)}>Open</button><span className="spacer" /><button className="small danger" onClick={() => setDeleting(s)} aria-label={`Delete ${s.name}`}><I.Trash size={14} /></button></div>
+              <div className="row tight"><button className="primary small" onClick={() => props.onOpen(s.id)}>Open</button><span className="spacer" /><button className="small" onClick={() => void backUp(s)} aria-label={`Back up ${s.name}`}>Back up…</button><button className="small danger" onClick={() => setDeleting(s)} aria-label={`Delete ${s.name}`}><I.Trash size={14} /></button></div>
             </div>
           </div>
         ))}

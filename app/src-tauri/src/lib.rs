@@ -927,6 +927,43 @@ async fn whisper_remove(state: State<'_, AppState>, model_id: String) -> Result<
     .await?
 }
 
+/// Save a project, with its audio, as one `.soundstage` file.
+#[tauri::command]
+async fn backup_project(state: State<'_, AppState>, id: String, dest: String) -> Result<u64, String> {
+    let (store, _) = shared(&state);
+    blocking(move || {
+        let dest = PathBuf::from(dest);
+        if dest.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() != Some(soundstage_core::projectpack::EXTENSION) {
+            return Err("Choose a file name ending in .soundstage.".to_string());
+        }
+        if dest.parent().map_or(true, |d| !d.is_dir()) {
+            return Err("That folder does not exist.".to_string());
+        }
+        // Never write inside the projects folder itself, where it could be mistaken for a project.
+        if let (Ok(root), Some(parent)) = (std::fs::canonicalize(&store.root), dest.parent().and_then(|p| std::fs::canonicalize(p).ok())) {
+            if parent.starts_with(&root) {
+                return Err("Save the backup outside the Soundstage projects folder.".to_string());
+            }
+        }
+        soundstage_core::projectpack::pack(&store, &id, &dest)
+    })
+    .await?
+}
+
+/// Open a `.soundstage` file as a new project. The original file is not changed.
+#[tauri::command]
+async fn open_project_file(state: State<'_, AppState>, path: String) -> Result<String, String> {
+    let (store, _) = shared(&state);
+    blocking(move || {
+        let src = PathBuf::from(path);
+        if src.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() != Some(soundstage_core::projectpack::EXTENSION) {
+            return Err("Choose a .soundstage project file.".to_string());
+        }
+        soundstage_core::projectpack::unpack(&store, &src)
+    })
+    .await?
+}
+
 #[tauri::command]
 async fn register_clone(state: State<'_, AppState>, adapter_id: String, name: String, attestation: soundstage_core::clone::Attestation) -> Result<soundstage_core::clone::ClonedVoice, String> {
     let (_, reg) = shared(&state);
@@ -1320,6 +1357,7 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .text("save", "&Save\tCtrl+S")
         .text("export", "&Export…\tCtrl+6")
         .separator()
+        .text("open-file", "Open a project &file…")
         .text("show-folder", "Show projects &folder")
         .separator()
         .text("exit", "E&xit\tAlt+F4")
@@ -1441,6 +1479,8 @@ pub fn run() {
             clone_check_reference,
             clone_voice,
             register_clone,
+            backup_project,
+            open_project_file,
             whisper_status,
             whisper_download,
             whisper_remove,

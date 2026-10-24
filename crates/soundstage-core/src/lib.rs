@@ -21,6 +21,7 @@ pub mod mix;
 pub mod net;
 pub mod output;
 pub mod project;
+pub mod projectpack;
 pub mod pronounce;
 pub mod providers;
 pub mod render;
