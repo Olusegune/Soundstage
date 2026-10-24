@@ -107,23 +107,25 @@ export function ExportStep({ ctx }: { ctx: Ctx }) {
   const [rate, setRate] = useState(48000);
   const [subs, setSubs] = useState<{ srt: boolean; vtt: boolean }>({ srt: false, vtt: false });
   const [labels, setLabels] = useState(false);
+  const [timeline, setTimeline] = useState(false);
 
   // Start from what was used last time, and keep it up to date.
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     try {
-      const m = ctx.exportMemory ? JSON.parse(ctx.exportMemory) as { master?: Codec; stems?: Codec | null; rate?: number; subs?: { srt: boolean; vtt: boolean }; labels?: boolean } : null;
+      const m = ctx.exportMemory ? JSON.parse(ctx.exportMemory) as { master?: Codec; stems?: Codec | null; rate?: number; subs?: { srt: boolean; vtt: boolean }; labels?: boolean; timeline?: boolean } : null;
       if (m) {
         if (m.master && typeof m.master.kind === "string") setMaster(m.master);
         if (m.stems === null || (m.stems && typeof m.stems.kind === "string")) setStems(m.stems ?? null);
         if (typeof m.rate === "number" && [44100, 48000, 96000].includes(m.rate)) setRate(m.rate);
         if (m.subs) setSubs({ srt: !!m.subs.srt, vtt: !!m.subs.vtt });
         if (typeof m.labels === "boolean") setLabels(m.labels);
+        if (typeof m.timeline === "boolean") setTimeline(m.timeline);
       }
     } catch { /* a damaged memory is ignored */ }
     setLoaded(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (loaded) ctx.setExportMemory(JSON.stringify({ master, stems, rate, subs, labels })); }, [loaded, master, stems, rate, subs, labels]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (loaded) ctx.setExportMemory(JSON.stringify({ master, stems, rate, subs, labels, timeline })); }, [loaded, master, stems, rate, subs, labels, timeline]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let live = true;
@@ -165,7 +167,7 @@ export function ExportStep({ ctx }: { ctx: Ctx }) {
     : !folder ? "Choose a folder to export into." : needsAck && !ack ? "Acknowledge the notice above to continue." : null;
 
   const options = (): ExportOptions => ({
-    master, stems, sample_rate: rate, speaker_labels: labels, ffmpeg_path: ctx.ffmpegPath || null,
+    master, stems, sample_rate: rate, speaker_labels: labels, ffmpeg_path: ctx.ffmpegPath || null, timeline,
     subtitles: [...(subs.srt ? (["srt"] as const) : []), ...(subs.vtt ? (["vtt"] as const) : [])],
   });
 
@@ -277,6 +279,9 @@ export function ExportStep({ ctx }: { ctx: Ctx }) {
           <label className="inline"><input type="checkbox" checked={subs.srt} onChange={(e) => setSubs({ ...subs, srt: e.target.checked })} /> SRT</label>
           <label className="inline"><input type="checkbox" checked={subs.vtt} onChange={(e) => setSubs({ ...subs, vtt: e.target.checked })} /> VTT</label>
           <label className="inline"><input type="checkbox" checked={labels} disabled={!subs.srt && !subs.vtt} onChange={(e) => setLabels(e.target.checked)} /> Show speaker names</label>
+          <span className="spacer" />
+          <label className="inline"><input type="checkbox" checked={timeline} onChange={(e) => setTimeline(e.target.checked)} /> Timeline for video editors (OTIO)</label>
+          <Help text="Writes an OpenTimelineIO file and every line, sound effect and music clip as its own WAV file, in the right place. DaVinci Resolve and other editors can open it, so you can move or replace single clips." />
           <Help text="Subtitle files are timed from your real timeline, so they match the audio exactly. Directions in [brackets] are never shown." />
         </div>
       </div>

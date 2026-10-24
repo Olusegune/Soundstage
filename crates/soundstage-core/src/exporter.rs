@@ -281,6 +281,77 @@ pub fn export_with(project: &Project, reg: &Registry, project_dir: &Path, dest: 
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Copy each clip into `media` and write the OTIO file that places them. Returns the files written (relative to the export
+/// folder) and a manifest entry for each.
+fn write_timeline(project: &Project, project_dir: &Path, folder: &Path, stem: &str, layout: &Layout) -> Result<(Vec<String>, Vec<serde_json::Value>), String> {
+    use crate::timeline::{assign_lanes, to_otio, Clip};
+    let media_dir_name = format!("{stem} - media");
+    let media_dir = folder.join(&media_dir_name);
+    std::fs::create_dir_all(&media_dir).map_err(|e| format!("Could not create the media folder: {e}"))?;
+    let (mut files, mut entries) = (Vec::new(), Vec::new());
+    let copy = |src: &Path, name: String, files: &mut Vec<String>, entries: &mut Vec<serde_json::Value>| -> Result<String, String> {
+        let bytes = std::fs::read(src).map_err(|e| format!("Could not read {}: {e}", src.display()))?;
+        std::fs::write(media_dir.join(&name), &bytes).map_err(|e| format!("Could not write {name}: {e}"))?;
+        let rel = format!("{media_dir_name}/{name}");
+        entries.push(serde_json::json!({ "file": rel, "format": "WAV clip", "sha256": sha256_hex(&bytes), "bytes": bytes.len() }));
+        files.push(rel.clone());
+        Ok(rel)
+    };
+
+    let mut dialogue = Vec::new();
+    for (n, slot) in layout.lines.iter().enumerate() {
+        let take = project.take(&slot.take_id).ok_or("A selected take is missing from the project.")?;
+        if !safe_relative(&take.file) {
+            return Err("A take has an unsafe file path.".into());
+        }
+        let name = format!("{:03} {} {}.wav", n + 1, safe_file_stem(&slot.speaker), safe_file_stem(&slot.key));
+        let rel = copy(&project_dir.join(&take.file), name, &mut files, &mut entries)?;
+        let dur = slot.end_ms.saturating_sub(slot.start_ms);
+        dialogue.push(Clip { name: format!("{}: {}", slot.speaker, slot.key), media: rel, start_ms: slot.start_ms, dur_ms: dur, media_dur_ms: take.duration_ms.max(dur), gain_db: 0.0, fade_in_ms: 1, fade_out_ms: 2 });
+    }
+
+    let (mut effects, mut music) = (Vec::new(), Vec::new());
+    let mut copied: std::collections::BTreeMap<String, String> = Default::default();
+    for cue in &project.cues {
+        let Some(asset) = project.asset(&cue.asset_id) else { continue };
+        if !safe_relative(&asset.file) {
+            return Err("An asset has an unsafe file path.".into());
+        }
+        let rel = match copied.get(&asset.id) {
+            Some(r) => r.clone(),
+            None => {
+                let r = copy(&project_dir.join(&asset.file), format!("{} {}.wav", if asset.kind == AssetKind::Music { "music" } else { "effect" }, safe_file_stem(&asset.name)), &mut files, &mut entries)?;
+                copied.insert(asset.id.clone(), r.clone());
+                r
+            }
+        };
+        let scene = cue.scene.and_then(|i| layout.scenes.iter().find(|s| s.index == i));
+        let start = scene.map_or(0, |s| s.start_ms) + cue.offset_ms as u64;
+        let dur = asset.duration_ms.max(1);
+        // A looped sound is written as repeated clips, so an editor sees exactly what the mix used.
+        let want = if cue.loop_to_scene { scene.map_or(dur, |s| s.end_ms.saturating_sub(s.start_ms).saturating_sub(cue.offset_ms as u64)) } else { dur };
+        let mut placed = 0u64;
+        let mut repeats = 0;
+        while placed < want.max(1) && repeats < 500 {
+            let len = (want - placed).min(dur);
+            let c = Clip { name: asset.name.clone(), media: rel.clone(), start_ms: start + placed, dur_ms: len, media_dur_ms: dur, gain_db: cue.gain_db, fade_in_ms: if repeats == 0 { cue.fade_in_ms } else { 0 }, fade_out_ms: if placed + len >= want { cue.fade_out_ms } else { 0 } };
+            if asset.kind == AssetKind::Music { music.push(c) } else { effects.push(c) }
+            placed += len;
+            repeats += 1;
+        }
+    }
+
+    let mut tracks = assign_lanes("Dialogue", dialogue);
+    tracks.extend(assign_lanes("Effects", effects));
+    tracks.extend(assign_lanes("Music", music));
+    let otio = serde_json::to_string_pretty(&to_otio(&project.name, APP_VERSION, &tracks)).map_err(|e| e.to_string())?;
+    let file = format!("{stem} - timeline.otio");
+    std::fs::write(folder.join(&file), otio.as_bytes()).map_err(|e| format!("Could not write the timeline: {e}"))?;
+    entries.push(serde_json::json!({ "file": file, "format": "OpenTimelineIO", "sha256": sha256_hex(otio.as_bytes()), "bytes": otio.len() }));
+    files.push(file);
+    Ok((files, entries))
+}
+
 fn write_everything(
     project: &Project, project_dir: &Path, folder: &Path, stem: &str, tmp: &Path, out: &crate::mix::MixOutput, layout: &Layout,
     dest_info: &crate::loudness::Destination, report: &GateReport, opts: &ExportOptions, ff: Option<&Ffmpeg>, consents: &[String],
@@ -316,6 +387,12 @@ fn write_everything(
             hashes.push(serde_json::json!({ "file": file, "format": format!("{} subtitles", ext.to_uppercase()), "sha256": sha256_hex(text.as_bytes()), "cues": cues.len() }));
             names.push(file);
         }
+    }
+
+    if opts.timeline {
+        let (files, entries) = write_timeline(project, project_dir, folder, stem, layout).map_err(failed)?;
+        names.extend(files);
+        hashes.extend(entries);
     }
 
     let lines: Vec<_> = layout
@@ -485,7 +562,7 @@ mod tests {
         let Some(ff) = Ffmpeg::detect(None) else { eprintln!("FFmpeg not found; skipping"); return };
         let (mut p, reg, dir) = fixture();
         p.line_directions.clear();
-        let opts = ExportOptions { master: Codec::Mp3 { kbps: 192 }, stems: Some(Codec::Flac), sample_rate: 44_100, subtitles: vec![SubtitleFormat::Srt, SubtitleFormat::Vtt, SubtitleFormat::Srt], speaker_labels: true, ffmpeg_path: None };
+        let opts = ExportOptions { master: Codec::Mp3 { kbps: 192 }, stems: Some(Codec::Flac), sample_rate: 44_100, subtitles: vec![SubtitleFormat::Srt, SubtitleFormat::Vtt, SubtitleFormat::Srt], speaker_labels: true, ffmpeg_path: None, timeline: false };
         if !ff.supports(&opts.master) || !ff.supports(opts.stems.as_ref().unwrap()) { eprintln!("encoders missing; skipping"); return }
         let dest = dir.join("out");
         std::fs::create_dir_all(&dest).unwrap();
@@ -503,6 +580,36 @@ mod tests {
         assert!(m["output"]["encoder"].as_str().unwrap().to_lowercase().starts_with("ffmpeg version"));
         assert!(m["files"].as_array().unwrap().iter().any(|f| f["file"] == "Test Film - master.mp3" && f["bytes"].as_u64().unwrap() > 1000));
         assert!(!folder.join("Test Film - master.wav").exists(), "no stray WAV is left behind");
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn the_timeline_for_editors_has_every_clip_as_its_own_file() {
+        let (p, reg, dir) = fixture();
+        let dest = dir.join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+        let opts = ExportOptions { timeline: true, ..Default::default() };
+        let r = export_with(&p, &reg, &dir, &dest, true, &opts).unwrap();
+        let folder = PathBuf::from(&r.folder);
+        let otio_name = r.files.iter().find(|f| f.ends_with("timeline.otio")).expect("the timeline is listed");
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(folder.join(otio_name)).unwrap()).unwrap();
+        assert_eq!(v["OTIO_SCHEMA"], "Timeline.1");
+        let mut urls = Vec::new();
+        for t in v["tracks"]["children"].as_array().unwrap() {
+            for c in t["children"].as_array().unwrap().iter().filter(|c| c["OTIO_SCHEMA"] == "Clip.2") {
+                urls.push(c["media_reference"]["target_url"].as_str().unwrap().to_string());
+            }
+        }
+        assert!(!urls.is_empty());
+        for u in &urls {
+            assert!(folder.join(u).is_file(), "{u} must exist next to the timeline");
+            assert!(!u.contains(".."), "{u}");
+        }
+        let m: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(folder.join("Test Film - manifest.json")).unwrap()).unwrap();
+        assert!(m["files"].as_array().unwrap().iter().any(|f| f["format"] == "OpenTimelineIO"), "the manifest lists the timeline");
+        // Not asked for, not written.
+        let r2 = export_with(&p, &reg, &dir, &dest, true, &ExportOptions::default()).unwrap();
+        assert!(!r2.files.iter().any(|f| f.ends_with(".otio")));
         std::fs::remove_dir_all(dir).ok();
     }
 

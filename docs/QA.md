@@ -6,8 +6,8 @@ Last full run: 2026-10-23, Windows 11, release build of v0.1.0 plus the v0.2 add
 
 | Layer | Command (from the repo root unless noted) | Result at last run |
 |---|---|---|
-| Core and shell unit and integration tests (Rust) | `cargo test --workspace` | 219 passed, 0 failed |
-| Front-end unit tests (Vitest) | `npm run test` in `app/` (`npx vitest run`) | 79 passed, 0 failed |
+| Core and shell unit and integration tests (Rust) | `cargo test --workspace` | 222 passed, 0 failed |
+| Front-end unit tests (Vitest) | `npm run test` in `app/` (`npx vitest run`) | 82 passed, 0 failed |
 | Types | `npx tsc --noEmit` in `app/` | clean |
 | Lint | `cargo clippy --workspace --all-targets` | style warnings only, no errors |
 | Real-window end-to-end, accessibility and screenshots | `node tools/e2e/run.mjs` (needs a release build: `npx tauri build` in `app/`) | 173 of 173 passed |

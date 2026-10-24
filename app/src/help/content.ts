@@ -128,6 +128,7 @@ export const ARTICLES: Article[] = [
     summary: "Music, effects, ducking and loudness.",
     tags: ["mix", "music", "effects", "ducking", "loudness", "lufs", "timeline", "import"],
     body: [
+      { t: "tip", text: "Sound for your scenes (when a generator is set up) drafts a background sound and music for each scene from its heading. Edit the words, press Make, and the sound is placed in that scene, looped to fill it and kept low under the dialogue." },
       { t: "p", text: "The mix has three groups of sound: dialogue, effects and music. Dialogue is laid out in script order with the gaps you choose." },
       { t: "ul", items: [
         "Import music or effects (WAV, MP3, FLAC, Ogg or M4A), or create them with AI: describe the sound under Create with AI and choose a generator. Created sounds are labelled AI-generated and start as licence unknown.",
@@ -144,6 +145,7 @@ export const ARTICLES: Article[] = [
     summary: "Licence checks, the files you get, and the manifest.",
     tags: ["format", "mp3", "mp4", "flac", "subtitles", "srt", "ffmpeg", "export", "licence", "license", "commercial", "personal", "stems", "manifest", "master"],
     body: [
+      { t: "tip", text: "Going on to a video editor? Tick Timeline for video editors. You get an OpenTimelineIO file and every line and sound as its own WAV file, in the right place, so you can move or swap single clips in DaVinci Resolve or another editor that reads OTIO. Levels and fades are noted inside the file." },
       { t: "tip", text: "Soundstage remembers the format, quality, stems and subtitle choices you used last time, so the next export starts where this one ended." },
       { t: "p", text: "Before anything is written, Soundstage checks every voice, engine, music track and effect against your project's target." },
       { t: "ul", items: [

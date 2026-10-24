@@ -1,10 +1,10 @@
 {
-  "when": "2026-10-24T14:14:41.413Z",
+  "when": "2026-10-24T14:39:34.522Z",
   "passed": 173,
   "total": 173,
   "failed": [],
   "timings": {
-    "paletteOpenMs": 78,
+    "paletteOpenMs": 79,
     "stepSwitchMs": 433
   },
   "accessibility": [

@@ -149,6 +149,8 @@ Rendering makes the audio for each line. The wavy picture beside a line is its w
 
 _Music, effects, ducking and loudness._
 
+> **Tip.** Sound for your scenes (when a generator is set up) drafts a background sound and music for each scene from its heading. Edit the words, press Make, and the sound is placed in that scene, looped to fill it and kept low under the dialogue.
+
 The mix has three groups of sound: dialogue, effects and music. Dialogue is laid out in script order with the gaps you choose.
 
 - Import music or effects (WAV, MP3, FLAC, Ogg or M4A), or create them with AI: describe the sound under Create with AI and choose a generator. Created sounds are labelled AI-generated and start as licence unknown.
@@ -163,6 +165,8 @@ Build a preview mix to hear the result and see its loudness. If a target cannot 
 ## Step 6: Export
 
 _Licence checks, the files you get, and the manifest._
+
+> **Tip.** Going on to a video editor? Tick Timeline for video editors. You get an OpenTimelineIO file and every line and sound as its own WAV file, in the right place, so you can move or swap single clips in DaVinci Resolve or another editor that reads OTIO. Levels and fades are noted inside the file.
 
 > **Tip.** Soundstage remembers the format, quality, stems and subtitle choices you used last time, so the next export starts where this one ended.
 

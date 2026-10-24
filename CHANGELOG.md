@@ -6,6 +6,8 @@
 - **FFmpeg is now included** (LGPL build), so MP3, FLAC, AAC, Opus, Ogg Vorbis and MP4 export work with nothing to install.
 - **Voices:** any OpenAI-compatible speech server (Kokoro, LocalAI, Speaches, OpenRouter and others), Piper, and your own ComfyUI workflows. Local engines need no account.
 - **Music and sound effects:** create them in the Mix step with ElevenLabs, Suno through Kie, fal models (including ACE-Step) or ComfyUI. Everything generated is labelled AI-generated and starts as licence unknown.
+- **Timeline for video editors** (OpenTimelineIO): every line, effect and music clip as its own file, placed exactly, with silences as gaps. Opens in DaVinci Resolve and other OTIO tools.
+- **Sound for your scenes** on the Mix step: a drafted background sound and music for each scene, which you edit and make with one press.
 - The welcome screen asks **what you are making** (podcast, audiobook, ad, explainer, drama) and starts from that template.
 - **Do all the steps for me** shows its progress as a list. A running total of characters **sent to online services** appears in the send prompt and in Settings (kept only while the app is open).
 - Problems on a line now have a **fix next to them**: remove a sound the voice cannot make, or pick another voice.

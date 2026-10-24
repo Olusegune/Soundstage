@@ -309,6 +309,7 @@ export interface ExportOptions {
   subtitles: ("srt" | "vtt")[];
   speaker_labels: boolean;
   ffmpeg_path: string | null;
+  timeline: boolean;
 }
 
 export interface ExportCaps {

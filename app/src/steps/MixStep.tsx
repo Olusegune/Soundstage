@@ -7,6 +7,7 @@ import { fmtMs, licenceNote } from "../logic";
 import { Confirm, Empty, Help, LicenceChip, PeaksView, PlayButton, Waveform } from "../ui";
 import type { Asset, Cue, Destination, GeneratorInfo, Layout } from "../types";
 import { LicenceEditor } from "./LicenceEditor";
+import { suggestScene } from "../sceneSounds";
 import { PromptHelper } from "../shell/PromptHelper";
 
 const lufs = (v: number | null) => (v === null ? "n/a" : `${v.toFixed(1)} LUFS`);
@@ -36,6 +37,32 @@ export function MixStep({ ctx }: { ctx: Ctx }) {
       setEditing(a.id);
       setGen((g) => ({ ...g, prompt: "" }));
     } catch (e) { ctx.toast(messageOf(e), true); } finally { setGen((g) => ({ ...g, busy: false })); }
+  };
+
+  // Sound for each scene: a drafted description the person edits, then one press to make it and place it.
+  const [sceneText, setSceneText] = useState<Record<string, string>>({});
+  const [sceneAsk, setSceneAsk] = useState<{ index: number; kind: "music" | "sfx"; prompt: string } | null>(null);
+  const [sceneBusy, setSceneBusy] = useState<string | null>(null);
+  const sceneDraft = (index: number, kind: "music" | "sfx") => {
+    const key = `${index}-${kind}`;
+    if (sceneText[key] !== undefined) return sceneText[key]!;
+    const ps = ctx.analysis?.parsed.scenes.find((s) => s.index === index);
+    const t = layout?.scenes.find((s) => s.index === index)?.title ?? "";
+    const sug = suggestScene({ title: ps?.title ?? t, location: ps?.location ?? "", time_of_day: ps?.time_of_day ?? "" });
+    return kind === "sfx" ? sug.ambience : sug.music;
+  };
+  const makeForScene = async (index: number, kind: "music" | "sfx", prompt: string) => {
+    const g = gens.filter((x) => x.kinds.includes(kind)).find((x) => x.ready);
+    if (!g) { ctx.toast("No generator is set up for this yet. Save an ElevenLabs key in Settings, or add one under Voice engines.", true); return; }
+    const sc = layout?.scenes.find((s) => s.index === index);
+    const lim = g[kind];
+    const secs = lim.supports_length ? Math.min(lim.max_s, Math.max(lim.min_s, Math.round(((sc ? sc.end_ms - sc.start_ms : 20000) / 1000)))) : null;
+    setSceneBusy(`${index}-${kind}`);
+    try {
+      const a = await api.generateAudio(project.id, g.id, kind, prompt, secs, true, null);
+      edit((p) => ({ ...p, assets: [...p.assets, a], cues: [...p.cues, { id: `cue-${Date.now().toString(36)}`, asset_id: a.id, scene: index, offset_ms: 0, gain_db: kind === "music" ? -16 : -24, loop_to_scene: true, fade_in_ms: 600, fade_out_ms: 1000, duck: true }] }));
+      ctx.toast(`${a.name} was made and placed in scene ${index + 1}. It loops to fill the scene, and sits under the dialogue.`);
+    } catch (e) { ctx.toast(messageOf(e), true); } finally { setSceneBusy(null); }
   };
 
   useEffect(() => { void api.destinations().then(setDests); }, []);
@@ -106,6 +133,27 @@ export function MixStep({ ctx }: { ctx: Ctx }) {
         </div>
         <p className="small muted" style={{ marginBottom: 0, marginTop: 8 }}>Dialogue follows your script with the gaps you set. With no music or effects, the mix is the voice track alone.</p>
       </div>
+
+      {layout.scenes.length > 0 && gens.some((g) => g.ready) && (
+        <div className="card" role="group" aria-label="Sound for your scenes">
+          <h2>Sound for your scenes</h2>
+          <p className="small muted" style={{ marginTop: 0 }}>Soundstage drafts a description of the background and the music for each scene from its heading. Change the words if you like, then press Make. The sound is placed in that scene, loops to fill it, and sits quietly under the dialogue.</p>
+          {layout.scenes.map((s) => (
+            <div key={s.index} className="linecard">
+              <strong>{s.index + 1}. {s.title}</strong>
+              {(["sfx", "music"] as const).map((kind) => (
+                <div key={kind} className="row" style={{ alignItems: "end", marginTop: 6 }}>
+                  <div style={{ flex: 1, minWidth: 260 }}>
+                    <label htmlFor={`sc-${s.index}-${kind}`}>{kind === "sfx" ? "Background sound" : "Music"}</label>
+                    <input id={`sc-${s.index}-${kind}`} type="text" style={{ width: "100%" }} maxLength={300} value={sceneDraft(s.index, kind)} onChange={(e) => setSceneText({ ...sceneText, [`${s.index}-${kind}`]: e.target.value })} />
+                  </div>
+                  <button className="small" disabled={sceneBusy !== null} onClick={() => setSceneAsk({ index: s.index, kind, prompt: sceneDraft(s.index, kind) })}>{sceneBusy === `${s.index}-${kind}` ? "Making…" : "Make"}</button>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid2" style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)" }}>
         <div className="card">
@@ -211,6 +259,11 @@ export function MixStep({ ctx }: { ctx: Ctx }) {
           ) : <p className="small muted">Build a preview to hear the mix and see its loudness before you export. Nothing is saved outside the project.</p>}
         </div>
       </div>
+      {sceneAsk && (
+        <Confirm title="Send this description to be made?" confirmLabel="Send and make" onCancel={() => setSceneAsk(null)}
+          body={<p>Your description (“{sceneAsk.prompt.slice(0, 120)}”) is sent over the internet to the generator you set up, and may use credits on your account there. No dialogue or audio from your project is sent.</p>}
+          onConfirm={() => { const a = sceneAsk; setSceneAsk(null); void makeForScene(a.index, a.kind, a.prompt); }} />
+      )}
       {gen.confirm && chosen && (
         <Confirm title={`Send this description to ${chosen.label}?`} confirmLabel="Send and create" onCancel={() => setGen({ ...gen, confirm: false })}
           body={<p>Your description is sent over the internet to {chosen.label} and may use credits on your account there. No script text or audio from your project is sent.</p>}

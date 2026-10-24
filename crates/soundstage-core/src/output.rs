@@ -118,11 +118,13 @@ pub struct ExportOptions {
     pub speaker_labels: bool,
     /// A specific ffmpeg.exe chosen by the user. When set, only that file is tried.
     pub ffmpeg_path: Option<String>,
+    /// Also write an OpenTimelineIO file and every clip as its own file, for video editors.
+    pub timeline: bool,
 }
 
 impl Default for ExportOptions {
     fn default() -> Self {
-        ExportOptions { master: Codec::Wav { bits: 24 }, stems: Some(Codec::Wav { bits: 24 }), sample_rate: SR, subtitles: vec![], speaker_labels: false, ffmpeg_path: None }
+        ExportOptions { master: Codec::Wav { bits: 24 }, stems: Some(Codec::Wav { bits: 24 }), sample_rate: SR, subtitles: vec![], speaker_labels: false, ffmpeg_path: None, timeline: false }
     }
 }
 

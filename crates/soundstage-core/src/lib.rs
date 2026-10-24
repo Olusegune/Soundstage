@@ -28,6 +28,7 @@ pub mod safety;
 pub mod secure;
 pub mod script;
 pub mod tags;
+pub mod timeline;
 pub mod transcribe;
 #[cfg(test)]
 pub mod testutil;
