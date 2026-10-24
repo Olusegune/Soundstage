@@ -102,7 +102,7 @@ impl VoicekillerAdapter {
     }
 
     fn build(keys: KeyProvider, base: String) -> Self {
-        let agent = ureq::AgentBuilder::new().redirects(0).timeout_connect(Duration::from_secs(10)).timeout_write(Duration::from_secs(30)).timeout_read(Duration::from_secs(120)).user_agent("Soundstage").build();
+        let agent = crate::net::cloud_agent_builder().redirects(0).timeout_connect(Duration::from_secs(10)).timeout_write(Duration::from_secs(30)).timeout_read(Duration::from_secs(120)).user_agent("Soundstage").build();
         VoicekillerAdapter { keys, base, agent, voices: Mutex::new(None), extra: Mutex::new(Vec::new()) }
     }
 
@@ -137,7 +137,7 @@ impl VoicekillerAdapter {
             Ok(r) if r.status() == 200 => Ok(r),
             Ok(r) => Err(AdapterError::ProviderError(format!("unexpected HTTP {}", r.status()))),
             Err(ureq::Error::Status(code, r)) => Err(error_from_status(code, r)),
-            Err(ureq::Error::Transport(_)) => Err(AdapterError::Network),
+            Err(ureq::Error::Transport(t)) => { crate::net::note_transport(&t); Err(AdapterError::Network) }
         }
     }
 

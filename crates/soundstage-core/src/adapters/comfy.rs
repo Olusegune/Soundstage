@@ -55,7 +55,7 @@ impl ComfyTransport {
             Ok(r) if r.status() == 200 => Ok(r),
             Ok(r) => Err(AdapterError::ProviderError(format!("unexpected HTTP {}", r.status()))),
             Err(ureq::Error::Status(c, _)) => Err(AdapterError::ProviderError(format!("ComfyUI answered with HTTP {c}"))),
-            Err(ureq::Error::Transport(_)) => Err(AdapterError::Network),
+            Err(ureq::Error::Transport(t)) => { crate::net::note_transport(&t); Err(AdapterError::Network) }
         }
     }
 }
@@ -93,7 +93,7 @@ impl Transport for ComfyTransport {
         let r = match self.agent.post(&self.url("/prompt")).set("content-type", "application/json").send_string(&body.to_string()) {
             Ok(r) => r,
             Err(ureq::Error::Status(c, _)) => return Err(AdapterError::ProviderError(format!("ComfyUI rejected the workflow (HTTP {c}). Check that it runs in ComfyUI first."))),
-            Err(ureq::Error::Transport(_)) => return Err(AdapterError::Network),
+            Err(ureq::Error::Transport(t)) => { crate::net::note_transport(&t); return Err(AdapterError::Network); }
         };
         let q = read_json(r, 1 << 20)?;
         let id = q["prompt_id"].as_str().filter(|i| safe_id(i)).ok_or_else(|| AdapterError::ProviderError("ComfyUI did not accept the workflow".into()))?.to_string();

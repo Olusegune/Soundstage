@@ -333,11 +333,25 @@ _Autosave, undo, and where your projects live._
 
 ## Simple and Advanced mode
 
-_The same project, with fewer or more controls._
-
-Simple shows what most scenes need. Advanced adds finer controls: pace and pause per line, direction levels, ducking depth, fades and loops, and detailed licence tools.
+_The same project, with fewer or more controls, and exactly what Advanced adds._
 
 It is one project in both modes. Switching hides controls without changing any value, and anything you set in Advanced still applies in Simple. Switch with Ctrl+Shift+M or the toggle in the toolbar.
+
+
+### What Advanced adds, screen by screen
+
+- Script: counts and read-aloud time, rename a speaker, find and replace, a link to Pronunciation, and a guide to every direction.
+- Cast: the performance notes you can write for each voice.
+- Direct: the direction levels, and pace and pause for each line.
+- Render: details of how each take was made.
+- Mix: the exact start time of each clip, ducking depth and the gap between lines.
+- Export: bit depth and quality, sample rate, stem format, and the FFmpeg settings. Simple keeps the quick choices.
+- Speak, Audio tools, Audio editor, Pronunciation and the Voice library already show everything. Advanced adds nothing there.
+
+
+### Making everything bigger
+
+On a large monitor, press Ctrl and + to make the whole app larger (Ctrl and - for smaller, Ctrl and 0 to reset), or use Ctrl and the mouse wheel, the View menu, or Interface size in Settings.
 
 ## Keyboard shortcuts
 
@@ -369,6 +383,17 @@ Shortcuts never interfere with typing: inside a text box, undo and redo belong t
 ## Troubleshooting
 
 _Common problems and what to do._
+
+
+### “The provider could not be reached”
+
+Soundstage could not make a connection to the online service. The message now says why. What to try:
+
+- “The address could not be looked up”: your internet, DNS or VPN. Open the service's website in a browser to check.
+- “Refused or blocked”: a firewall, VPN or proxy is stopping Soundstage. Allow Soundstage.exe, or turn the VPN off to test. If you use a proxy, set the HTTPS_PROXY setting for Windows and restart Soundstage.
+- “A certificate problem”: antivirus programs and company proxies that inspect HTTPS can cause this. Soundstage uses the Windows certificate store, so adding your company's certificate to Windows fixes it; or turn off HTTPS scanning for Soundstage.exe.
+- “Dropped or took too long”: a slow connection, or a very long text. Try a shorter line.
+- In Settings, press Test connection next to the service. If that works but rendering does not, tell us the exact message.
 
 
 ### No voices are listed

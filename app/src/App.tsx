@@ -379,6 +379,24 @@ export default function App() {
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
 
+  // Interface size: applied to the whole window, and changed with Ctrl+= , Ctrl+- , Ctrl+0 or Ctrl+mouse wheel.
+  useEffect(() => { document.documentElement.style.zoom = prefs.uiScale === 1 ? "" : String(prefs.uiScale); }, [prefs.uiScale]);
+  const scaleBy = (delta: number | "reset") => setPrefs({ uiScale: delta === "reset" ? 1 : Math.min(1.8, Math.max(0.8, Math.round((prefs.uiScale + delta) * 20) / 20)) });
+  const scaleRef = useRef(scaleBy);
+  scaleRef.current = scaleBy;
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.altKey) return;
+      if (e.key === "=" || e.key === "+") { e.preventDefault(); scaleRef.current(0.1); }
+      else if (e.key === "-") { e.preventDefault(); scaleRef.current(-0.1); }
+      else if (e.key === "0") { e.preventDefault(); scaleRef.current("reset"); }
+    };
+    const wheel = (e: WheelEvent) => { if (e.ctrlKey) { e.preventDefault(); scaleRef.current(e.deltaY < 0 ? 0.05 : -0.05); } };
+    window.addEventListener("keydown", key);
+    window.addEventListener("wheel", wheel, { passive: false });
+    return () => { window.removeEventListener("keydown", key); window.removeEventListener("wheel", wheel); };
+  }, []);
+
   // The native Windows menu sends the id of the item that was chosen.
   useEffect(() => {
     let off: (() => void) | undefined;
@@ -389,6 +407,7 @@ export default function App() {
         export: () => a["step-6"](),
         engines: () => openAux("providers"),
         speak: () => openAux("speak"),
+        "zoom-in": () => scaleRef.current(0.1), "zoom-out": () => scaleRef.current(-0.1), "zoom-reset": () => scaleRef.current("reset"),
         editor: () => openAux("editor"),
         pronunciation: () => openAux("pronunciation"),
         tools: () => openAux("tools"),
@@ -463,7 +482,7 @@ export default function App() {
   /* ---------------------------------------------------------------- render */
   const ctx: Ctx | null = project && g ? {
     project, analysis, voices, dir, mode: prefs.mode, ffmpegPath: prefs.ffmpegPath, setFfmpegPath: (p) => setPrefs({ ffmpegPath: p }), edit, toast: say, goto: (n) => goStep(n),
-    openLibrary: () => openAux("library"), openHelp, render, confirmSend, renderBatch, batch, errors, busy,
+    openLibrary: () => openAux("library"), openPronunciation: () => openAux("pronunciation"), openHelp, render, confirmSend, renderBatch, batch, errors, busy,
     steps: g.steps, next: g.next, mixPreview, mixBuilding, buildMix, markExported: () => setExported(true), focusKey,
   } : null;
 
@@ -480,7 +499,7 @@ export default function App() {
         <Rail view={view} projectName={project?.name ?? null} steps={project && g ? g.steps : null} step={step} collapsed={railCollapsed}
           onHome={() => void goHome()} onStep={goStep} onVoices={() => openAux("library")} onPron={() => openAux("pronunciation")} onEditor={() => openAux("editor")} onSpeak={() => openAux("speak")} onTools={() => openAux("tools")} onEngines={() => openAux("providers")} onHelp={() => openHelp()} onShortcuts={() => setShortcutsOpen(true)}
           onSettings={() => openAux("settings")} onToggle={() => setPrefs({ railCollapsed: !prefs.railCollapsed })} shortcutHint={(id) => keyOf(id as ShortcutId)} />
-        <Toolbar hereLabel={hereLabel} project={view === "project" ? project : null} saveState={saved} canUndo={history.current.length > 0} canRedo={future.current.length > 0}
+        <Toolbar onModeHelp={() => openHelp("simple-advanced")} hereLabel={hereLabel} project={view === "project" ? project : null} saveState={saved} canUndo={history.current.length > 0} canRedo={future.current.length > 0}
           onUndo={undo} onRedo={redo} mode={prefs.mode} onMode={setMode} onPalette={actions.palette} paletteKey={keyOf("palette")}
           guideOpen={prefs.guideOpen} showGuide={showGuide} onToggleGuide={() => setPrefs({ guideOpen: !prefs.guideOpen })} onToggleRail={() => setPrefs({ railCollapsed: !prefs.railCollapsed })}
           railCollapsed={railCollapsed} onEdit={edit} guideKey={keyOf("toggle-guide")} />

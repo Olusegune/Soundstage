@@ -70,7 +70,7 @@ impl ElevenLabsAdapter {
     }
 
     fn build(keys: KeyProvider, base: String, retry_delay: Duration, max_audio_bytes: usize) -> Self {
-        let agent = ureq::AgentBuilder::new()
+        let agent = crate::net::cloud_agent_builder()
             .redirects(0)
             .timeout_connect(Duration::from_secs(10))
             .timeout_write(Duration::from_secs(30))
@@ -121,7 +121,7 @@ impl ElevenLabsAdapter {
                     }
                     return Err(err);
                 }
-                Err(ureq::Error::Transport(_)) => return Err(AdapterError::Network),
+                Err(ureq::Error::Transport(t)) => { crate::net::note_transport(&t); return Err(AdapterError::Network); }
             }
         }
     }
@@ -134,7 +134,7 @@ impl ElevenLabsAdapter {
             Ok(r) if r.status() == 200 => Ok(r),
             Ok(r) => Err(AdapterError::ProviderError(format!("unexpected HTTP {}", r.status()))),
             Err(ureq::Error::Status(code, r)) => Err(map_status(code, r)),
-            Err(ureq::Error::Transport(_)) => Err(AdapterError::Network),
+            Err(ureq::Error::Transport(t)) => { crate::net::note_transport(&t); Err(AdapterError::Network) }
         }
     }
 
@@ -409,7 +409,7 @@ impl Adapter for ElevenLabsAdapter {
             Ok(r) if r.status() == 200 => r,
             Ok(r) => return Err(AdapterError::ProviderError(format!("unexpected HTTP {}", r.status()))),
             Err(ureq::Error::Status(code, r)) => return Err(map_status(code, r)),
-            Err(ureq::Error::Transport(_)) => return Err(AdapterError::Network),
+            Err(ureq::Error::Transport(t)) => { crate::net::note_transport(&t); return Err(AdapterError::Network); }
         };
         let v = crate::net::read_json(res, 1 << 20)?;
         let vid = v["voice_id"].as_str().filter(|i| valid_voice_id(i)).ok_or_else(|| AdapterError::ProviderError("the provider did not confirm the voice".into()))?;

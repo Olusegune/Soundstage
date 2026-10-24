@@ -32,7 +32,10 @@ impl std::fmt::Display for AdapterError {
             AdapterError::UnsupportedTag(t) => write!(f, "This voice cannot perform [{t}]."),
             AdapterError::UnsupportedLanguage(l) => write!(f, "This provider does not support the language {l}."),
             AdapterError::Quota => write!(f, "The provider account is out of quota."),
-            AdapterError::Network => write!(f, "The provider could not be reached."),
+            AdapterError::Network => {
+                let why = crate::net::last_transport_reason();
+                if why.is_empty() { write!(f, "The provider could not be reached.") } else { write!(f, "The provider could not be reached: {why}.") }
+            }
             AdapterError::ProviderError(m) => write!(f, "The provider reported a problem: {m}"),
             AdapterError::UnknownVoice(v) => write!(f, "The voice {v} is not available."),
         }

@@ -83,7 +83,7 @@ impl OpenAiSpeechAdapter {
                     }
                     return Err(e);
                 }
-                Err(ureq::Error::Transport(_)) => return Err(AdapterError::Network),
+                Err(ureq::Error::Transport(t)) => { crate::net::note_transport(&t); return Err(AdapterError::Network); }
             }
         }
     }
@@ -205,7 +205,7 @@ impl Adapter for OpenAiSpeechAdapter {
             Ok(r) if r.status() == 200 => r,
             Ok(r) => return Err(AdapterError::ProviderError(format!("unexpected HTTP {}", r.status()))),
             Err(ureq::Error::Status(code, r)) => return Err(error_from_status(code, r)),
-            Err(ureq::Error::Transport(_)) => return Err(AdapterError::Network),
+            Err(ureq::Error::Transport(t)) => { crate::net::note_transport(&t); return Err(AdapterError::Network); }
         };
         let v = read_json(res, 32 << 20)?;
         crate::transcribe::parse_openai(&v).map_err(AdapterError::ProviderError)

@@ -7,7 +7,7 @@ import type { Project } from "../types";
 export function Toolbar(props: {
   hereLabel: string; project: Project | null; saveState: "saved" | "saving" | "error";
   canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void;
-  mode: Mode; onMode: (m: Mode) => void; onPalette: () => void; paletteKey: string;
+  mode: Mode; onMode: (m: Mode) => void; onModeHelp: () => void; onPalette: () => void; paletteKey: string;
   guideOpen: boolean; showGuide: boolean; onToggleGuide: () => void; onToggleRail: () => void; railCollapsed: boolean;
   onEdit: (fn: (p: Project) => Project, coalesce?: string) => void; guideKey: string;
 }) {
@@ -79,6 +79,7 @@ export function Toolbar(props: {
           </button>
         ))}
       </div>
+      <button className="ghost icon" onClick={props.onModeHelp} aria-label="What does Advanced mode add?" data-tip="What does Advanced mode add?" data-tip-pos="bottom"><I.Info size={16} /></button>
       <button className="searchbtn" onClick={props.onPalette} aria-keyshortcuts="Control+K" data-tour="palette">
         <span><I.Search size={16} /><span className="label">Search or run a command</span></span>
         <Kbd combo={props.paletteKey} />

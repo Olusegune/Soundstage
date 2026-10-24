@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { Ctx } from "../ctx";
 import { insertAt, splitTags } from "../logic";
 import { Empty } from "../ui";
@@ -6,6 +6,95 @@ import { NON_VERBAL } from "../types";
 
 const QUICK = ["pause:short", "pause:long", ...NON_VERBAL, "whisper", "shout"];
 const MAX_IMPORT_BYTES = 2_000_000;
+
+const TAG_GUIDE: [string, string][] = [
+  ["[pause:short]  [pause:long]", "A quarter second, or most of a second, of silence."],
+  ["[pause:350]", "An exact pause in milliseconds (0 to 10000)."],
+  ["[laugh] [chuckle] [sigh] [cough] [sneeze] [gasp] [cry] [breath] [sniff]", "Sounds. Only voices that can make them accept them; others say so instead of ignoring them."],
+  ["[whisper] [shout] [excited] [sad] [tired] [sarcastic] [curious] [serious]", "A way of speaking, from that point on in the line."],
+];
+
+function escapeRe(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Extra tools for people who want them: counts, rename a speaker, find and replace, and a tag guide. */
+function AdvancedScriptTools({ ctx }: { ctx: Ctx }) {
+  const { project, analysis: a, edit } = ctx;
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [find, setFind] = useState("");
+  const [repl, setRepl] = useState("");
+  const [matchCase, setMatchCase] = useState(false);
+
+  const stats = useMemo(() => {
+    const lines = a?.lines ?? [];
+    const words = lines.reduce((n, l) => n + splitTags(l.line.text).filter((p) => !p.tag).map((p) => p.text).join(" ").split(/\s+/).filter(Boolean).length, 0);
+    const bySpeaker = new Map<string, number>();
+    for (const l of lines) bySpeaker.set(l.line.speaker, (bySpeaker.get(l.line.speaker) ?? 0) + splitTags(l.line.text).filter((p) => !p.tag).map((p) => p.text).join(" ").split(/\s+/).filter(Boolean).length);
+    return { words, seconds: Math.round(words / 2.5), bySpeaker: [...bySpeaker.entries()] };
+  }, [a]);
+
+  const count = useMemo(() => {
+    if (!find) return 0;
+    return (project.script.match(new RegExp(escapeRe(find), matchCase ? "g" : "gi")) ?? []).length;
+  }, [project.script, find, matchCase]);
+
+  const speakers = a?.parsed.speakers ?? [];
+  const newName = to.trim().toUpperCase();
+  const validNew = /^[A-Z][A-Z0-9 _-]{0,23}$/.test(newName);
+  const rename = () => {
+    if (!from || !validNew || newName === from) return;
+    const re = new RegExp(`^(\\s*)${escapeRe(from)}(\\s*:)`, "gm");
+    edit((p) => {
+      const characters = { ...p.characters };
+      if (characters[from] && !characters[newName]) characters[newName] = characters[from];
+      delete characters[from];
+      return { ...p, script: p.script.replace(re, `$1${newName}$2`), characters };
+    });
+    ctx.toast(`${from} is now ${newName}.`);
+    setFrom(""); setTo("");
+  };
+  const replaceAll = () => {
+    if (!find || count === 0) return;
+    const re = new RegExp(escapeRe(find), matchCase ? "g" : "gi");
+    edit((p) => ({ ...p, script: p.script.replace(re, () => repl) }), "script");
+    ctx.toast(`Replaced ${count} ${count === 1 ? "place" : "places"}.`);
+  };
+
+  return (
+    <div className="card" role="group" aria-label="Script tools">
+      <h2>Script tools <span className="chip info" style={{ verticalAlign: "middle" }}>Advanced</span></h2>
+      <div className="small" style={{ marginBottom: 8 }}>{stats.words} spoken words, about {Math.floor(stats.seconds / 60)} min {stats.seconds % 60} s read aloud (an estimate; pauses add time).</div>
+      {stats.bySpeaker.length > 0 && <div className="small muted" style={{ marginBottom: 10 }}>{stats.bySpeaker.map(([s, w]) => `${s}: ${w} words`).join(" · ")}</div>}
+
+      <h3 style={{ margin: "10px 0 4px" }}>Rename a speaker</h3>
+      <div className="row" style={{ alignItems: "end" }}>
+        <div><label htmlFor="sr-from">Speaker</label><select id="sr-from" value={from} onChange={(e) => setFrom(e.target.value)}><option value="">Choose…</option>{speakers.map((s) => <option key={s}>{s}</option>)}</select></div>
+        <div><label htmlFor="sr-to">New name</label><input id="sr-to" type="text" style={{ width: 160 }} maxLength={24} value={to} onChange={(e) => setTo(e.target.value)} placeholder="FOR EXAMPLE NARRATOR" /></div>
+        <button className="small" disabled={!from || !validNew || newName === from} onClick={rename}>Rename</button>
+      </div>
+      <p className="small faint" style={{ margin: "4px 0 0" }}>Changes the name at the start of every line, and keeps the voice and directions you set. If the new name already exists, the two speakers become one.</p>
+
+      <h3 style={{ margin: "14px 0 4px" }}>Find and replace</h3>
+      <div className="row" style={{ alignItems: "end" }}>
+        <div><label htmlFor="fr-f">Find</label><input id="fr-f" type="text" style={{ width: 150 }} maxLength={100} value={find} onChange={(e) => setFind(e.target.value)} /></div>
+        <div><label htmlFor="fr-r">Replace with</label><input id="fr-r" type="text" style={{ width: 150 }} maxLength={200} value={repl} onChange={(e) => setRepl(e.target.value)} /></div>
+        <label className="inline"><input type="checkbox" checked={matchCase} onChange={(e) => setMatchCase(e.target.checked)} /> Match capitals</label>
+        <button className="small" disabled={!find || count === 0} onClick={replaceAll}>Replace all{find ? ` (${count})` : ""}</button>
+      </div>
+
+      <h3 style={{ margin: "14px 0 4px" }}>Say a name differently</h3>
+      <p className="small muted" style={{ margin: "0 0 6px" }}>A voice mispronouncing a name? Teach it for this project without changing your script.</p>
+      <button className="small" onClick={ctx.openPronunciation}>Open Pronunciation</button>
+
+      <details style={{ marginTop: 14 }}>
+        <summary className="small">Every direction you can write</summary>
+        <table className="small" style={{ marginTop: 6 }}><tbody>{TAG_GUIDE.map(([t, d]) => <tr key={t}><td className="mono" style={{ paddingRight: 10, verticalAlign: "top" }}>{t}</td><td className="muted">{d}</td></tr>)}</tbody></table>
+      </details>
+    </div>
+  );
+}
 
 export function ScriptStep({ ctx }: { ctx: Ctx }) {
   const { project, analysis, edit } = ctx;
@@ -100,6 +189,7 @@ export function ScriptStep({ ctx }: { ctx: Ctx }) {
             </>
           )}
         </div>
+        {ctx.mode === "advanced" && <AdvancedScriptTools ctx={ctx} />}
         <div className="card" aria-live="polite">
           <h2>Checks</h2>
           {a && a.parsed.issues.length === 0 && tagIssues.length === 0 && <p className="chip ok">✓ Nothing to fix</p>}

@@ -46,7 +46,7 @@ impl KieTransport {
         Self::build(model, template, keys, KIE_HOST.into(), fetch, Duration::from_secs(5), 120)
     }
     fn build(model: String, template: Value, keys: KeyProvider, base: String, fetch: Arc<dyn Fetcher>, poll: Duration, max_polls: u32) -> Self {
-        let agent = ureq::AgentBuilder::new().redirects(0).timeout_connect(Duration::from_secs(10)).timeout_write(Duration::from_secs(30)).timeout_read(Duration::from_secs(60)).user_agent("Soundstage").build();
+        let agent = crate::net::cloud_agent_builder().redirects(0).timeout_connect(Duration::from_secs(10)).timeout_write(Duration::from_secs(30)).timeout_read(Duration::from_secs(60)).user_agent("Soundstage").build();
         KieTransport { model, template, keys, agent, base, fetch, poll, max_polls }
     }
     #[cfg(test)]
@@ -74,7 +74,7 @@ impl KieTransport {
                 let _ = crate::net::error_code(r);
                 return Err(code_error(code as i64));
             }
-            Err(ureq::Error::Transport(_)) => return Err(AdapterError::Network),
+            Err(ureq::Error::Transport(t)) => { crate::net::note_transport(&t); return Err(AdapterError::Network); }
         };
         let v = read_json(r, 4 << 20)?;
         match v["code"].as_i64() {

@@ -21,10 +21,12 @@ export interface Prefs {
   assistantModel: string;
   /** Keep a copy of what the Speak and Audio tools screens make. */
   keepHistory: boolean;
+  /** Interface size, 0.8 to 1.8. For large monitors and for people who want bigger text. */
+  uiScale: number;
 }
 
 export const DEFAULT_PREFS: Prefs = {
-  theme: "dark", mode: "simple", railCollapsed: false, guideOpen: true, guideWidth: 352, welcomed: false, toured: false, shortcuts: {}, ffmpegPath: "", assistantUrl: "http://127.0.0.1:11434/v1", assistantModel: "", keepHistory: true,
+  theme: "dark", mode: "simple", railCollapsed: false, guideOpen: true, guideWidth: 352, welcomed: false, toured: false, shortcuts: {}, ffmpegPath: "", assistantUrl: "http://127.0.0.1:11434/v1", assistantModel: "", keepHistory: true, uiScale: 1,
 };
 
 const KEY = "soundstage.prefs.v1";
@@ -49,6 +51,7 @@ export function sanitize(raw: unknown): Prefs {
     shortcuts,
     assistantUrl: typeof r.assistantUrl === "string" && r.assistantUrl.length < 300 && !/[\s\0]/.test(r.assistantUrl) ? r.assistantUrl : DEFAULT_PREFS.assistantUrl,
     keepHistory: r.keepHistory !== false,
+    uiScale: typeof r.uiScale === "number" && Number.isFinite(r.uiScale) ? Math.min(1.8, Math.max(0.8, Math.round(r.uiScale * 20) / 20)) : 1,
     assistantModel: typeof r.assistantModel === "string" && r.assistantModel.length <= 100 && !/[\s\0]/.test(r.assistantModel) ? r.assistantModel : "",
     ffmpegPath: typeof r.ffmpegPath === "string" && r.ffmpegPath.length < 400 && !/[\r\n\0]/.test(r.ffmpegPath) ? r.ffmpegPath : "",
   };

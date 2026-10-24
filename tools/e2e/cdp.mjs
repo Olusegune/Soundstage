@@ -23,7 +23,8 @@ export class App {
     if (!page) throw new Error("The app did not start or did not expose a debug port.");
     this.ws = new WebSocket(page.webSocketDebuggerUrl);
     await new Promise((r, j) => { this.ws.onopen = r; this.ws.onerror = j; });
-    this.ws.onmessage = (m) => { const d = JSON.parse(m.data); if (d.id && this.pending.has(d.id)) { this.pending.get(d.id)(d); this.pending.delete(d.id); } };
+    this.pageErrors = [];
+    this.ws.onmessage = (m) => { const d = JSON.parse(m.data); if (d.method === "Runtime.exceptionThrown") this.pageErrors.push(String(d.params?.exceptionDetails?.exception?.description ?? d.params?.exceptionDetails?.text).slice(0, 300)); if (d.method === "Runtime.consoleAPICalled" && d.params?.type === "error") this.pageErrors.push(d.params.args.map((a) => a.description ?? a.value).join(" ").slice(0, 300)); if (d.id && this.pending.has(d.id)) { this.pending.get(d.id)(d); this.pending.delete(d.id); } };
     await this.send("Runtime.enable");
     await this.send("Page.enable");
   }
@@ -78,7 +79,7 @@ export class App {
     writeFileSync(path, Buffer.from(r.result.data, "base64"));
   }
 
-  check(name, ok, extra = "") { this.results.push({ name, ok: !!ok, extra: String(extra) }); console.log(ok ? "PASS" : "FAIL", name, extra ? `| ${extra}` : ""); }
+  check(name, ok, extra = "") { if (!ok && this.pageErrors?.length) extra = `${extra} [page error: ${this.pageErrors[this.pageErrors.length - 1]}]`; this.results.push({ name, ok: !!ok, extra: String(extra) }); console.log(ok ? "PASS" : "FAIL", name, extra ? `| ${extra}` : ""); }
 
   async close() { try { this.ws?.close(); } catch { /* closed */ } this.child?.kill(); }
 }

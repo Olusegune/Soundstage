@@ -1252,6 +1252,11 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .text("theme-light", "&Light theme")
         .text("theme-system", "&Match Windows theme")
         .separator()
+        .separator()
+        .text("zoom-in", "Make everything &larger\tCtrl+=")
+        .text("zoom-out", "Make everything &smaller\tCtrl+-")
+        .text("zoom-reset", "&Normal size\tCtrl+0")
+        .separator()
         .fullscreen()
         .build()?;
     let go = SubmenuBuilder::new(app, "&Go")

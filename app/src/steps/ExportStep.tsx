@@ -24,6 +24,18 @@ const FORMATS: { kind: Codec["kind"]; name: string; blurb: string; tag: "Lossles
   { kind: "mp4", name: "MP4 video", blurb: "Your audio over a moving waveform, for social sites.", tag: "Video" },
 ];
 
+function codecLabel(c: Codec): string {
+  switch (c.kind) {
+    case "wav": return `WAV ${c.bits === 32 ? "32-bit float" : `${c.bits}-bit`}`;
+    case "flac": return "FLAC";
+    case "mp3": return `MP3 ${c.kbps} kbps`;
+    case "aac": return `AAC ${c.kbps} kbps`;
+    case "vorbis": return `Ogg Vorbis, quality ${c.quality}`;
+    case "opus": return `Opus ${c.kbps} kbps`;
+    case "mp4": return `MP4 video, ${c.kbps} kbps`;
+  }
+}
+
 export function defaultCodec(kind: Codec["kind"]): Codec {
   switch (kind) {
     case "wav": return { kind, bits: 24 };
@@ -220,15 +232,17 @@ export function ExportStep({ ctx }: { ctx: Ctx }) {
           })}
         </div>
 
+        {ctx.mode === "advanced" ? (
         <div className="row" style={{ alignItems: "end", marginTop: 16 }}>
           <CodecSettings codec={master} onChange={setMaster} id="master" />
           <div><label htmlFor="rate">Sample rate <Help text="How many times per second the sound is measured. 48 kHz is the film and video standard; 44.1 kHz is for music and podcasts." /></label>
             <select id="rate" value={rate} onChange={(e) => setRate(Number(e.target.value))}><option value={44100}>44.1 kHz</option><option value={48000}>48 kHz</option><option value={96000}>96 kHz</option></select></div>
         </div>
+        ) : <p className="small muted" style={{ margin: "14px 0 0" }}>Using {codecLabel(master)} at {rate / 1000} kHz. Switch to Advanced mode to change bit depth, quality and sample rate.</p>}
 
         <hr className="divider" />
         <label className="inline"><input type="checkbox" checked={stems !== null} onChange={(e) => setStems(e.target.checked ? (master.kind === "mp4" ? { kind: "wav", bits: 24 } : master.kind === "wav" || master.kind === "flac" ? master : { kind: "wav", bits: 24 }) : null)} /> Also write separate dialogue, effects and music stems <Help text="Stems are the three parts of the mix as their own files, the same length as the master, so an editor can rebalance them later." /></label>
-        {stems !== null && (
+        {stems !== null && ctx.mode === "advanced" && (
           <div className="row" style={{ alignItems: "end", marginTop: 10 }}>
             <div><label htmlFor="stem-fmt">Stem format</label>
               <select id="stem-fmt" value={stems.kind === "wav" ? `wav${stems.bits}` : stems.kind} onChange={(e) => { const v = e.target.value; setStems(v.startsWith("wav") ? { kind: "wav", bits: Number(v.slice(3)) as 16 | 24 | 32 } : defaultCodec(v as Codec["kind"])); }}>
@@ -250,7 +264,7 @@ export function ExportStep({ ctx }: { ctx: Ctx }) {
         </div>
       </div>
 
-      <div className="card">
+      {(ctx.mode === "advanced" || !caps?.ffmpeg) && <div className="card">
         <div className="row"><h2 style={{ margin: 0 }}>FFmpeg</h2><span className="spacer" />
           {caps?.ffmpeg ? <span className="chip ok"><I.Check size={12} /> Found</span> : <span className="chip warn"><I.Alert size={12} /> Not found</span>}
         </div>
@@ -269,7 +283,7 @@ export function ExportStep({ ctx }: { ctx: Ctx }) {
           <button className="small" onClick={() => void chooseFfmpeg()}>Choose ffmpeg.exe…</button>
           {ctx.ffmpegPath && <button className="small ghost" onClick={() => ctx.setFfmpegPath("")}>Look automatically</button>}
         </div>
-      </div>
+      </div>}
 
       <div className="card">
         <h2>Export</h2>

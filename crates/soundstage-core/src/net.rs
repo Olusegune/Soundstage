@@ -329,3 +329,49 @@ pub fn multipart(fields: &[(&str, &str)], file: (&str, &str, &str, &[u8])) -> (S
     b.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
     (boundary, b)
 }
+
+thread_local! {
+    static LAST_TRANSPORT: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+}
+
+/// Remember why the last request could not be made, so the plain "could not be reached" message can say what to check.
+/// The text names the kind of failure and never includes a URL, a header or a key.
+pub fn note_transport(t: &ureq::Transport) {
+    let msg = t.message().unwrap_or("").to_lowercase();
+    let why = if msg.contains("certificate") || msg.contains("unknownissuer") || msg.contains("handshake") || msg.contains("tls") {
+        "the secure connection was rejected (a certificate problem). Antivirus programs and company proxies that inspect HTTPS can cause this"
+    } else {
+        match t.kind() {
+            ureq::ErrorKind::Dns => "the address could not be looked up. Check your internet connection, DNS or VPN",
+            ureq::ErrorKind::ConnectionFailed => "the connection was refused or blocked. Check a firewall, VPN or proxy",
+            ureq::ErrorKind::ProxyConnect | ureq::ErrorKind::ProxyUnauthorized | ureq::ErrorKind::InvalidProxyUrl => "the proxy refused the connection",
+            ureq::ErrorKind::Io => "the connection dropped or took too long",
+            _ => "the request could not be made",
+        }
+    };
+    LAST_TRANSPORT.with(|l| *l.borrow_mut() = why.to_string());
+}
+
+pub fn last_transport_reason() -> String {
+    LAST_TRANSPORT.with(|l| l.borrow().clone())
+}
+
+/// A builder for services on the internet: it follows the `HTTPS_PROXY` / `ALL_PROXY` settings when they are set.
+pub fn cloud_agent_builder() -> ureq::AgentBuilder {
+    ureq::AgentBuilder::new().try_proxy_from_env(true)
+}
+
+#[cfg(test)]
+mod transport_tests {
+    use super::*;
+
+    #[test]
+    fn a_refused_connection_says_what_to_check_and_never_shows_a_url() {
+        let agent = ureq::AgentBuilder::new().timeout_connect(std::time::Duration::from_secs(2)).build();
+        let Err(ureq::Error::Transport(t)) = agent.get("http://127.0.0.1:1/secret-path?key=abc").call() else { panic!("expected a transport error") };
+        note_transport(&t);
+        let why = last_transport_reason();
+        assert!(why.contains("refused or blocked"), "{why}");
+        assert!(!why.contains("secret-path") && !why.contains("abc"));
+    }
+}

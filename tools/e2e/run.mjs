@@ -150,6 +150,9 @@ try {
   await app.press("Ctrl+3");
   await sleep(500);
   app.check("Advanced mode reveals the direction levels", (await app.text()).includes("Direction levels"));
+  await app.press("Ctrl+1"); await sleep(500);
+  app.check("Advanced mode adds Script tools on the Script step", (await app.text()).includes("Rename a speaker") && (await app.text()).includes("Find and replace"));
+  await app.press("Ctrl+3"); await sleep(500);
   await app.shot(`${shotsDir}/dark-1280x720-direct-advanced.png`);
   await app.press("Ctrl+Shift+M");
   await sleep(300);
@@ -273,7 +276,7 @@ try {
     await app.resize(1280, 720);
     await app.press("Ctrl+,"); await sleep(400);
     await app.clickText("Dark"); await sleep(400);
-    const tidy = (id) => app.ev(`(()=>{document.querySelectorAll('[role=status].toast, .toast').forEach(t=>t.remove());document.getElementById(${JSON.stringify(id)})?.scrollIntoView({block:'center'})})()`);
+    const tidy = (id) => app.ev(`(()=>{document.querySelectorAll('[role=status].toast, .toast').forEach(t=>{t.style.visibility='hidden'});document.getElementById(${JSON.stringify(id)})?.scrollIntoView({block:'center'})})()`);
     await app.press("Ctrl+Shift+V"); await sleep(600);
     await app.clickText("Help me write this"); await sleep(300);
     await app.clickText("Older"); await app.clickText("Woman"); await app.clickText("Nigerian English"); await app.clickText("Warm and kind"); await sleep(300);
@@ -391,7 +394,7 @@ try {
   await sleep(500);
   await audit("home (dark)");
 } catch (e) {
-  app.check("the end-to-end run completed", false, String(e).slice(0, 400));
+  app.check("the end-to-end run completed", false, String(e).slice(0, 400) + " | page errors: " + JSON.stringify((app.pageErrors ?? []).slice(0, 3)));
   await app.shot(`${shotsDir}/error.png`).catch(() => {});
 }
 
