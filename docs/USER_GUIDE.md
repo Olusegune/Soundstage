@@ -20,6 +20,7 @@ _Generated from the in-app Help centre (`app/src/help/content.ts`). Edit that fi
 - [What is free and what costs money](#what-is-free-and-what-costs-money)
 - [Voices and providers](#voices-and-providers)
 - [Speak, transcribe and clean audio](#speak-transcribe-and-clean-audio)
+- [Change a voice, dub and edit audio](#change-a-voice-dub-and-edit-audio)
 - [Pronunciation and history](#pronunciation-and-history)
 - [The prompt helper](#the-prompt-helper)
 - [Consent and voice cloning](#consent-and-voice-cloning)
@@ -240,6 +241,35 @@ Not everything needs a project. The Speak and Audio tools screens (in the sideba
 
 Removes background noise and music and keeps the voice (ElevenLabs). Your original is not changed. Recordings up to 10 minutes.
 
+## Change a voice, dub and edit audio
+
+_Re-speak a recording in another voice, translate a recording, and trim and layer clips._
+
+
+### Change voice (Audio tools)
+
+- Choose a recording and a new voice. The words, timing and feeling stay; the voice changes (ElevenLabs).
+- The person speaking in the recording must agree that their performance can drive another voice. You tick the same promises as for cloning (adult, alive, not a public figure), and the record is saved on your computer first. It is never sent.
+- If the new voice is a clone, its own consent must be clean too.
+
+
+### Dub (Audio tools)
+
+- Transcribe a recording, translate it with the AI helper from Settings, fix any line, then save translated subtitles (SRT or WebVTT) or create a dubbing project.
+- The project holds the translated lines as one speaker, NARRATOR. Cast any voice you may use and render as normal.
+- Soundstage does not clone the original speakers, and it does not match the new voice's timing to the original picture.
+- Small models are weaker in some languages, so read every line.
+
+
+### Audio editor
+
+Add recordings (or things you made), set where each starts and ends, where it sits on the timeline, its level and fades, and make one file. Clips that overlap are layered. To join clips, press Place after clip. Loud layers are turned down so nothing distorts. Originals are never changed.
+
+
+### Templates
+
+On the Projects screen, Start from a template gives you a podcast episode, an audiobook chapter, a 30-second ad, an explainer narration or a short drama scene. They are ordinary scripts you can change.
+
 ## Pronunciation and history
 
 _Teach voices how to say names and terms, and find what you made before._
@@ -435,6 +465,9 @@ _Captured from the real app by `tools/e2e/run.mjs`._
 
 ![Pronunciation: teach the voices how to say names and terms, and hear the result.](design/screens/dark-1280x720-pronunciation.png)
 *Pronunciation: teach the voices how to say names and terms, and hear the result.*
+
+![Audio editor: trim, join and layer clips, and save one file.](design/screens/dark-1280x720-audio-editor.png)
+*Audio editor: trim, join and layer clips, and save one file.*
 
 ![Audio tools: speech to text with subtitles, and noise and music removal.](design/screens/dark-1280x720-audio-tools.png)
 *Audio tools: speech to text with subtitles, and noise and music removal.*

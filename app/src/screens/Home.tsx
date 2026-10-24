@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { api, messageOf } from "../api";
 import * as I from "../icons";
 import { Confirm, Empty } from "../ui";
-import type { Summary } from "../types";
+import { PlayButton } from "../ui";
+import { TEMPLATES } from "../templates";
+import type { HistoryView, Summary } from "../types";
 
 const MAX_IMPORT = 2_000_000;
 
@@ -13,12 +15,14 @@ function ago(iso: string): string {
   return days <= 0 ? "Today" : days === 1 ? "Yesterday" : days < 14 ? `${days} days ago` : iso.slice(0, 10);
 }
 
-export function Home(props: { onOpen: (id: string) => void; toast: (t: string, bad?: boolean) => void; onQuickStart: () => void; onHelp: () => void }) {
+export function Home(props: { onSpeak: () => void; onOpen: (id: string) => void; toast: (t: string, bad?: boolean) => void; onQuickStart: () => void; onHelp: () => void }) {
   const [list, setList] = useState<Summary[] | null>(null);
   const [attention, setAttention] = useState<Record<string, number>>({});
   const [name, setName] = useState("");
   const [sample, setSample] = useState(true);
   const [deleting, setDeleting] = useState<Summary | null>(null);
+  const [recent, setRecent] = useState<HistoryView[]>([]);
+  useEffect(() => { void api.historyList().then((l) => setRecent(l.slice(0, 6))).catch(() => setRecent([])); }, []);
 
   const refresh = async () => {
     try {
@@ -86,6 +90,31 @@ export function Home(props: { onOpen: (id: string) => void; toast: (t: string, b
           <label className="inline"><input type="file" accept=".txt,.fountain,text/plain" style={{ display: "none" }} onChange={(e) => void importScript(e.target.files?.[0])} /><span className="chipbtn"><I.Upload size={16} /> Import a script</span></label>
         </form>
       </div>
+
+      <div className="card">
+        <h2>Start from a template</h2>
+        <div className="voice-grid">
+          {TEMPLATES.map((t) => (
+            <div key={t.id} className="voice-card">
+              <strong>{t.name}</strong>
+              <p className="small muted">{t.blurb}</p>
+              <button className="small" onClick={() => void create(t.script, t.name)}><I.Plus size={14} /> Use this</button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {recent.length > 0 && (
+        <div className="card">
+          <div className="row"><h2 style={{ margin: 0 }}>Latest creations</h2><span className="spacer" /><button className="small" onClick={props.onSpeak}>See all</button></div>
+          {recent.map((h) => (
+            <div key={h.item.id} className="linecard">
+              <div className="row"><strong>{h.item.voice_name}</strong><span className="chip">{h.item.kind === "speak" ? "Speech" : h.item.kind === "clean" ? "Cleaned" : h.item.kind === "convert" ? "Voice changed" : "Edit"}</span><span className="muted small">{(h.item.duration_ms / 1000).toFixed(1)} s · {ago(h.item.created)}</span><span className="spacer" /><PlayButton path={h.path} label={`${h.item.voice_name}: ${h.item.text.slice(0, 40)}`} /></div>
+              <div className="small muted" style={{ marginTop: 4 }}>{h.item.text.length > 120 ? `${h.item.text.slice(0, 120)}…` : h.item.text}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {list === null && <div className="proj-grid">{[0, 1, 2].map((i) => <div key={i} className="skeleton" style={{ height: 110 }} />)}</div>}
       {list && list.length === 0 && <Empty title="No projects yet"><p className="muted">Create one above, or press Quick start.</p></Empty>}

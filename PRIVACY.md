@@ -9,6 +9,8 @@ Your projects, scripts, takes, mixes and exports are saved in `Documents\Soundst
 Soundstage asks before sending anything. Depending on what you set up:
 - **Online voices (ElevenLabs, OpenRouter, other online engines you add):** the text of the lines you render, and the voice you chose.
 - **Voice cloning:** the recording of the voice (trimmed to three minutes), and the name you give the voice, sent to the provider you chose. The consent record is saved only on your computer and is never sent.
+- **Changing a voice:** the recording you choose, converted on your computer, sent to the engine you chose. The speaker's consent record stays on your computer.
+- **Translation and dubbing:** the transcribed text, sent to the chat server you set in Settings (nothing leaves your computer if that is Ollama here).
 - **Speech to text and audio cleaning:** the recording you choose, converted on your computer, sent to the engine you chose.
 - **VoiceKiller:** the text of the lines you render and the voice name, sent to voicekiller.com.
 - **Music, effects and voice design:** the description you typed, sent to the service you chose (ElevenLabs, Kie, fal).

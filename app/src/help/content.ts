@@ -216,6 +216,30 @@ export const ARTICLES: Article[] = [
     ],
   },
   {
+    id: "voice-changer-dub", title: "Change a voice, dub and edit audio", group: "Understanding",
+    summary: "Re-speak a recording in another voice, translate a recording, and trim and layer clips.",
+    tags: ["voice changer", "speech to speech", "dub", "dubbing", "translate", "subtitles", "editor", "trim", "layer", "merge", "podcast", "template"],
+    body: [
+      { t: "h", text: "Change voice (Audio tools)" },
+      { t: "ul", items: [
+        "Choose a recording and a new voice. The words, timing and feeling stay; the voice changes (ElevenLabs).",
+        "The person speaking in the recording must agree that their performance can drive another voice. You tick the same promises as for cloning (adult, alive, not a public figure), and the record is saved on your computer first. It is never sent.",
+        "If the new voice is a clone, its own consent must be clean too.",
+      ] },
+      { t: "h", text: "Dub (Audio tools)" },
+      { t: "ul", items: [
+        "Transcribe a recording, translate it with the AI helper from Settings, fix any line, then save translated subtitles (SRT or WebVTT) or create a dubbing project.",
+        "The project holds the translated lines as one speaker, NARRATOR. Cast any voice you may use and render as normal.",
+        "Soundstage does not clone the original speakers, and it does not match the new voice's timing to the original picture.",
+        "Small models are weaker in some languages, so read every line.",
+      ] },
+      { t: "h", text: "Audio editor" },
+      { t: "p", text: "Add recordings (or things you made), set where each starts and ends, where it sits on the timeline, its level and fades, and make one file. Clips that overlap are layered. To join clips, press Place after clip. Loud layers are turned down so nothing distorts. Originals are never changed." },
+      { t: "h", text: "Templates" },
+      { t: "p", text: "On the Projects screen, Start from a template gives you a podcast episode, an audiobook chapter, a 30-second ad, an explainer narration or a short drama scene. They are ordinary scripts you can change." },
+    ],
+  },
+  {
     id: "pronunciation", title: "Pronunciation and history", group: "Understanding",
     summary: "Teach voices how to say names and terms, and find what you made before.",
     tags: ["pronunciation", "say", "name", "spelling", "dictionary", "word", "history", "again", "delete"],

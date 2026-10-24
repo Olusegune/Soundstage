@@ -52,6 +52,12 @@ Rules:
 - Age, identity and public-figure status cannot be verified by the app; the owner attests.
 - Not built: speech-to-speech and performance-reference use, retention policy, revocation reports listing past exports.
 
+### 2.2.2 Performance reference and dubbing (v0.2.0)
+- The voice changer uses a recording as a performance. It requires a consent record for that use (`performance_reference`), made from the same promises as a clone, saved before anything is sent. A record made for performance cannot be used to clone, and the reverse.
+- A cloned target voice is checked as well.
+- The dubbing helper never clones the original speakers: it translates the transcript and the user chooses the voices.
+- Not built: automatic dubbing that copies the original voices, lip-sync, and talking-head avatars. These are deliberately left out for now because they are the easiest route to a convincing fake of a real person.
+
 ### 2.3 Reference audio
 - Single speaker, minimum length (VERIFY per adapter), no music or background speech.
 - The app runs a check and shows the result. A failed check blocks cloning and says why.

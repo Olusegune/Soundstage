@@ -35,6 +35,8 @@ pub struct TranscriptOut {
     pub vtt: String,
     pub seconds: f32,
     pub has_times: bool,
+    /// Subtitle cues with times, for translation and dubbing.
+    pub cues: Vec<SubCue>,
 }
 
 /// 16 kHz mono 16-bit WAV, or a plain reason the recording cannot be used.
@@ -155,7 +157,30 @@ pub fn cues(words: &[Word]) -> Vec<SubCue> {
 
 pub fn finish(t: Transcript, seconds: f32) -> TranscriptOut {
     let c = cues(&t.words);
-    TranscriptOut { has_times: !c.is_empty(), srt: to_srt(&c), vtt: to_vtt(&c), text: t.text, language: t.language, seconds }
+    TranscriptOut { has_times: !c.is_empty(), srt: to_srt(&c), vtt: to_vtt(&c), cues: c, text: t.text, language: t.language, seconds }
+}
+
+/// Subtitle text from cues the user may have edited (a translation, for example). Bad times and control characters are
+/// refused or removed, so a damaged cue can never produce a broken subtitle file.
+pub fn subtitles(cues: &[SubCue], kind: &str) -> Result<String, String> {
+    if cues.is_empty() || cues.len() > 5000 {
+        return Err("There are no subtitle lines to save.".into());
+    }
+    let mut clean = Vec::with_capacity(cues.len());
+    let mut last_start = 0;
+    for c in cues {
+        let text: String = c.text.chars().filter(|ch| !ch.is_control() || *ch == '\n').take(500).collect();
+        if c.end_ms < c.start_ms || c.end_ms > 24 * 3600 * 1000 || c.start_ms < last_start {
+            return Err("The subtitle times are not in order.".into());
+        }
+        last_start = c.start_ms;
+        clean.push(SubCue { start_ms: c.start_ms, end_ms: c.end_ms, text: text.trim().to_string() });
+    }
+    match kind {
+        "srt" => Ok(to_srt(&clean)),
+        "vtt" => Ok(to_vtt(&clean)),
+        _ => Err("Choose SRT or WebVTT.".into()),
+    }
 }
 
 #[cfg(test)]
@@ -210,5 +235,11 @@ mod tests {
         let out = finish(Transcript { text: "t".into(), language: "en".into(), words }, 5.0);
         assert!(out.srt.starts_with("1\n00:00:00,000 --> 00:00:00,800\nGood morning."));
         assert!(out.vtt.starts_with("WEBVTT"));
+        assert_eq!(out.cues.len(), 3);
+        let edited: Vec<SubCue> = out.cues.iter().map(|c| SubCue { text: format!("{}\u{7}!", c.text), ..c.clone() }).collect();
+        assert!(subtitles(&edited, "srt").unwrap().contains("Good morning.!"), "control characters are removed");
+        let mut out_of_order = out.cues.clone();
+        out_of_order.swap(0, 2);
+        assert!(subtitles(&out_of_order, "srt").is_err() && subtitles(&[], "srt").is_err() && subtitles(&out.cues, "doc").is_err());
     }
 }

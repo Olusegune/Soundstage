@@ -1,7 +1,7 @@
 import * as I from "../icons";
 import type { GoldenStep, StepId } from "../golden";
 
-export type View = "home" | "project" | "library" | "providers" | "settings" | "help" | "speak" | "tools" | "pronunciation";
+export type View = "home" | "project" | "library" | "providers" | "settings" | "help" | "speak" | "tools" | "pronunciation" | "editor";
 
 const STEP_ICON: Record<StepId, (p: { size?: number }) => React.JSX.Element> = {
   script: I.Script, cast: I.Cast, direct: I.Direct, render: I.Render, mix: I.Mix, export: I.Export,
@@ -19,7 +19,7 @@ function statusWord(s: GoldenStep): string {
 
 export function Rail(props: {
   view: View; projectName: string | null; steps: GoldenStep[] | null; step: number;
-  collapsed: boolean; onHome: () => void; onStep: (i: number) => void; onVoices: () => void; onEngines: () => void; onSpeak: () => void; onTools: () => void; onPron: () => void;
+  collapsed: boolean; onHome: () => void; onStep: (i: number) => void; onVoices: () => void; onEngines: () => void; onSpeak: () => void; onTools: () => void; onPron: () => void; onEditor: () => void;
   onHelp: () => void; onShortcuts: () => void; onSettings: () => void; onToggle: () => void; shortcutHint: (s: string) => string;
 }) {
   const { view, steps } = props;
@@ -65,6 +65,10 @@ export function Rail(props: {
 
       <button className="rail-item" aria-current={view === "speak" ? "page" : undefined} onClick={props.onSpeak} aria-label={props.collapsed ? "Speak" : undefined} data-tip={props.collapsed ? "Speak" : undefined} data-tip-pos="right">
         <I.Speaker size={18} /><span className="grow">Speak</span>
+      </button>
+
+      <button className="rail-item" aria-current={view === "editor" ? "page" : undefined} onClick={props.onEditor} aria-label={props.collapsed ? "Audio editor" : undefined} data-tip={props.collapsed ? "Audio editor" : undefined} data-tip-pos="right">
+        <I.Mix size={18} /><span className="grow">Audio editor</span>
       </button>
 
       <button className="rail-item" aria-current={view === "tools" ? "page" : undefined} onClick={props.onTools} aria-label={props.collapsed ? "Audio tools" : undefined} data-tip={props.collapsed ? "Audio tools" : undefined} data-tip-pos="right">

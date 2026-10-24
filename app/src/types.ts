@@ -384,10 +384,12 @@ export interface Attestation {
   expires: string | null;
 }
 export interface SpeakOut { path: string; duration_ms: number; voice_name: string; history_id: string | null }
-export interface ToolInfo { id: string; label: string; ready: boolean; transcribe: boolean; isolate: boolean; sends_data: boolean }
-export interface TranscriptOut { text: string; language: string; srt: string; vtt: string; seconds: number; has_times: boolean }
+export interface ToolInfo { id: string; label: string; ready: boolean; transcribe: boolean; isolate: boolean; convert: boolean; sends_data: boolean }
+export interface Cue2 { start_ms: number; end_ms: number; text: string }
+export interface TranscriptOut { text: string; language: string; srt: string; vtt: string; seconds: number; has_times: boolean; cues: Cue2[] }
 export interface CleanOut { path: string; duration_ms: number }
-export interface CloneInfo { statement: string; min_seconds: number; good_seconds: number; max_seconds: number }
+export interface AudioInfo { duration_ms: number; peaks: number[] }
+export interface CloneInfo { statement: string; performance_statement: string; min_seconds: number; good_seconds: number; max_seconds: number }
 export interface RefReport { seconds: number; used_seconds: number; peak: number; clipped_pct: number; silence_pct: number; problems: string[]; warnings: string[] }
 export interface ConsentRecord { id: string; voice_subject: string; subject_is_self: boolean; purpose: string; commercial_use_permitted: boolean; expires: string | null; signed_at: string | null; status: "active" | "revoked" | "expired" }
 export interface ClonedVoice { voice_id: string; adapter_id: string; name: string; consent_id: string; created: string }

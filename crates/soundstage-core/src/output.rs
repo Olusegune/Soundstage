@@ -365,7 +365,7 @@ pub fn write_audio(buf: &Stereo, out_without_ext: &Path, codec: &Codec, rate: u3
 
 /* ------------------------------------------------------------------ subtitles */
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SubCue {
     pub start_ms: u64,
     pub end_ms: u64,

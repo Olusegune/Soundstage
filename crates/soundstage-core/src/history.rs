@@ -72,7 +72,7 @@ impl HistoryStore {
         item.text = item.text.chars().filter(|c| !c.is_control() || *c == '\n').take(5000).collect();
         item.voice_name = item.voice_name.chars().take(120).collect();
         item.provider_label = item.provider_label.chars().take(80).collect();
-        if !["speak", "clean"].contains(&item.kind.as_str()) {
+        if !["speak", "clean", "convert", "edit"].contains(&item.kind.as_str()) {
             return Err("Unknown history kind.".into());
         }
         std::fs::create_dir_all(&self.dir).map_err(|e| format!("Could not create the history folder: {e}"))?;

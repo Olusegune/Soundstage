@@ -7,6 +7,9 @@
 - **Voices:** any OpenAI-compatible speech server (Kokoro, LocalAI, Speaches, OpenRouter and others), Piper, and your own ComfyUI workflows. Local engines need no account.
 - **Music and sound effects:** create them in the Mix step with ElevenLabs, Suno through Kie, fal models (including ACE-Step) or ComfyUI. Everything generated is labelled AI-generated and starts as licence unknown.
 - **Voice cloning** (ElevenLabs), only with a recorded consent record. The record stays on your computer; every render and export re-checks it, and revoking blocks the voice at once.
+- **Voice changer** (ElevenLabs) behind a performer consent record, and a **dubbing helper**: transcribe, translate, save translated subtitles or start a project.
+- **Audio editor**: trim, join and layer clips with levels and fades.
+- **Starter templates** (podcast, audiobook, ad, explainer, drama scene) and a **Latest creations** list on the Projects screen.
 - **Pronunciation** rules (all projects, and per project) that change only what the voice is given, with a Hear it test.
 - **History** for Speak and Audio tools: play, use again, save as, delete, clear; stored on your computer.
 - **VoiceKiller** voices (about two thousand, many languages) and your own VoiceKiller clones, behind the same consent record as clones made in the app.

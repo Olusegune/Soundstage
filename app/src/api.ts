@@ -1,7 +1,7 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
-  Analysis, Asset, Destination, Attestation, CleanOut, HistoryView, PronRule, SpeakOut, ToolInfo, TranscriptOut, CloneEntry, CloneInfo, ClonedVoice, DesignPreview, DesignerInfo, RefReport, EnginesConfig, GeneratorInfo, SystemCheck, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Voice, VoiceDef,
+  Analysis, Asset, Destination, Attestation, AudioInfo, CleanOut, Cue2, HistoryView, PronRule, SpeakOut, ToolInfo, TranscriptOut, CloneEntry, CloneInfo, ClonedVoice, DesignPreview, DesignerInfo, RefReport, EnginesConfig, GeneratorInfo, SystemCheck, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Voice, VoiceDef,
 } from "./types";
 
 /** Tauri rejects with a string for plain errors and with an object for structured ones. */
@@ -62,6 +62,11 @@ export const api = {
   saveTextCopy: (dest: string, content: string) => invoke<void>("save_text_copy", { dest, content }),
   listAudioTools: () => invoke<ToolInfo[]>("list_audio_tools"),
   transcribeAudio: (adapterId: string, path: string, language: string | null) => invoke<TranscriptOut>("transcribe_audio", { adapterId, path, language }),
+  changeVoice: (voiceId: string, path: string, attestation: Attestation, keep: boolean) => invoke<CleanOut>("change_voice", { voiceId, path, attestation, keep }),
+  translateCues: (baseUrl: string, model: string, target: string, lines: string[]) => invoke<string[]>("translate_cues", { baseUrl, model, target, lines }),
+  cuesSubtitles: (cues: Cue2[], kind: "srt" | "vtt") => invoke<string>("cues_subtitles", { cues, kind }),
+  audioInfo: (path: string) => invoke<AudioInfo>("audio_info", { path }),
+  editAudio: (clips: { path: string; start_s: number; end_s: number | null; offset_s: number; gain_db: number; fade_in_ms: number; fade_out_ms: number }[], normalize: boolean, keep: boolean) => invoke<CleanOut>("edit_audio", { clips, normalize, keep }),
   cleanAudio: (adapterId: string, path: string, keep: boolean) => invoke<CleanOut>("clean_audio", { adapterId, path, keep }),
   consentList: () => invoke<CloneEntry[]>("consent_list"),
   consentRevoke: (consentId: string, deleteRemote: boolean) => invoke<string>("consent_revoke", { consentId, deleteRemote }),

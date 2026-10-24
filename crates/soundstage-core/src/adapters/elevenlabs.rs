@@ -358,6 +358,23 @@ impl Adapter for ElevenLabsAdapter {
         let v = crate::net::read_json(self.post_form("/v1/speech-to-text", &fields, ("file", "audio.wav", "audio/wav", wav))?, 32 << 20)?;
         crate::transcribe::parse_elevenlabs(&v).map_err(AdapterError::ProviderError)
     }
+    fn can_convert_voice(&self) -> bool {
+        self.has_key()
+    }
+    fn convert_voice(&self, wav: &[u8], voice_id: &str, _proof: &crate::consent::ConsentProof) -> Result<(Vec<f32>, u32), AdapterError> {
+        if wav.len() < 1000 || wav.len() > MAX_STT_BYTES || !wav.starts_with(b"RIFF") {
+            return Err(AdapterError::ProviderError("the recording is not valid".into()));
+        }
+        let bare = voice_id.strip_prefix("elevenlabs:").unwrap_or("");
+        let known = self.voices().iter().any(|v| v.id == voice_id) || self.extra.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|v| v == voice_id);
+        if !valid_voice_id(bare) || !known {
+            return Err(AdapterError::UnknownVoice(voice_id.chars().take(60).collect()));
+        }
+        let bytes = read_limited(self.post_form(&format!("/v1/voice-changer/{bare}"), &[("model_id", "eleven_multilingual_sts_v2"), ("remove_background_noise", "false")], ("audio", "audio.wav", "audio/wav", wav))?, MAX_AUDIO_BYTES * 8)?;
+        let d = crate::decode::decode_bytes(&bytes, Some("mp3")).map_err(|_| AdapterError::ProviderError("the provider did not return audio Soundstage could read".into()))?;
+        let n = d.channels[0].len();
+        Ok(((0..n).map(|i| d.channels.iter().map(|c| c.get(i).copied().unwrap_or(0.0)).sum::<f32>() / d.channels.len() as f32).collect(), d.rate))
+    }
     fn can_isolate(&self) -> bool {
         self.has_key()
     }
@@ -916,6 +933,41 @@ mod tests {
         assert!(a.isolate_audio(&wav).is_err(), "a non-audio answer is an error, not silence");
         let none = ElevenLabsAdapter::for_test(Arc::new(|_| None), f.base.clone(), MAX_AUDIO_BYTES);
         assert!(!none.can_transcribe());
+    }
+
+    #[test]
+    fn the_voice_changer_needs_proof_a_known_voice_and_real_audio() {
+        let wavfile = |secs: f32| {
+            let n = (secs * 22_050.0) as usize;
+            let mut cur = std::io::Cursor::new(Vec::new());
+            {
+                let spec = hound::WavSpec { channels: 1, sample_rate: 22_050, bits_per_sample: 16, sample_format: hound::SampleFormat::Int };
+                let mut w = hound::WavWriter::new(&mut cur, spec).unwrap();
+                for i in 0..n { w.write_sample((6000.0 * (i as f32 * 0.05).sin()) as i16).unwrap(); }
+                w.finalize().unwrap();
+            }
+            cur.into_inner()
+        };
+        let out = wavfile(0.5);
+        let f = start(Box::new(move |r, _| {
+            if r.path.starts_with("/v1/voice-changer/VoiceAAA111") { (200, out.clone()) }
+            else if r.path.starts_with("/v2/voices") { (200, voices_json()) } else { (404, b"{}".to_vec()) }
+        }));
+        let a = adapter(&f);
+        let rec = crate::clone::build_performance_record(&crate::clone::Attestation { subject: "Ama Okafor".into(), subject_is_self: true, adult: true, alive: true, not_public_figure: true, agrees: true, purpose: "Voice acting".into(), commercial: false, expires: None }, "consent-v").unwrap();
+        let proof = crate::consent::proof(&rec, &crate::consent::Use::PerformanceReference, false).unwrap();
+        assert!(a.can_convert_voice());
+        let input = wavfile(1.0);
+        let (samples, rate) = a.convert_voice(&input, "elevenlabs:VoiceAAA111", &proof).unwrap();
+        assert!(samples.len() > 1000 && rate > 0);
+        let hit = f.hits.lock().unwrap().iter().find(|h| h.path.starts_with("/v1/voice-changer/")).cloned().unwrap();
+        assert!(hit.body.contains("name=\"audio\"") && hit.body.contains("eleven_multilingual_sts_v2"));
+        for private in ["Okafor", "consent", "Voice acting"] {
+            assert!(!hit.body.contains(private), "{private} must never be uploaded");
+        }
+        assert!(matches!(a.convert_voice(&input, "elevenlabs:NotListed", &proof), Err(AdapterError::UnknownVoice(_))));
+        assert!(matches!(a.convert_voice(&input, "elevenlabs:../x", &proof), Err(AdapterError::UnknownVoice(_))));
+        assert!(a.convert_voice(b"nope", "elevenlabs:VoiceAAA111", &proof).is_err());
     }
 
     #[test]

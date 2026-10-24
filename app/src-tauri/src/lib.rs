@@ -420,6 +420,7 @@ async fn improve_prompt(base_url: String, model: String, kind: soundstage_core::
 #[derive(Serialize)]
 struct CloneInfo {
     statement: &'static str,
+    performance_statement: &'static str,
     min_seconds: f32,
     good_seconds: f32,
     max_seconds: f32,
@@ -427,7 +428,7 @@ struct CloneInfo {
 
 #[tauri::command]
 fn clone_info() -> CloneInfo {
-    CloneInfo { statement: soundstage_core::clone::STATEMENT, min_seconds: soundstage_core::clone::MIN_REFERENCE_S, good_seconds: soundstage_core::clone::GOOD_REFERENCE_S, max_seconds: soundstage_core::clone::MAX_REFERENCE_S }
+    CloneInfo { statement: soundstage_core::clone::STATEMENT, performance_statement: soundstage_core::clone::PERFORMANCE_STATEMENT, min_seconds: soundstage_core::clone::MIN_REFERENCE_S, good_seconds: soundstage_core::clone::GOOD_REFERENCE_S, max_seconds: soundstage_core::clone::MAX_REFERENCE_S }
 }
 
 fn load_reference(path: &str) -> Result<soundstage_core::audio::Stereo, String> {
@@ -600,6 +601,7 @@ struct ToolView {
     ready: bool,
     transcribe: bool,
     isolate: bool,
+    convert: bool,
     sends_data: bool,
 }
 
@@ -610,8 +612,8 @@ async fn list_audio_tools(state: State<'_, AppState>) -> Result<Vec<ToolView>, S
         reg.get()
             .adapters
             .iter()
-            .filter(|a| a.can_transcribe() || a.can_isolate())
-            .map(|a| ToolView { id: a.id().into(), label: a.label().into(), ready: a.ready(), transcribe: a.can_transcribe(), isolate: a.can_isolate(), sends_data: a.sends_data() })
+            .filter(|a| a.can_transcribe() || a.can_isolate() || a.can_convert_voice())
+            .map(|a| ToolView { id: a.id().into(), label: a.label().into(), ready: a.ready(), transcribe: a.can_transcribe(), isolate: a.can_isolate(), convert: a.can_convert_voice(), sends_data: a.sends_data() })
             .collect()
     })
     .await
@@ -728,6 +730,117 @@ async fn pronunciation_save(state: State<'_, AppState>, rules: Vec<soundstage_co
     .await??;
     cell.reset();
     Ok(())
+}
+
+/// Re-speak a recording in another voice, keeping its words, timing and feeling. The person speaking in the recording must
+/// have agreed (a consent record for that use is saved first), and a cloned target voice must have clean consent too.
+#[tauri::command]
+async fn change_voice(state: State<'_, AppState>, voice_id: String, path: String, attestation: soundstage_core::clone::Attestation, keep: bool) -> Result<CleanOut, String> {
+    let (store, reg) = shared(&state);
+    let dir = store.root.join(".preview");
+    blocking(move || {
+        let registry = reg.get();
+        let voice = registry.voice(&voice_id).ok_or("That voice is not available.")?.clone();
+        let adapter = registry.adapter(&voice.provider).filter(|a| a.can_convert_voice()).ok_or("That voice cannot be used for changing voices.")?;
+        if let Some(problems) = registry.consent_problems(&voice_id, attestation.commercial) {
+            return Err(format!("{} cannot be used: {}", voice.name, problems.join(" ")));
+        }
+        let rec = soundstage_core::clone::build_performance_record(&attestation, &soundstage_core::clone::ConsentStore::new_record_id()).map_err(|p| p.join(" "))?;
+        let proof = soundstage_core::consent::proof(&rec, &soundstage_core::consent::Use::PerformanceReference, rec.commercial_use_permitted).map_err(|p| p.join(" "))?;
+        let audio = load_reference(&path)?;
+        let wav = soundstage_core::transcribe::prepare_isolation(&audio)?;
+        // The record is kept before anything is sent, as for a clone.
+        reg.consent_store().save_record(&rec)?;
+        let (mono, rate) = adapter.convert_voice(&wav, &voice_id, &proof).map_err(|e| e.to_string())?;
+        let up = soundstage_core::audio::resample(&mono, rate, soundstage_core::audio::SR);
+        let stereo = soundstage_core::audio::Stereo { l: up.clone(), r: up };
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let out = dir.join(format!("{}.wav", new_id("convert")));
+        soundstage_core::output::write_wav(&out, &stereo, soundstage_core::audio::SR, 24)?;
+        let duration_ms = stereo.len() as u64 * 1000 / soundstage_core::audio::SR as u64;
+        if keep {
+            let name = std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let item = soundstage_core::history::HistoryItem { id: String::new(), created: String::new(), kind: "convert".into(), voice_id: voice_id.clone(), voice_name: voice.name.clone(), provider_label: adapter.label().to_string(), text: format!("{name} (performer consent {})", rec.id), style: "neutral".into(), pace: 1.0, duration_ms };
+            if let Ok((_, stored)) = reg.history_store().add(item, &out) {
+                return Ok(CleanOut { path: stored.to_string_lossy().to_string(), duration_ms });
+            }
+        }
+        Ok(CleanOut { path: out.to_string_lossy().to_string(), duration_ms })
+    })
+    .await?
+}
+
+/// Translate subtitle lines with the chat server set in Settings. The result is shown for the person to edit.
+#[tauri::command]
+async fn translate_cues(base_url: String, model: String, target: String, lines: Vec<String>) -> Result<Vec<String>, String> {
+    blocking(move || {
+        let key = key_provider()("assistant");
+        soundstage_core::assistant::translate_lines(&base_url, &model, key.as_deref(), &target, &lines)
+    })
+    .await?
+}
+
+/// Subtitle text from cues (original or translated, possibly edited).
+#[tauri::command]
+fn cues_subtitles(cues: Vec<soundstage_core::output::SubCue>, kind: String) -> Result<String, String> {
+    soundstage_core::transcribe::subtitles(&cues, &kind)
+}
+
+#[derive(Serialize)]
+struct AudioInfo {
+    duration_ms: u64,
+    peaks: Vec<f32>,
+}
+
+/// Length and a rough waveform for a file chosen in the Audio editor.
+#[tauri::command]
+async fn audio_info(path: String) -> Result<AudioInfo, String> {
+    blocking(move || {
+        let a = load_reference(&path)?;
+        let bins = 160usize;
+        let step = (a.len() / bins).max(1);
+        let peaks = (0..bins).map(|b| (b * step..((b + 1) * step).min(a.len())).fold(0f32, |m, i| m.max(a.l[i].abs().max(a.r[i].abs())))).collect();
+        Ok(AudioInfo { duration_ms: a.len() as u64 * 1000 / soundstage_core::audio::SR as u64, peaks })
+    })
+    .await?
+}
+
+#[derive(Deserialize)]
+struct EditClipIn {
+    path: String,
+    #[serde(flatten)]
+    params: soundstage_core::editor::ClipParams,
+}
+
+/// Trim, place and layer clips into one new file. Sources may be any audio file the user chooses or anything in the
+/// history; the originals are never changed.
+#[tauri::command]
+async fn edit_audio(state: State<'_, AppState>, clips: Vec<EditClipIn>, normalize: bool, keep: bool) -> Result<CleanOut, String> {
+    let (store, reg) = shared(&state);
+    let dir = store.root.join(".preview");
+    blocking(move || {
+        if clips.is_empty() || clips.len() > soundstage_core::editor::MAX_CLIPS {
+            return Err(format!("Use between 1 and {} clips.", soundstage_core::editor::MAX_CLIPS));
+        }
+        let mut loaded = Vec::with_capacity(clips.len());
+        for c in &clips {
+            loaded.push((load_reference(&c.path)?, c.params.clone()));
+        }
+        let r = soundstage_core::editor::render(&loaded, normalize)?;
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let out = dir.join(format!("{}.wav", new_id("edit")));
+        soundstage_core::output::write_wav(&out, &r.audio, soundstage_core::audio::SR, 24)?;
+        let duration_ms = r.audio.len() as u64 * 1000 / soundstage_core::audio::SR as u64;
+        if keep {
+            let names: Vec<String> = clips.iter().take(4).map(|c| std::path::Path::new(&c.path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()).collect();
+            let item = soundstage_core::history::HistoryItem { id: String::new(), created: String::new(), kind: "edit".into(), voice_id: String::new(), voice_name: format!("Edit of {} clip{}", clips.len(), if clips.len() == 1 { "" } else { "s" }), provider_label: "On this computer".into(), text: names.join(", "), style: "neutral".into(), pace: 1.0, duration_ms };
+            if let Ok((_, stored)) = reg.history_store().add(item, &out) {
+                return Ok(CleanOut { path: stored.to_string_lossy().to_string(), duration_ms });
+            }
+        }
+        Ok(CleanOut { path: out.to_string_lossy().to_string(), duration_ms })
+    })
+    .await?
 }
 
 #[tauri::command]
@@ -1150,6 +1263,7 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .text("step-6", "Step 6: Export\tCtrl+6")
         .separator()
         .text("speak", "S&peak")
+        .text("editor", "Audio &editor")
         .text("tools", "&Audio tools")
         .text("pronunciation", "&Pronunciation")
         .text("voices", "&Voice library")
@@ -1242,6 +1356,11 @@ pub fn run() {
             list_audio_tools,
             transcribe_audio,
             clean_audio,
+            change_voice,
+            audio_info,
+            edit_audio,
+            translate_cues,
+            cues_subtitles,
             consent_list,
             consent_revoke,
             quit_app,

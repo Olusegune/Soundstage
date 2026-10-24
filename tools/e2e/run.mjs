@@ -325,6 +325,30 @@ try {
     await audit("pronunciation");
     app.check("saving audio cannot copy files Soundstage did not make", !/allowed/.test(String(outside)), String(outside).slice(0, 120));
     await app.ev("window.__TAURI_INTERNALS__.invoke('plugin:event|emit',{event:'menu',payload:'tools'})"); await sleep(700);
+    // Voice changer and dubbing guards, subtitle cues, the editor, and the starter templates.
+    const noConsent = await app.ev("window.__TAURI_INTERNALS__.invoke('change_voice',{voiceId:'elevenlabs:x',path:'C:/nope.wav',attestation:{subject:'Ama',subject_is_self:true,adult:true,alive:true,not_public_figure:true,agrees:false,purpose:'x',commercial:false,expires:null},keep:false}).then(()=>'allowed',e=>String(e))");
+    app.check("changing a voice needs the speaker's agreement before anything is read or sent", !/allowed/.test(String(noConsent)) && /agree|available|cannot/i.test(String(noConsent)), String(noConsent).slice(0, 160));
+    const subs = await app.ev("window.__TAURI_INTERNALS__.invoke('cues_subtitles',{cues:[{start_ms:0,end_ms:900,text:'Bonjour'},{start_ms:1000,end_ms:1800,text:'Au revoir'}],kind:'srt'})");
+    app.check("translated subtitles are written from edited cues", /00:00:00,000 --> 00:00:00,900\nBonjour/.test(String(subs)), String(subs).slice(0, 80));
+    const outOfOrder = await app.ev("window.__TAURI_INTERNALS__.invoke('cues_subtitles',{cues:[{start_ms:2000,end_ms:2500,text:'b'},{start_ms:0,end_ms:500,text:'a'}],kind:'srt'}).then(()=>'allowed',e=>String(e))");
+    app.check("subtitle cues out of order are refused", !/allowed/.test(String(outOfOrder)));
+    await app.ev("window.__TAURI_INTERNALS__.invoke('list_voices').then(v=>v.find(x=>!x.sends_data&&x.language!=='zxx')).then(v=>window.__TAURI_INTERNALS__.invoke('speak_text',{voiceId:v.id,text:'Another short line for the editor test.',emotion:null,pace:null,keep:true}))");
+    const editedMs = await app.ev("window.__TAURI_INTERNALS__.invoke('history_list').then(l=>l[0]?l[0].path:null).then(p=>p?window.__TAURI_INTERNALS__.invoke('edit_audio',{clips:[{path:p,start_s:0,end_s:null,offset_s:0,gain_db:0,fade_in_ms:50,fade_out_ms:50},{path:p,start_s:0,end_s:null,offset_s:5,gain_db:-3,fade_in_ms:0,fade_out_ms:0}],normalize:false,keep:false}).then(r=>r.duration_ms,e=>String(e)):'no history')");
+    app.check("the Audio editor joins and layers clips into one file", typeof editedMs === "number" && editedMs > 5000, String(editedMs));
+    const badEdit = await app.ev("window.__TAURI_INTERNALS__.invoke('edit_audio',{clips:[],normalize:false,keep:false}).then(()=>'allowed',e=>String(e))");
+    app.check("an edit with no clips is refused", !/allowed/.test(String(badEdit)));
+    const { TEMPLATES } = await import(`file:///${root}app/src/templates.ts`);
+    let tplBad = [];
+    for (const t of TEMPLATES) {
+      const made = await app.ev(`window.__TAURI_INTERNALS__.invoke('create_project',{name:${JSON.stringify("e2e-scene tpl " + t.id)},sample:false}).then(p=>{p.script=${JSON.stringify(t.script)};return window.__TAURI_INTERNALS__.invoke('save_project',{project:p}).then(()=>window.__TAURI_INTERNALS__.invoke('analyze_project',{project:p})).then(a=>window.__TAURI_INTERNALS__.invoke('delete_project',{id:p.id}).then(()=>({lines:a.lines.length,bad:a.lines.flatMap(l=>l.issues.filter(i=>i.kind==='unknown_tag'||i.kind==='empty').map(i=>i.message))})))})`);
+      if (!made || made.lines < 2 || made.bad.length) tplBad.push(`${t.id}: ${JSON.stringify(made)}`);
+    }
+    app.check("every starter template is a valid script with no unknown directions", tplBad.length === 0, tplBad.join("; "));
+    await app.ev("window.__TAURI_INTERNALS__.invoke('plugin:event|emit',{event:'menu',payload:'editor'})"); await sleep(700);
+    app.check("choosing Audio editor from the menu opens it", /Trim, join and layer/.test(await app.ev("document.body.textContent")));
+    await app.shot(`${shotsDir}/dark-1280x720-audio-editor.png`);
+    await audit("audio editor");
+    await app.ev("window.__TAURI_INTERNALS__.invoke('plugin:event|emit',{event:'menu',payload:'tools'})"); await sleep(700);
     app.check("choosing Audio tools from the menu opens it", /Speech to text/.test(await app.ev("document.body.textContent")));
     await app.shot(`${shotsDir}/dark-1280x720-audio-tools.png`);
     await audit("audio tools");

@@ -1,11 +1,11 @@
 {
-  "when": "2026-10-24T01:04:24.343Z",
-  "passed": 159,
-  "total": 159,
+  "when": "2026-10-24T01:42:22.346Z",
+  "passed": 167,
+  "total": 167,
   "failed": [],
   "timings": {
-    "paletteOpenMs": 79,
-    "stepSwitchMs": 435
+    "paletteOpenMs": 78,
+    "stepSwitchMs": 429
   },
   "accessibility": [
     {
@@ -38,6 +38,10 @@
     },
     {
       "screen": "pronunciation",
+      "violations": []
+    },
+    {
+      "screen": "audio editor",
       "violations": []
     },
     {

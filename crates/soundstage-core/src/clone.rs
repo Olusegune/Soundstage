@@ -23,6 +23,9 @@ const UPLOAD_RATE: u32 = 24_000;
 /// The statement the voice's owner must agree to. It is stored word for word in the record.
 pub const STATEMENT: &str = "I am the owner of this voice, or I have the owner's clear permission. The owner is an adult, is alive, and is not a public figure. They agree that Soundstage may create a synthetic copy of this voice from the recording and use it for the purposes below, and they know they can withdraw this consent at any time.";
 
+/// The statement for using someone's performance to drive another voice (the voice changer).
+pub const PERFORMANCE_STATEMENT: &str = "I am the person speaking in this recording, or I have the speaker's clear permission. The speaker is an adult, is alive, and is not a public figure. They agree that Soundstage may use their performance (the words, timing and feeling) to drive a different synthetic voice for the purposes below, and they know they can withdraw this consent at any time.";
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct Attestation {
     /// The name of the person whose voice it is.
@@ -94,6 +97,13 @@ pub fn build_record(a: &Attestation, id: &str) -> Result<ConsentRecord, Vec<Stri
         signed_at: Some(iso_now()),
         status: ConsentStatus::Active,
     })
+}
+
+/// A consent record for using a recording as a performance reference. It permits that use and nothing else.
+pub fn build_performance_record(a: &Attestation, id: &str) -> Result<ConsentRecord, Vec<String>> {
+    let mut rec = build_record(a, id)?;
+    rec.permitted_uses = vec!["performance_reference".into()];
+    Ok(rec)
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -307,6 +317,16 @@ mod tests {
         assert!(crate::consent::require(Some(&rec), &crate::consent::Use::Dialogue, true).is_ok());
         assert_eq!(rec.evidence.as_ref().unwrap().method, "in-app attestation");
         assert!(rec.revocable && rec.permitted_uses.contains(&"narration".to_string()));
+    }
+
+    #[test]
+    fn a_performance_record_permits_only_that_use() {
+        let rec = build_performance_record(&form(), "consent-p").unwrap();
+        assert!(crate::consent::proof(&rec, &crate::consent::Use::PerformanceReference, false).is_ok());
+        assert!(crate::consent::proof(&rec, &crate::consent::Use::Dialogue, false).is_err(), "it cannot be reused to clone the voice");
+        let mut f = form();
+        f.agrees = false;
+        assert!(build_performance_record(&f, "x").is_err());
     }
 
     #[test]

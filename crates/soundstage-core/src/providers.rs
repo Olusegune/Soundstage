@@ -143,6 +143,15 @@ pub trait Adapter: Send + Sync {
     fn transcribe(&self, _wav: &[u8], _language: Option<&str>) -> Result<crate::transcribe::Transcript, AdapterError> {
         Err(AdapterError::ProviderError("this engine cannot transcribe speech".into()))
     }
+    /// True when this provider can re-speak a recording in one of its voices (a voice changer).
+    fn can_convert_voice(&self) -> bool {
+        false
+    }
+    /// Re-speak a recording (mono 16-bit WAV) in `voice_id`, keeping its words, timing and feeling. The core calls this
+    /// only after the performer's consent has been checked.
+    fn convert_voice(&self, _wav: &[u8], _voice_id: &str, _proof: &crate::consent::ConsentProof) -> Result<(Vec<f32>, u32), AdapterError> {
+        Err(AdapterError::ProviderError("this engine cannot change voices".into()))
+    }
     /// True when this provider can remove noise and music from a recording.
     fn can_isolate(&self) -> bool {
         false
