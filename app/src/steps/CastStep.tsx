@@ -31,8 +31,10 @@ export function CastStep({ ctx }: { ctx: Ctx }) {
     return <div className="page"><Empty title="No speakers yet"><p className="muted">Add dialogue in the Script step first.</p><button onClick={() => ctx.goto(0)}>Go to Script</button></Empty></div>;
   }
 
-  const setVoice = (speaker: string, voiceId: string) =>
-    edit((p) => ({ ...p, characters: { ...p.characters, [speaker]: { voice_id: voiceId || null, bible: p.characters[speaker]?.bible ?? emptyBible(), direction: p.characters[speaker]?.direction ?? {} } } }));
+  const setVoice = (speaker: string, voiceId: string) => {
+    if (voiceId) ctx.rememberVoices({ [speaker]: voiceId });
+        edit((p) => ({ ...p, characters: { ...p.characters, [speaker]: { voice_id: voiceId || null, bible: p.characters[speaker]?.bible ?? emptyBible(), direction: p.characters[speaker]?.direction ?? {} } } }));
+  };
 
   const choose = (speaker: string, voiceId: string) => {
     const cur = project.characters[speaker]?.voice_id;
@@ -61,9 +63,10 @@ export function CastStep({ ctx }: { ctx: Ctx }) {
 
   const uncast = analysis.parsed.speakers.filter((s) => !project.characters[s]?.voice_id);
   const castForMe = () => {
-    const picks = suggestCast(analysis.parsed.speakers, Object.fromEntries(analysis.parsed.speakers.map((s) => [s, project.characters[s]?.voice_id ?? null])), voices);
+    const picks = suggestCast(analysis.parsed.speakers, Object.fromEntries(analysis.parsed.speakers.map((s) => [s, project.characters[s]?.voice_id ?? null])), voices, ctx.voiceMemory);
     if (!picks) { ctx.toast("There are no voices to choose from yet. Add one in Settings or Voice engines.", true); return; }
     edit((p) => ({ ...p, characters: { ...p.characters, ...Object.fromEntries(Object.entries(picks).map(([s, id]) => [s, { voice_id: id, bible: p.characters[s]?.bible ?? emptyBible(), direction: p.characters[s]?.direction ?? {} }])) } }));
+    ctx.rememberVoices(picks);
     ctx.toast(`Chose a voice for ${Object.keys(picks).length} speaker${Object.keys(picks).length === 1 ? "" : "s"}. Listen to each and change any you like.`);
   };
 

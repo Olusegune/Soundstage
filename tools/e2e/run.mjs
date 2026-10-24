@@ -43,6 +43,7 @@ try {
   app.check("splash artwork is shown while loading", await app.ev("!!document.querySelector('.splash')") || true, "(it may already have faded)");
   app.check("splash leaves on its own", await app.waitFor("!document.querySelector('.splash')", 10000));
   app.check("first launch shows the welcome screen", await app.waitFor("document.querySelector('.welcome-card')", 5000));
+  app.check("the welcome screen asks what you are making", (await app.ev("document.body.textContent")).includes("What are you making?") && (await app.ev("[...document.querySelectorAll('.welcome button')].some(b=>b.textContent.trim()==='Podcast episode')")) === true);
   await app.shot(`${shotsDir}/dark-welcome.png`);
   await app.clickText("I will explore on my own");
   await sleep(500);

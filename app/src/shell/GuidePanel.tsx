@@ -7,7 +7,7 @@ import { CostBadge, Kbd } from "../ui";
 export function GuidePanel(props: {
   steps: GoldenStep[]; next: NextAction | null; current: number; viewing: number; busy: boolean; nextKey: string;
   onGoto: (i: number) => void; onNext: () => void; onHelp: (id: string) => void;
-  width: number; onResize: (w: number) => void; hideNext?: boolean; onAuto?: () => void;
+  width: number; onResize: (w: number) => void; hideNext?: boolean; onAuto?: () => void; auto?: { stage: "cast" | "render" | "mix" | "done"; done: number; total: number } | null;
 }) {
   const s = props.steps[props.viewing];
   const done = props.steps.filter((x) => x.status === "done").length;
@@ -65,7 +65,27 @@ export function GuidePanel(props: {
         <div className="sect"><h3>Cost</h3><p>{s.costNote}</p></div>
       </div>
 
-      {props.next && !props.hideNext && (
+      {props.auto && (
+        <div className="guide-next" role="status" aria-live="polite">
+          <div className="guide-eyebrow">Doing it all</div>
+          <ol className="tasklist" style={{ margin: "6px 0" }}>
+            {([["cast", "Choosing voices"], ["render", props.auto.total > 0 && props.auto.stage === "render" ? `Rendering lines (${props.auto.done} of ${props.auto.total})` : "Rendering lines"], ["mix", "Building the preview mix"]] as const).map(([k, label], i) => {
+              const order = ["cast", "render", "mix", "done"];
+              const at = order.indexOf(props.auto!.stage);
+              const state = at > i ? "done" : at === i ? "now" : "later";
+              return (
+                <li key={k} className={state === "done" ? "done" : ""}>
+                  <span className="tick" aria-hidden="true">{state === "done" ? <I.Check size={11} /> : state === "now" ? <span className="spin" /> : null}</span>
+                  <span><span className="sr-only">{state === "done" ? "Done: " : state === "now" ? "Now: " : "Next: "}</span>{label}</span>
+                </li>
+              );
+            })}
+          </ol>
+          {props.auto.stage === "done" && <p className="small" style={{ margin: 0 }}>Finished. Listen to the mix, then export.</p>}
+        </div>
+      )}
+
+      {props.next && !props.hideNext && !props.auto && (
         <div className="guide-next">
           <div className="guide-eyebrow">Next</div>
           <div className="reason">{props.next.reason}</div>

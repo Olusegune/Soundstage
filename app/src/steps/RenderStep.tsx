@@ -1,3 +1,4 @@
+import { removeTagFromRow } from "../logic";
 import { Fragment, useState } from "react";
 import { joinPath } from "../api";
 import type { Ctx } from "../ctx";
@@ -89,7 +90,17 @@ export function RenderStep({ ctx }: { ctx: Ctx }) {
                 <div style={{ minWidth: 0 }}>
                   <div className="words" title={l.line.text}>{l.line.text}</div>
                   {err && <div className="callout bad small" style={{ margin: "6px 0 0" }} role="alert"><strong>Could not render</strong>{err}</div>}
-                  {l.issues.length > 0 && l.status !== "skipped" && <div className="small" style={{ color: "var(--warn)", marginTop: 4 }}>{l.issues[0]?.message}</div>}
+                  {l.issues.length > 0 && l.status !== "skipped" && (
+                    <div className="small" style={{ color: "var(--warn)", marginTop: 4 }}>
+                      {l.issues[0]?.message}
+                      <span className="row tight" style={{ marginTop: 4 }}>
+                        {(l.issues[0]?.kind === "unsupported_tag" || l.issues[0]?.kind === "unknown_tag") && l.issues[0]?.tag && (
+                          <button className="small" onClick={() => ctx.edit((p) => ({ ...p, script: removeTagFromRow(p.script, l.line.row, l.issues[0]!.tag!) }))}>Remove [{l.issues[0].tag}] from this line</button>
+                        )}
+                        {["no_voice", "voice_missing", "unsupported_tag"].includes(l.issues[0]?.kind ?? "") && <button className="small" onClick={() => ctx.goto(1)}>Pick another voice</button>}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div>
                   {take ? <><Waveform projectId={project.id} file={take.file} bins={72} height={36} dim={l.status !== "rendered"} label={`Waveform of ${l.line.speaker}, ${key}`} /><div className="small faint num">{fmtMs(take.duration_ms)}</div></>

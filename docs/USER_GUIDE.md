@@ -98,6 +98,8 @@ Only these directions exist. Anything else in brackets is flagged so a typo neve
 
 _Choosing a voice for each character, and hearing samples first._
 
+> **Tip.** Soundstage remembers the voice you gave each speaker name (AMA, NARRATOR and so on). Cast for me brings those voices back in your next project.
+
 In a hurry? Press Cast for me. Soundstage gives each speaker without a voice a different free voice from this computer, alternating between male and female voices where it can tell. Listen to each one and change any you like.
 
 Every speaker needs a voice. Pick one from the list and press Make a sample to hear it say that character's first line.
@@ -161,6 +163,8 @@ Build a preview mix to hear the result and see its loudness. If a target cannot 
 ## Step 6: Export
 
 _Licence checks, the files you get, and the manifest._
+
+> **Tip.** Soundstage remembers the format, quality, stems and subtitle choices you used last time, so the next export starts where this one ended.
 
 Before anything is written, Soundstage checks every voice, engine, music track and effect against your project's target.
 

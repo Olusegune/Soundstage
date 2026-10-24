@@ -19,6 +19,8 @@ import { AudioTools } from "./screens/AudioTools";
 import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
 import { GuidePanel } from "./shell/GuidePanel";
 import { suggestCast } from "./castSuggest";
+import { addSent, sentBy } from "./session";
+import { TEMPLATES } from "./templates";
 import { emptyBible } from "./logic";
 import { Splash, Welcome } from "./shell/Onboarding";
 import { Rail, type View } from "./shell/Rail";
@@ -58,6 +60,8 @@ function PreviewKey({ enabled, combo }: { enabled: boolean; combo: string }) {
 
 export default function App() {
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs);
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
   const setPrefs = useCallback((patch: Partial<Prefs>) => setPrefsState((p) => { const n = { ...p, ...patch }; savePrefs(n); return n; }), []);
 
   const [view, setView] = useState<View>("home");
@@ -66,6 +70,7 @@ export default function App() {
   const [project, setProject] = useState<Project | null>(null);
   const [dir, setDir] = useState("");
   const [step, setStep] = useState(0);
+  const [auto, setAuto] = useState<{ stage: "cast" | "render" | "mix" | "done" } | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [voicesReady, setVoicesReady] = useState(false);
@@ -73,7 +78,7 @@ export default function App() {
   const [toast, setToast] = useState<ToastMsg | null>(null);
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [saved, setSaved] = useState<"saved" | "saving" | "error">("saved");
-  const [sendPrompt, setSendPrompt] = useState<{ provider: string; lines: number; chars: number; resolve: (ok: boolean) => void } | null>(null);
+  const [sendPrompt, setSendPrompt] = useState<{ provider: string; lines: number; chars: number; sofar: number; resolve: (ok: boolean) => void } | null>(null);
   const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [mixPreview, setMixPreview] = useState<MixPreview | null>(null);
@@ -278,7 +283,7 @@ export default function App() {
     if (cloud.length === 0) return Promise.resolve(true);
     const chars = cloud.reduce((n, x) => n + x.l.line.text.replace(/\[[^\]]*\]/g, "").length, 0);
     const provider = [...new Set(cloud.map((x) => x.v?.provider_label ?? "a cloud provider"))].join(" and ");
-    return new Promise((resolve) => setSendPrompt({ provider, lines: cloud.length, chars, resolve }));
+    return new Promise((resolve) => setSendPrompt({ provider, lines: cloud.length, chars, sofar: provider.split(" and ").reduce((n, p) => n + sentBy(p), 0), resolve }));
   }, []);
 
   const render = useCallback(async (keys: string[], opts?: { confirmed?: boolean }) => {
@@ -334,26 +339,36 @@ export default function App() {
 
   /** Cast free voices, render every line and build a preview mix, then stop so the person can listen. */
   const finishForMe = useCallback(async () => {
+    setAuto({ stage: "cast" });
+    try { await finishRef.current(); } finally { setTimeout(() => setAuto(null), 6000); }
+  }, []);
+
+  const runAuto = useCallback(async () => {
     const cur = projectRef.current;
     const a = analysisRef.current;
     if (!cur || !a || a.parsed.speakers.length === 0) { say("Write some dialogue first.", true); return; }
     const speakers = a.parsed.speakers;
     if (speakers.some((s) => !cur.characters[s]?.voice_id)) {
-      const picks = suggestCast(speakers, Object.fromEntries(speakers.map((s) => [s, cur.characters[s]?.voice_id ?? null])), voicesRef.current);
+      const picks = suggestCast(speakers, Object.fromEntries(speakers.map((s) => [s, cur.characters[s]?.voice_id ?? null])), voicesRef.current, prefsRef.current.voiceMemory);
       if (!picks) { say("There are no voices to cast yet. Add one in Settings or Voice engines.", true); return; }
       edit((p) => ({ ...p, characters: { ...p.characters, ...Object.fromEntries(Object.entries(picks).map(([s, id]) => [s, { voice_id: id, bible: p.characters[s]?.bible ?? emptyBible(), direction: p.characters[s]?.direction ?? {} }])) } }));
       if (!(await until(() => speakers.every((s) => projectRef.current?.characters[s]?.voice_id) && (analysisRef.current?.lines.every((l) => l.voice_id !== null) ?? false)))) { say("Could not choose voices. Try the Cast step.", true); return; }
     }
+    setAuto({ stage: "render" });
     setStep(3);
     const keys = (analysisRef.current?.lines ?? []).filter((l) => (l.status === "drafted" || l.status === "stale") && l.issues.length === 0).map((l) => l.line.key);
     await renderBatch(keys);
     await until(() => (analysisRef.current?.lines ?? []).every((l) => l.issues.length > 0 || l.status === "rendered" || l.status === "skipped"), 4000);
     const left = (analysisRef.current?.lines ?? []).filter((l) => l.status !== "rendered" && l.status !== "skipped").length;
     if (left > 0) { say(`${left} line${left === 1 ? "" : "s"} still need attention. Check the Render step.`, true); return; }
+    setAuto({ stage: "mix" });
     setStep(4);
     await buildMix();
+    setAuto({ stage: "done" });
     say("All set. Listen to the preview mix, then export when you are happy.");
   }, [say, edit, until, renderBatch, buildMix]);
+  const finishRef = useRef(runAuto);
+  finishRef.current = runAuto;
 
   /* ---------------------------------------------------------------- the one button */
   const doNext = useCallback(() => {
@@ -514,7 +529,7 @@ export default function App() {
   /* ---------------------------------------------------------------- render */
   const ctx: Ctx | null = project && g ? {
     project, analysis, voices, dir, mode: prefs.mode, ffmpegPath: prefs.ffmpegPath, setFfmpegPath: (p) => setPrefs({ ffmpegPath: p }), edit, toast: say, goto: (n) => goStep(n),
-    openLibrary: () => openAux("library"), openPronunciation: () => openAux("pronunciation"), openHelp, render, confirmSend, renderBatch, batch, errors, busy,
+    openLibrary: () => openAux("library"), openPronunciation: () => openAux("pronunciation"), newProject: () => void newProject(), exportMemory: prefs.exportMemory, setExportMemory: (json) => { if (json !== prefs.exportMemory) setPrefs({ exportMemory: json }); }, voiceMemory: prefs.voiceMemory, rememberVoices: (picks) => setPrefs({ voiceMemory: { ...prefs.voiceMemory, ...picks } }), openHelp, render, confirmSend, renderBatch, batch, errors, busy,
     steps: g.steps, next: g.next, mixPreview, mixBuilding, buildMix, markExported: () => setExported(true), focusKey,
   } : null;
 
@@ -572,7 +587,7 @@ export default function App() {
 
         {showGuide && prefs.guideOpen && g && (
           <GuidePanel steps={g.steps} next={g.next} current={currentIdx} viewing={step} busy={!!batch || mixBuilding} nextKey={keyOf("do-next")}
-            onGoto={goStep} onNext={doNext} onAuto={g.next && g.next.kind !== "export" && !batch && !mixBuilding ? () => void finishForMe() : undefined} onHelp={openHelp} width={prefs.guideWidth} onResize={(w) => setPrefs({ guideWidth: Math.max(260, Math.min(520, Math.round(w))) })} />
+            onGoto={goStep} onNext={doNext} auto={auto ? { ...auto, done: batch?.done ?? 0, total: batch?.total ?? 0 } : null} onAuto={g.next && g.next.kind !== "export" && !batch && !mixBuilding ? () => void finishForMe() : undefined} onHelp={openHelp} width={prefs.guideWidth} onResize={(w) => setPrefs({ guideWidth: Math.max(260, Math.min(520, Math.round(w))) })} />
         )}
       </div>
 
@@ -581,15 +596,15 @@ export default function App() {
       {shortcutsOpen && <ShortcutsDialog overrides={prefs.shortcuts} onChange={(o) => setPrefs({ shortcuts: o })} onClose={() => setShortcutsOpen(false)} />}
       {tour && <Tour onClose={(done) => { setTour(false); if (done) setPrefs({ toured: true }); }} />}
       {!splash && !prefs.welcomed && view === "home" && (
-        <Welcome onTour={() => { setPrefs({ welcomed: true }); void quickStart(); }} onExplore={() => setPrefs({ welcomed: true })} />
+        <Welcome onGoal={(id) => { const t = TEMPLATES.find((x) => x.id === id); if (!t) return; setPrefs({ welcomed: true, mode: "simple" }); void (async () => { try { const p = await api.createProject(t.name, false); await api.saveProject({ ...p, script: t.script }); await openProject(p.id); setTour(true); } catch (e) { say(messageOf(e), true); } })(); }} onTour={() => { setPrefs({ welcomed: true }); void quickStart(); }} onExplore={() => setPrefs({ welcomed: true })} />
       )}
       {splash && <Splash ready={voicesReady} onDone={() => setSplash(false)} />}
       <Toast toast={toast} onClose={() => setToast(null)} />
       {sendPrompt && (
         <Confirm title={`Send text to ${sendPrompt.provider}?`} confirmLabel="Send and render" danger={false}
-          body={<p>{sendPrompt.lines} line{sendPrompt.lines === 1 ? "" : "s"} ({sendPrompt.chars} characters of dialogue) will be sent over the internet to {sendPrompt.provider} to be spoken. It is billed to your account there, and Soundstage cannot show the cost in advance. Their copy follows their own retention policy.</p>}
+          body={<p>{sendPrompt.lines} line{sendPrompt.lines === 1 ? "" : "s"} ({sendPrompt.chars} characters of dialogue) will be sent over the internet to {sendPrompt.provider} to be spoken. It is billed to your account there, and Soundstage cannot show the cost in advance. Their copy follows their own retention policy.{sendPrompt.sofar > 0 ? ` So far this session you have sent ${sendPrompt.sofar.toLocaleString()} characters to ${sendPrompt.provider}.` : ""}</p>}
           onCancel={() => { sendPrompt.resolve(false); setSendPrompt(null); }}
-          onConfirm={() => { sendPrompt.resolve(true); setSendPrompt(null); }} />
+          onConfirm={() => { const share = sendPrompt.chars / Math.max(1, sendPrompt.provider.split(" and ").length); sendPrompt.provider.split(" and ").forEach((p) => addSent(p, share)); sendPrompt.resolve(true); setSendPrompt(null); }} />
       )}
     </PlayerProvider>
   );

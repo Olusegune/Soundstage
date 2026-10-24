@@ -78,6 +78,7 @@ export const ARTICLES: Article[] = [
     summary: "Choosing a voice for each character, and hearing samples first.",
     tags: ["voice", "cast", "sample", "character", "elevenlabs", "windows"],
     body: [
+      { t: "tip", text: "Soundstage remembers the voice you gave each speaker name (AMA, NARRATOR and so on). Cast for me brings those voices back in your next project." },
       { t: "p", text: "In a hurry? Press Cast for me. Soundstage gives each speaker without a voice a different free voice from this computer, alternating between male and female voices where it can tell. Listen to each one and change any you like." },
       { t: "p", text: "Every speaker needs a voice. Pick one from the list and press Make a sample to hear it say that character's first line." },
       { t: "ul", items: [
@@ -143,6 +144,7 @@ export const ARTICLES: Article[] = [
     summary: "Licence checks, the files you get, and the manifest.",
     tags: ["format", "mp3", "mp4", "flac", "subtitles", "srt", "ffmpeg", "export", "licence", "license", "commercial", "personal", "stems", "manifest", "master"],
     body: [
+      { t: "tip", text: "Soundstage remembers the format, quality, stems and subtitle choices you used last time, so the next export starts where this one ended." },
       { t: "p", text: "Before anything is written, Soundstage checks every voice, engine, music track and effect against your project's target." },
       { t: "ul", items: [
         "Personal projects can use anything. You see a notice for items not cleared for commercial use and must acknowledge it.",

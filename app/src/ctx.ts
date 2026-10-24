@@ -17,6 +17,11 @@ export interface Ctx {
   goto: (step: number) => void;
   openLibrary: () => void;
   openPronunciation: () => void;
+  newProject: () => void;
+  exportMemory: string;
+  setExportMemory: (json: string) => void;
+  voiceMemory: Record<string, string>;
+  rememberVoices: (picks: Record<string, string>) => void;
   openHelp: (articleId?: string) => void;
   /** Render lines into takes. Resolves with the outcome, or null if the call itself failed. */
   render: (keys: string[], opts?: { confirmed?: boolean }) => Promise<RenderOutcome | null>;

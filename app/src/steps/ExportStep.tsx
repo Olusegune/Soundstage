@@ -108,6 +108,23 @@ export function ExportStep({ ctx }: { ctx: Ctx }) {
   const [subs, setSubs] = useState<{ srt: boolean; vtt: boolean }>({ srt: false, vtt: false });
   const [labels, setLabels] = useState(false);
 
+  // Start from what was used last time, and keep it up to date.
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    try {
+      const m = ctx.exportMemory ? JSON.parse(ctx.exportMemory) as { master?: Codec; stems?: Codec | null; rate?: number; subs?: { srt: boolean; vtt: boolean }; labels?: boolean } : null;
+      if (m) {
+        if (m.master && typeof m.master.kind === "string") setMaster(m.master);
+        if (m.stems === null || (m.stems && typeof m.stems.kind === "string")) setStems(m.stems ?? null);
+        if (typeof m.rate === "number" && [44100, 48000, 96000].includes(m.rate)) setRate(m.rate);
+        if (m.subs) setSubs({ srt: !!m.subs.srt, vtt: !!m.subs.vtt });
+        if (typeof m.labels === "boolean") setLabels(m.labels);
+      }
+    } catch { /* a damaged memory is ignored */ }
+    setLoaded(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (loaded) ctx.setExportMemory(JSON.stringify({ master, stems, rate, subs, labels })); }, [loaded, master, stems, rate, subs, labels]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     let live = true;
     void api.checkExport(project).then((r) => live && setReport(r)).catch((e) => ctx.toast(messageOf(e), true));
@@ -307,7 +324,19 @@ export function ExportStep({ ctx }: { ctx: Ctx }) {
           <ul className="small">{result.files.map((f) => <li key={f} className="mono">{f}</li>)}</ul>
           <p className="small">Integrated {result.loudness.integrated_lufs?.toFixed(1) ?? "n/a"} LUFS (target {result.target_lufs}), true peak {result.loudness.true_peak_dbtp.toFixed(1)} dBTP, gain {result.gain_db.toFixed(1)} dB. Measured before encoding.</p>
           {result.warnings.map((w, i) => <div key={i} className="callout warn small"><strong>Flagged</strong>{w}</div>)}
-          <button onClick={() => void revealItemInDir(result.folder)}><I.Folder size={16} /> Show in folder</button>
+          <div className="row">
+            <button className="primary" onClick={() => void revealItemInDir(result.folder)}><I.Folder size={16} /> Show in folder</button>
+            {!subs.srt && !subs.vtt && <button onClick={() => { setSubs({ srt: true, vtt: false }); setResult(null); }}>Add subtitles and export again</button>}
+            <button onClick={() => setResult(null)}>Export again in another format</button>
+            <button onClick={ctx.newProject}><I.Plus size={14} /> Start another project</button>
+          </div>
+          <h3 style={{ marginTop: 14 }}>What next?</h3>
+          <ul className="small" style={{ margin: 0 }}>
+            <li>Play the master through headphones once, start to end, before you share it.</li>
+            <li>Keep the stems (dialogue, effects, music) if an editor will mix it further.</li>
+            <li>The manifest records which voices and licences were used. Keep it with the files.</li>
+            <li>A name sounded wrong? Teach it in Pronunciation, then render the lines again.</li>
+          </ul>
         </div>
       )}
     </div>

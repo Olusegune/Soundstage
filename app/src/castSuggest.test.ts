@@ -28,4 +28,10 @@ describe("suggestCast", () => {
     expect(suggestCast(["A"], {}, [v("tone", { language: "zxx" })])).toBeNull();
     expect(suggestCast(["A"], {}, [])).toBeNull();
   });
+
+  it("brings back the voice a speaker name had before, unless it is gone or already taken", () => {
+    expect(suggestCast(["AMA", "KOLA"], {}, voices, { AMA: "zira", KOLA: "david" })).toEqual({ AMA: "zira", KOLA: "david" });
+    expect(suggestCast(["AMA", "KOLA"], {}, voices, { AMA: "gone", KOLA: "david" })).toEqual({ AMA: "zira", KOLA: "david" });
+    expect(suggestCast(["AMA", "KOLA"], {}, voices, { AMA: "david", KOLA: "david" })).toEqual({ AMA: "david", KOLA: "zira" });
+  });
 });

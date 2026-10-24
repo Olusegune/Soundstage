@@ -1,4 +1,5 @@
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { sentTotals } from "../session";
 import { useEffect, useState } from "react";
 import { api, messageOf } from "../api";
 import * as I from "../icons";
@@ -97,6 +98,13 @@ export function Settings(props: {
           <label className="inline"><input type="checkbox" checked={props.prefs.keepHistory} onChange={(e) => props.onPrefs({ keepHistory: e.target.checked })} /> Keep a history of what Speak and Audio tools make</label>
           <button className="ghost" onClick={() => { props.onPrefs({ welcomed: false, toured: false }); props.toast("The welcome screen will show next time Soundstage starts."); }}>Show the welcome screen again</button>
         </div>
+      </div>
+
+      <div className="card" role="group" aria-label="Sent this session">
+        <h2>Sent to online services this session</h2>
+        {sentTotals().length === 0 ? <p className="small muted" style={{ margin: 0 }}>Nothing yet. Soundstage asks before it sends anything, and this list fills in as you render with online voices. It is not saved.</p> : (
+          <ul className="small" style={{ margin: 0 }}>{sentTotals().map(([p, n]) => <li key={p}>{p}: {n.toLocaleString()} characters of dialogue</li>)}</ul>
+        )}
       </div>
 
       <div className="card" role="group" aria-label="VoiceKiller">

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { TEMPLATES } from "../templates";
 import { useDialog } from "../ui";
 
 /** The supplied splash artwork, shown while voices load. Fades out; respects reduced motion. */
@@ -31,7 +32,7 @@ const PANELS = [
   { t: "Free until you choose", b: "Windows voices cost nothing. Cloud voices always ask first." },
 ];
 
-export function Welcome({ onTour, onExplore }: { onTour: () => void; onExplore: () => void }) {
+export function Welcome({ onTour, onExplore, onGoal }: { onTour: () => void; onExplore: () => void; onGoal: (templateId: string) => void }) {
   const ref = useDialog(onExplore);
   return (
     <div className="welcome">
@@ -41,6 +42,10 @@ export function Welcome({ onTour, onExplore }: { onTour: () => void; onExplore: 
         <p>The whole sound side of your film, with a guide beside you from the first line.</p>
         <div className="panels">
           {PANELS.map((p) => <div key={p.t}><b>{p.t}</b>{p.b}</div>)}
+        </div>
+        <p className="small" style={{ margin: "0 0 8px", color: "#d6d0c4" }}>What are you making?</p>
+        <div className="row" style={{ justifyContent: "center", marginBottom: 14 }} role="group" aria-label="What are you making?">
+          {TEMPLATES.map((t) => <button key={t.id} className="small" onClick={() => onGoal(t.id)} title={t.blurb}>{t.name}</button>)}
         </div>
         <div className="row" style={{ justifyContent: "center" }}>
           <button className="primary" onClick={onTour} style={{ minHeight: 44, padding: "0 28px" }}>Make a first scene with me</button>

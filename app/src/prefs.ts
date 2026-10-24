@@ -23,10 +23,14 @@ export interface Prefs {
   keepHistory: boolean;
   /** Interface size, 0.8 to 1.8. For large monitors and for people who want bigger text. */
   uiScale: number;
+  /** The last export choices, as JSON. */
+  exportMemory: string;
+  /** The voice last used for each speaker name, so the next project starts where this one ended. */
+  voiceMemory: Record<string, string>;
 }
 
 export const DEFAULT_PREFS: Prefs = {
-  theme: "dark", mode: "simple", railCollapsed: false, guideOpen: true, guideWidth: 352, welcomed: false, toured: false, shortcuts: {}, ffmpegPath: "", assistantUrl: "http://127.0.0.1:11434/v1", assistantModel: "", keepHistory: true, uiScale: 1,
+  theme: "dark", mode: "simple", railCollapsed: false, guideOpen: true, guideWidth: 352, welcomed: false, toured: false, shortcuts: {}, ffmpegPath: "", assistantUrl: "http://127.0.0.1:11434/v1", assistantModel: "", keepHistory: true, uiScale: 1, exportMemory: "", voiceMemory: {},
 };
 
 const KEY = "soundstage.prefs.v1";
@@ -50,6 +54,8 @@ export function sanitize(raw: unknown): Prefs {
     toured: r.toured === true,
     shortcuts,
     assistantUrl: typeof r.assistantUrl === "string" && r.assistantUrl.length < 300 && !/[\s\0]/.test(r.assistantUrl) ? r.assistantUrl : DEFAULT_PREFS.assistantUrl,
+    exportMemory: typeof r.exportMemory === "string" && r.exportMemory.length < 800 ? r.exportMemory : "",
+    voiceMemory: Object.fromEntries(Object.entries((r.voiceMemory && typeof r.voiceMemory === "object" ? r.voiceMemory : {}) as Record<string, unknown>).filter(([k, v]) => /^[A-Z][A-Z0-9 _-]{0,23}$/.test(k) && typeof v === "string" && v.length > 0 && v.length <= 200).slice(0, 100) as [string, string][]),
     keepHistory: r.keepHistory !== false,
     uiScale: typeof r.uiScale === "number" && Number.isFinite(r.uiScale) ? Math.min(1.8, Math.max(0.8, Math.round(r.uiScale * 20) / 20)) : 1,
     assistantModel: typeof r.assistantModel === "string" && r.assistantModel.length <= 100 && !/[\s\0]/.test(r.assistantModel) ? r.assistantModel : "",

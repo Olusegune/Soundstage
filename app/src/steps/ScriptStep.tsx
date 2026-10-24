@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { Ctx } from "../ctx";
-import { insertAt, splitTags } from "../logic";
+import { insertAt, removeTagFromRow, splitTags } from "../logic";
 import { Empty } from "../ui";
 import { NON_VERBAL } from "../types";
 
@@ -194,7 +194,7 @@ export function ScriptStep({ ctx }: { ctx: Ctx }) {
           <h2>Checks</h2>
           {a && a.parsed.issues.length === 0 && tagIssues.length === 0 && <p className="chip ok">✓ Nothing to fix</p>}
           {a?.parsed.issues.map((i) => <div key={i.row} className="callout warn small"><strong>Line {i.row}</strong>{i.message}</div>)}
-          {tagIssues.map((t, i) => <div key={i} className="callout bad small"><strong>Line {t.row}: <span className="tag-bad mono">{t.tag}</span></strong>{t.message} Use a tag from the buttons above, or remove it.</div>)}
+          {tagIssues.map((t, i) => <div key={i} className="callout bad small"><strong>Line {t.row}: <span className="tag-bad mono">{t.tag}</span></strong>{t.message} Use a tag from the buttons above, or remove it. <button className="small" style={{ marginTop: 4 }} onClick={() => edit((p) => ({ ...p, script: removeTagFromRow(p.script, t.row, t.tag.replace(/^\[|\]$/g, "")) }))}>Remove it</button></div>)}
         </div>
         {a && a.lines.length > 0 && (
           <div className="card">

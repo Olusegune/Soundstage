@@ -50,3 +50,4 @@ describe("script editing helpers", () => {
     expect(parts.filter((p) => p.tag).map((p) => p.bad)).toEqual([false, false, true]);
   });
 });
+
