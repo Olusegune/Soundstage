@@ -60,7 +60,7 @@ export class App {
   }
 
   clickText(t, scope = "document") {
-    return this.ev(`(()=>{const b=[...${scope}.querySelectorAll('button')].find(b=>b.textContent.trim().startsWith(${JSON.stringify(t)})&&!b.disabled);if(!b)return false;b.click();return true})()`);
+    return this.ev(`(()=>{const all=[...${scope}.querySelectorAll('button')].filter(b=>!b.disabled);const b=all.find(b=>b.textContent.trim()===${JSON.stringify(t)})||all.find(b=>b.textContent.trim().startsWith(${JSON.stringify(t)}));if(!b)return false;b.click();return true})()`);
   }
   clickSel(sel) { return this.ev(`(()=>{const e=document.querySelector(${JSON.stringify(sel)});if(!e||e.disabled)return false;e.click();return true})()`); }
   setSelect(sel, v) {

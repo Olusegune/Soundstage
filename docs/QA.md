@@ -6,11 +6,11 @@ Last full run: 2026-10-23, Windows 11, release build of v0.1.0 plus the v0.2 add
 
 | Layer | Command (from the repo root unless noted) | Result at last run |
 |---|---|---|
-| Core and shell unit and integration tests (Rust) | `cargo test --workspace` | 230 passed, 0 failed |
+| Core and shell unit and integration tests (Rust) | `cargo test --workspace` | 233 passed, 0 failed |
 | Front-end unit tests (Vitest) | `npm run test` in `app/` (`npx vitest run`) | 82 passed, 0 failed |
 | Types | `npx tsc --noEmit` in `app/` | clean |
 | Lint | `cargo clippy --workspace --all-targets` | style warnings only, no errors |
-| Real-window end-to-end, accessibility and screenshots | `node tools/e2e/run.mjs` (needs a release build: `npx tauri build` in `app/`) | 177 of 177 passed |
+| Real-window end-to-end, accessibility and screenshots | `node tools/e2e/run.mjs` (needs a release build: `npx tauri build` in `app/`) | 181 of 181 passed |
 | Secrets | `rafter secrets .` | none found |
 | Dependencies | `npm audit --omit=dev` in `app/` | 0 vulnerabilities |
 
@@ -49,3 +49,6 @@ The end-to-end run drives the built app through the Chrome DevTools protocol in 
 ## Reporting a bug
 
 Say which screen, what you did, what you expected and what happened. A screenshot helps. For an engine problem, say which engine and whether it is local or online. Never paste a key.
+
+## Automatic checks on GitHub
+`.github/workflows/ci.yml` runs on every push: type check, front-end tests, front-end build, Rust tests, lint advice and an audit of shipped packages. It was proven on a fresh clone (no build output, empty stand-ins for the bundled programs). If a run fails with "the job was not started because recent account payments have failed or your spending limit needs to be increased", that is a GitHub billing setting, not the code.

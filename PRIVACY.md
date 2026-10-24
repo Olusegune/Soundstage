@@ -23,6 +23,9 @@ Each service has its own privacy terms and billing. Soundstage cannot see or cha
 ## Consent records
 Consent records (who agreed, for what) are kept in `Documents\Soundstage\.consent`, encrypted for your Windows account. They are never sent to any service.
 
+## Project files
+A `.soundstage` backup holds your script, takes and imported audio, plus pronunciation rules. It does not hold keys or consent records. It is as private as wherever you save it.
+
 ## History
 The Speak and Audio tools screens keep a copy of what they make, with the text you typed, in `Documents\Soundstage\.history` on your computer (up to 200 items). It is never sent anywhere. Turn it off in Settings or clear it on the Speak screen.
 

@@ -339,6 +339,8 @@ A person's voice is theirs. In the Voice library, Clone a voice makes a syntheti
 
 _Autosave, undo, and where your projects live._
 
+> **Tip.** Back up… on a project card saves it as one .soundstage file (script, takes and imported audio). Open a project file… brings one back as a new project, on this computer or another. Keys and consent records are never in the file, so a cloned voice needs its consent set up again on the new computer.
+
 - Soundstage saves automatically a moment after every change. The toolbar shows Saved, Saving or Not saved.
 - Ctrl+Z undoes your last edits (about 30 steps). Undo never throws away rendered takes or imported audio.
 - If a project file is damaged, Soundstage opens the last good copy.

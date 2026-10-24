@@ -306,6 +306,7 @@ export const ARTICLES: Article[] = [
     summary: "Autosave, undo, and where your projects live.",
     tags: ["save", "autosave", "undo", "redo", "backup", "recovery", "folder", "delete"],
     body: [
+      { t: "tip", text: "Back up… on a project card saves it as one .soundstage file (script, takes and imported audio). Open a project file… brings one back as a new project, on this computer or another. Keys and consent records are never in the file, so a cloned voice needs its consent set up again on the new computer." },
       { t: "ul", items: [
         "Soundstage saves automatically a moment after every change. The toolbar shows Saved, Saving or Not saved.",
         "Ctrl+Z undoes your last edits (about 30 steps). Undo never throws away rendered takes or imported audio.",

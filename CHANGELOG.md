@@ -6,6 +6,7 @@
 - **FFmpeg is now included** (LGPL build), so MP3, FLAC, AAC, Opus, Ogg Vorbis and MP4 export work with nothing to install.
 - **Voices:** any OpenAI-compatible speech server (Kokoro, LocalAI, Speaches, OpenRouter and others), Piper, and your own ComfyUI workflows. Local engines need no account.
 - **Music and sound effects:** create them in the Mix step with ElevenLabs, Suno through Kie, fal models (including ACE-Step) or ComfyUI. Everything generated is labelled AI-generated and starts as licence unknown.
+- **Back up and open projects as one file** (`.soundstage`): the script, takes, imported audio and pronunciation rules. Opening a file always makes a new project and never overwrites. Keys and consent records are not included.
 - **Offline speech to text** with Whisper, built in. Download a model once (78 to 148 MB) and transcribe on your own computer with no account, no internet and nothing sent anywhere. Works for subtitles and the dubbing helper too.
 - **Timeline for video editors** (OpenTimelineIO): every line, effect and music clip as its own file, placed exactly, with silences as gaps. Opens in DaVinci Resolve and other OTIO tools.
 - **Sound for your scenes** on the Mix step: a drafted background sound and music for each scene, which you edit and make with one press.
