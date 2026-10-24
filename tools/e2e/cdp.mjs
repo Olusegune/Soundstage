@@ -14,7 +14,7 @@ export class App {
   constructor(exe, port = 9400 + Math.floor(Math.random() * 500)) { this.exe = exe; this.port = port; this.results = []; this.id = 0; this.pending = new Map(); }
 
   async launch() {
-    this.child = spawn(this.exe, [], { env: { ...process.env, WEBVIEW2_USER_DATA_FOLDER: process.env.E2E_PROFILE ?? `${process.env.TEMP}/soundstage-e2e-profile`, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${this.port}` }, stdio: "ignore" });
+    this.child = spawn(this.exe, [], { env: { ...process.env, SOUNDSTAGE_WHISPER_DIR: process.env.SOUNDSTAGE_WHISPER_DIR ?? new URL("../../app/src-tauri/resources/whisper", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"), WEBVIEW2_USER_DATA_FOLDER: process.env.E2E_PROFILE ?? `${process.env.TEMP}/soundstage-e2e-profile`, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${this.port}` }, stdio: "ignore" });
     let page;
     for (let i = 0; i < 60 && !page; i++) {
       try { page = (await (await fetch(`http://127.0.0.1:${this.port}/json`)).json()).find((t) => t.type === "page" && !/^chrome-extension:/.test(t.url)); } catch { /* not up yet */ }

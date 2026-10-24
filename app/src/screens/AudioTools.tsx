@@ -2,6 +2,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useState } from "react";
 import { api, messageOf } from "../api";
 import { loadPrefs } from "../prefs";
+import { OfflineSpeech } from "../shell/OfflineSpeech";
 import { ConsentFields, EMPTY_ATTESTATION, consentComplete } from "../shell/ConsentFields";
 import { Confirm, PlayButton } from "../ui";
 import type { Attestation, CleanOut, CloneInfo, Cue2, ToolInfo, TranscriptOut, Voice } from "../types";
@@ -115,11 +116,13 @@ export function AudioTools(props: { keepHistory: boolean; voices: Voice[]; toast
         <button role="radio" aria-checked={tab === "dub"} onClick={() => switchTab("dub")}>Dub</button>
       </div>
 
+      {(tab === "transcribe" || tab === "dub") && <OfflineSpeech toast={props.toast} onChanged={() => { void api.listAudioTools().then(setTools).catch(() => setTools([])); }} />}
+
       <div className="card">
         <p className="muted small" style={{ marginTop: 0 }}>{BLURB[tab]}</p>
         {capable.length === 0 ? (
           <div className="callout small"><strong>{tab === "clean" ? "No engine can clean audio yet." : tab === "change" ? "No engine can change voices yet." : "No engine can transcribe yet."}</strong>
-            {tab === "transcribe" || tab === "dub" ? "Save an ElevenLabs key in Settings, or add a local server with a Whisper model under Voice engines (set its transcription model)." : "Save an ElevenLabs key in Settings."}
+            {tab === "transcribe" || tab === "dub" ? "Download an offline speech model above (nothing is sent anywhere), save an ElevenLabs key in Settings, or add a local Whisper server under Voice engines." : "Save an ElevenLabs key in Settings."}
             <div className="row" style={{ marginTop: 8 }}><button className="small" onClick={props.onSettings}>Open Settings</button><button className="small" onClick={props.onEngines}>Voice engines</button></div></div>
         ) : (
           <>

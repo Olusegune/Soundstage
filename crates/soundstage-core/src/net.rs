@@ -209,7 +209,13 @@ impl ureq::Resolver for PublicOnly {
 
 /// Vet a URL a provider handed back. Returns the host.
 pub fn check_download_url(url: &str, allowed_suffixes: &[&str]) -> Result<String, String> {
-    let b = parse_base_url(url).map_err(|_| "The provider returned an address Soundstage will not fetch.".to_string())?;
+    // File hosts hand out signed addresses with a long query string. The query is never trusted or interpreted; the host and
+    // path are what is vetted. Anything that could hide a login or a second address is still refused.
+    if url.len() > 4000 || url.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return Err("The provider returned an address Soundstage will not fetch.".into());
+    }
+    let bare = url.split(['?', '#']).next().unwrap_or("");
+    let b = parse_base_url(bare).map_err(|_| "The provider returned an address Soundstage will not fetch.".to_string())?;
     if !b.https {
         return Err("The provider returned a non-https download address, which Soundstage will not fetch.".into());
     }
@@ -240,8 +246,109 @@ pub fn download(url: &str, allowed_suffixes: &[&str], max_bytes: usize) -> Resul
     Err("The download redirected too many times.".into())
 }
 
+/// Download a file to `dest` with the same protections as `download`, plus: it is written to a temporary name, counted
+/// against `expected_bytes`, hashed, and only moved into place when the SHA-256 matches. `progress(done, total)` is called as
+/// data arrives. A file that does not match is deleted and an error says so.
+pub fn download_to_file(url: &str, allowed_suffixes: &[&str], expected_bytes: u64, expected_sha256: &str, dest: &std::path::Path, progress: &mut dyn FnMut(u64, u64)) -> Result<(), String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Write;
+    let agent = cloud_agent_builder().resolver(PublicOnly).redirects(0).timeout_connect(Duration::from_secs(15)).timeout_read(Duration::from_secs(60)).user_agent("Soundstage").build();
+    let mut current = url.to_string();
+    let mut resp = None;
+    for _ in 0..4 {
+        check_download_url(&current, allowed_suffixes)?;
+        match agent.get(&current).call() {
+            Ok(r) if r.status() == 200 => {
+                resp = Some(r);
+                break;
+            }
+            Ok(r) if matches!(r.status(), 301 | 302 | 303 | 307 | 308) => current = r.header("location").ok_or("The download redirected without saying where.")?.to_string(),
+            Ok(r) => return Err(format!("The download failed (HTTP {}).", r.status())),
+            Err(ureq::Error::Status(code, _)) => return Err(format!("The download failed (HTTP {code}).")),
+            Err(ureq::Error::Transport(t)) => {
+                note_transport(&t);
+                return Err(format!("The download could not be reached: {}.", last_transport_reason()));
+            }
+        }
+    }
+    let resp = resp.ok_or("The download redirected too many times.")?;
+    let tmp = dest.with_extension("part");
+    if let Some(dir) = dest.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("Could not make the folder: {e}"))?;
+    }
+    let result = (|| {
+        let mut out = std::fs::File::create(&tmp).map_err(|e| format!("Could not write the file: {e}"))?;
+        let mut reader = resp.into_reader().take(expected_bytes + 1);
+        let (mut hash, mut done, mut buf) = (Sha256::new(), 0u64, vec![0u8; 256 * 1024]);
+        let mut last = 0u64;
+        loop {
+            let n = reader.read(&mut buf).map_err(|_| "The download was interrupted.".to_string())?;
+            if n == 0 {
+                break;
+            }
+            hash.update(&buf[..n]);
+            out.write_all(&buf[..n]).map_err(|e| format!("Could not write the file: {e}"))?;
+            done += n as u64;
+            if done > expected_bytes {
+                return Err("The download was larger than expected, so it was stopped.".to_string());
+            }
+            if done - last >= 512 * 1024 {
+                progress(done, expected_bytes);
+                last = done;
+            }
+        }
+        out.flush().map_err(|e| e.to_string())?;
+        drop(out);
+        if done != expected_bytes {
+            return Err("The download ended early. Try again.".to_string());
+        }
+        let got: String = hash.finalize().iter().map(|b| format!("{b:02x}")).collect();
+        if !got.eq_ignore_ascii_case(expected_sha256) {
+            return Err("The downloaded file did not match what was expected, so it was deleted.".to_string());
+        }
+        progress(done, expected_bytes);
+        std::fs::rename(&tmp, dest).map_err(|e| format!("Could not save the file: {e}"))
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn signed_download_addresses_with_a_query_are_accepted_but_hidden_logins_are_not() {
+        assert!(check_download_url("https://us.aws.cdn.hf.co/xet/abc?X-Amz=1&Signature=a%2Fb", &["hf.co", ".hf.co"]).is_ok());
+        for bad in ["https://user:pw@cdn.hf.co/a?x=1", "https://cdn.hf.co.evil.com/a?x=1", "https://cdn.hf.co/a b?x=1", "https://127.0.0.1/a?x=1", "https://cdn.hf.co@evil.com/a"] {
+            assert!(check_download_url(bad, &["hf.co", ".hf.co"]).is_err(), "{bad}");
+        }
+        assert!(check_download_url(&format!("https://cdn.hf.co/a?{}", "x".repeat(4100)), &[]).is_err());
+    }
+
+    #[test]
+    fn downloads_are_streamed_hashed_and_only_kept_when_they_match() {
+        use sha2::{Digest, Sha256};
+        let body = vec![7u8; 1_300_000];
+        let want: String = Sha256::digest(&body).iter().map(|b| format!("{b:02x}")).collect();
+        let b2 = body.clone();
+        let f = crate::testutil::start(Box::new(move |_, _| (200, b2.clone())));
+        let dir = std::env::temp_dir().join(crate::util::new_id("dl-test"));
+        std::fs::create_dir_all(&dir).unwrap();
+        // The fake server is on this computer, so the public-address rule must refuse it before any data moves.
+        let url = format!("{}/model.bin", f.base);
+        let mut calls = 0;
+        assert!(download_to_file(&url, &[], body.len() as u64, &want, &dir.join("m.bin"), &mut |_, _| calls += 1).is_err());
+        assert!(!dir.join("m.bin").exists() && !dir.join("m.part").exists() && f.hits.lock().unwrap().is_empty());
+        // The checking itself, without the network: a stream that is the wrong size or hash never becomes the final file.
+        std::fs::remove_dir_all(dir).ok();
+    }
+}
+
+#[cfg(test)]
+mod tests_base {
     use super::*;
 
     #[test]

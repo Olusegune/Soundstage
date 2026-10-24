@@ -244,6 +244,8 @@ Not everything needs a project. The Speak and Audio tools screens (in the sideba
 
 ### Speech to text
 
+Offline: Soundstage includes Whisper. In Audio tools, open Offline speech to text and download one model (78 to 148 MB). After that you can transcribe with no account and no internet, and nothing leaves your computer. Pick a many-languages model for languages other than English; they are weaker in smaller languages, so read the result.
+
 - Choose a recording (up to 25 minutes) and press Transcribe. You get the text and, when the engine gives word times, SRT and WebVTT subtitles.
 - Works with ElevenLabs, or with your own server: add a Whisper model name to a local engine under Voice engines.
 - The recording is converted on your computer first and sent only to the engine you chose.

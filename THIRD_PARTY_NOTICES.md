@@ -16,6 +16,7 @@ _A summary of the main components. Before a public release, generate the complet
 
 ## Bundled and separate programs
 - **FFmpeg** is bundled as a separate program (`resources\ffmpeg.exe`), an LGPL v3 build (n8.1, from BtbN/FFmpeg-Builds, no GPL or non-free parts). Its licence text and source pointers ship beside it (`FFMPEG-LICENSE.txt`, `FFMPEG-NOTICE.txt`). You may replace it with your own build on the Export screen. H.264 video in MP4 uses OpenH264 inside this build; codec patents are the user's responsibility where they apply. When updating the bundled build, keep it an LGPL build, ship its licence text and source pointers, and update this file.
+- **whisper.cpp** (offline speech to text, MIT licence) is bundled as a separate program (`resources\whisper\whisper-cli.exe` with its libraries; release v1.9.2 from github.com/ggml-org/whisper.cpp). Its licence text ships beside it (`WHISPER-LICENSE.txt`). The Whisper speech models (OpenAI, MIT licence) are not bundled: people download one inside the app from huggingface.co, and each is checked against a fixed size and SHA-256.
 - **Piper, ComfyUI, Ollama and any speech or music models** are separate programs with their own licences. Every voice and model has its own terms, which Soundstage cannot read for you.
 
 ## Online services

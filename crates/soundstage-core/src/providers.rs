@@ -355,6 +355,13 @@ impl Registry {
         reg
     }
 
+    /// Add offline speech to text, when the program that comes with Soundstage is present.
+    pub fn with_whisper(mut self, exe: std::path::PathBuf, models_dir: std::path::PathBuf) -> Self {
+        self.adapters.push(Box::new(crate::adapters::whisper::WhisperAdapter::new(exe, models_dir, std::sync::Arc::new(crate::adapters::piper::RealRunner))));
+        self.refresh();
+        self
+    }
+
     pub fn with_pronunciations(mut self, rules: Vec<crate::pronounce::Rule>) -> Self {
         self.pronunciations = rules.into_iter().filter(|r| r.validate().is_ok()).take(crate::pronounce::MAX_RULES).collect();
         self

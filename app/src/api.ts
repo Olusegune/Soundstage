@@ -1,7 +1,7 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
-  Analysis, Asset, Destination, Attestation, AudioInfo, CleanOut, Cue2, HistoryView, PronRule, SpeakOut, ToolInfo, TranscriptOut, CloneEntry, CloneInfo, ClonedVoice, DesignPreview, DesignerInfo, RefReport, EnginesConfig, GeneratorInfo, SystemCheck, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Voice, VoiceDef,
+  Analysis, Asset, Destination, Attestation, AudioInfo, WhisperStatus, CleanOut, Cue2, HistoryView, PronRule, SpeakOut, ToolInfo, TranscriptOut, CloneEntry, CloneInfo, ClonedVoice, DesignPreview, DesignerInfo, RefReport, EnginesConfig, GeneratorInfo, SystemCheck, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Voice, VoiceDef,
 } from "./types";
 
 /** Tauri rejects with a string for plain errors and with an object for structured ones. */
@@ -67,6 +67,9 @@ export const api = {
   cuesSubtitles: (cues: Cue2[], kind: "srt" | "vtt") => invoke<string>("cues_subtitles", { cues, kind }),
   audioInfo: (path: string) => invoke<AudioInfo>("audio_info", { path }),
   editAudio: (clips: { path: string; start_s: number; end_s: number | null; offset_s: number; gain_db: number; fade_in_ms: number; fade_out_ms: number }[], normalize: boolean, keep: boolean) => invoke<CleanOut>("edit_audio", { clips, normalize, keep }),
+  whisperStatus: () => invoke<WhisperStatus>("whisper_status"),
+  whisperDownload: (modelId: string) => invoke<void>("whisper_download", { modelId }),
+  whisperRemove: (modelId: string) => invoke<void>("whisper_remove", { modelId }),
   cleanAudio: (adapterId: string, path: string, keep: boolean) => invoke<CleanOut>("clean_audio", { adapterId, path, keep }),
   consentList: () => invoke<CloneEntry[]>("consent_list"),
   consentRevoke: (consentId: string, deleteRemote: boolean) => invoke<string>("consent_revoke", { consentId, deleteRemote }),

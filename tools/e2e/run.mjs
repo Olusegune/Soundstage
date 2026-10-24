@@ -354,6 +354,13 @@ try {
     await audit("audio editor");
     await app.ev("window.__TAURI_INTERNALS__.invoke('plugin:event|emit',{event:'menu',payload:'tools'})"); await sleep(700);
     app.check("choosing Audio tools from the menu opens it", /Speech to text/.test(await app.ev("document.body.textContent")));
+    app.check("Audio tools shows the offline speech card", /Offline speech to text/.test(await app.ev("document.body.textContent")) && /Nothing leaves this computer/.test(await app.ev("document.body.textContent")));
+    const ws = await app.ev("window.__TAURI_INTERNALS__.invoke('whisper_status').then(s=>JSON.stringify({p:s.program,m:s.models.map(m=>m.id)}))");
+    app.check("the offline speech program and four models are known", /"p":true/.test(String(ws)) && /tiny\.en/.test(String(ws)) && /"base"/.test(String(ws)), String(ws));
+    const badModel = await app.ev("window.__TAURI_INTERNALS__.invoke('whisper_download',{modelId:'../../evil'}).then(()=>'allowed',e=>String(e))");
+    app.check("only listed models can be downloaded", !/allowed/.test(String(badModel)) && /not on the list/.test(String(badModel)), String(badModel));
+    const noModel = await app.ev("window.__TAURI_INTERNALS__.invoke('transcribe_audio',{adapterId:'whisper-local',path:'C:/nope.wav',language:null}).then(()=>'allowed',e=>String(e))");
+    app.check("offline transcription without a model says what to do, and starts nothing", !/allowed/.test(String(noModel)));
     await app.shot(`${shotsDir}/dark-1280x720-audio-tools.png`);
     await audit("audio tools");
     await app.press("Ctrl+O"); await sleep(500);

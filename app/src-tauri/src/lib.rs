@@ -42,6 +42,16 @@ fn valid_key_name(name: &str) -> bool {
     matches!(name, "elevenlabs" | "fal" | "kie" | "assistant" | "voicekiller" | "voicekiller:userid") || name.strip_prefix("engine:").is_some_and(valid_engine_id)
 }
 
+/// Where the offline speech program is. It is installed with Soundstage, beside the app. A developer can point
+/// `SOUNDSTAGE_WHISPER_DIR` at another folder.
+fn whisper_exe() -> PathBuf {
+    if let Some(d) = std::env::var_os("SOUNDSTAGE_WHISPER_DIR") {
+        return PathBuf::from(d).join("whisper-cli.exe");
+    }
+    let dir = std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.to_path_buf())).unwrap_or_default();
+    [dir.join("resources").join("whisper").join("whisper-cli.exe"), dir.join("whisper").join("whisper-cli.exe")].into_iter().find(|p| p.is_file()).unwrap_or_else(|| dir.join("resources").join("whisper").join("whisper-cli.exe"))
+}
+
 /// Builds the registry on first use and again after a key is saved or removed.
 struct RegistryCell {
     inner: Mutex<Option<Arc<Registry>>>,
@@ -55,12 +65,15 @@ impl RegistryCell {
     fn get(&self) -> Arc<Registry> {
         let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         // A damaged engines file must never stop the app from starting; Settings shows what is wrong with it.
-        g.get_or_insert_with(|| Arc::new(Registry::standard(key_provider(), &EnginesConfig::load(&self.config_path).unwrap_or_default()).with_clones(self.consent_store().list()).with_pronunciations(self.pronunciation_rules()))).clone()
+        g.get_or_insert_with(|| Arc::new(Registry::standard(key_provider(), &EnginesConfig::load(&self.config_path).unwrap_or_default()).with_clones(self.consent_store().list()).with_pronunciations(self.pronunciation_rules()).with_whisper(whisper_exe(), self.models_dir()))).clone()
     }
     /// Consent records live beside the projects folder's other private data, never inside a project.
     fn consent_store(&self) -> soundstage_core::clone::ConsentStore {
         let root = self.config_path.parent().and_then(|p| p.parent()).map(|p| p.to_path_buf()).unwrap_or_default();
         soundstage_core::clone::ConsentStore::new(root.join(".consent"))
+    }
+    fn models_dir(&self) -> PathBuf {
+        self.config_dir().parent().map(|p| p.join(".models")).unwrap_or_default()
     }
     fn config_dir(&self) -> PathBuf {
         self.config_path.parent().map(|p| p.to_path_buf()).unwrap_or_default()
@@ -843,6 +856,77 @@ async fn edit_audio(state: State<'_, AppState>, clips: Vec<EditClipIn>, normaliz
     .await?
 }
 
+#[derive(Serialize)]
+struct ModelView {
+    id: &'static str,
+    label: &'static str,
+    blurb: &'static str,
+    mb: u64,
+    installed: bool,
+    english_only: bool,
+}
+
+#[derive(Serialize)]
+struct WhisperStatus {
+    program: bool,
+    models: Vec<ModelView>,
+}
+
+#[tauri::command]
+async fn whisper_status(state: State<'_, AppState>) -> Result<WhisperStatus, String> {
+    let (_, reg) = shared(&state);
+    blocking(move || {
+        let dir = reg.models_dir();
+        WhisperStatus {
+            program: whisper_exe().is_file(),
+            models: soundstage_core::adapters::whisper::MODELS.iter().map(|m| ModelView { id: m.id, label: m.label, blurb: m.blurb, mb: m.bytes / 1_000_000, installed: soundstage_core::adapters::whisper::is_installed(&dir, m), english_only: m.english_only }).collect(),
+        }
+    })
+    .await
+}
+
+static DOWNLOADING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[derive(Clone, Serialize)]
+struct Progress {
+    id: String,
+    done: u64,
+    total: u64,
+}
+
+/// Download one offline speech model. Only the fixed list can be fetched, from its fixed host, and the file is kept only if
+/// its size and SHA-256 match.
+#[tauri::command]
+async fn whisper_download(app: AppHandle, state: State<'_, AppState>, model_id: String) -> Result<(), String> {
+    use std::sync::atomic::Ordering;
+    let spec = soundstage_core::adapters::whisper::model(&model_id).ok_or("That model is not on the list.")?;
+    if DOWNLOADING.swap(true, Ordering::SeqCst) {
+        return Err("A download is already running. Wait for it to finish.".into());
+    }
+    let (_, reg) = shared(&state);
+    let id = model_id.clone();
+    let res = blocking(move || {
+        let dest = soundstage_core::adapters::whisper::model_path(&reg.models_dir(), spec);
+        soundstage_core::net::download_to_file(spec.url, soundstage_core::adapters::whisper::MODEL_HOSTS, spec.bytes, spec.sha256, &dest, &mut |done, total| {
+            let _ = app.emit("whisper-progress", Progress { id: id.clone(), done, total });
+        })
+    })
+    .await;
+    DOWNLOADING.store(false, Ordering::SeqCst);
+    res?
+}
+
+#[tauri::command]
+async fn whisper_remove(state: State<'_, AppState>, model_id: String) -> Result<(), String> {
+    let spec = soundstage_core::adapters::whisper::model(&model_id).ok_or("That model is not on the list.")?;
+    let (_, reg) = shared(&state);
+    blocking(move || {
+        let p = soundstage_core::adapters::whisper::model_path(&reg.models_dir(), spec);
+        if p.exists() { std::fs::remove_file(&p).map_err(|e| format!("Could not remove it: {e}")) } else { Ok(()) }
+    })
+    .await?
+}
+
 #[tauri::command]
 async fn register_clone(state: State<'_, AppState>, adapter_id: String, name: String, attestation: soundstage_core::clone::Attestation) -> Result<soundstage_core::clone::ClonedVoice, String> {
     let (_, reg) = shared(&state);
@@ -1175,6 +1259,14 @@ fn run_checks(state: &AppState, config: &std::path::Path, ffmpeg_path: Option<&s
         detail: if saved.is_empty() { "No keys saved. That is fine: local voices need none.".into() } else { format!("Keys saved for: {}. {cloud} online voice{} available.", saved.join(", "), if cloud == 1 { "" } else { "s" }) },
         fix: if saved.is_empty() { "Add an ElevenLabs key in Settings for online voices, music and effects, or a Kie or fal key under Voice engines.".into() } else { String::new() },
     });
+    let wh = reg.adapter("whisper-local").map(|a| a.ready()).unwrap_or(false);
+    out.push(Check {
+        id: "offline-stt",
+        label: "Offline speech to text (Whisper)",
+        status: if wh { "ok" } else { "info" },
+        detail: if wh { "Ready. Transcription can run on this computer with nothing sent anywhere.".into() } else { "Not set up. Optional.".into() },
+        fix: if wh { String::new() } else { "In Audio tools, download an offline speech model (78 to 148 MB) to transcribe without an account.".into() },
+    });
     let (sp, jb) = EnginesConfig::load(config).map(|c| (c.speech.len() + usize::from(c.piper.is_some()), c.jobs.len())).unwrap_or((0, 0));
     out.push(Check { id: "engines", label: "Your own engines", status: "info", detail: format!("{sp} speech engine{} and {jb} music, effects or workflow engine{} set up.", if sp == 1 { "" } else { "s" }, if jb == 1 { "" } else { "s" }), fix: if sp + jb == 0 { "Optional. Add one under Voice engines.".into() } else { String::new() } });
     let probe = state.store.root.join(".write-test");
@@ -1349,6 +1441,9 @@ pub fn run() {
             clone_check_reference,
             clone_voice,
             register_clone,
+            whisper_status,
+            whisper_download,
+            whisper_remove,
             speak_text,
             history_list,
             history_delete,

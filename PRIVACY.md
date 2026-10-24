@@ -11,6 +11,7 @@ Soundstage asks before sending anything. Depending on what you set up:
 - **Voice cloning:** the recording of the voice (trimmed to three minutes), and the name you give the voice, sent to the provider you chose. The consent record is saved only on your computer and is never sent.
 - **Changing a voice:** the recording you choose, converted on your computer, sent to the engine you chose. The speaker's consent record stays on your computer.
 - **Translation and dubbing:** the transcribed text, sent to the chat server you set in Settings (nothing leaves your computer if that is Ollama here).
+- **Offline speech to text:** nothing is sent. The only download is the speech model you choose, fetched once from huggingface.co (no personal data is sent with it).
 - **Speech to text and audio cleaning:** the recording you choose, converted on your computer, sent to the engine you chose.
 - **VoiceKiller:** the text of the lines you render and the voice name, sent to voicekiller.com.
 - **Music, effects and voice design:** the description you typed, sent to the service you chose (ElevenLabs, Kie, fal).

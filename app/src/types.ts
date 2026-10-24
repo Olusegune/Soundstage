@@ -399,3 +399,6 @@ export interface CloneEntry { voice: ClonedVoice; consent: ConsentRecord }
 export interface PronRule { from: string; to: string; whole_word: boolean; ignore_case: boolean }
 export interface HistoryItem { id: string; created: string; kind: "speak" | "clean"; voice_id: string; voice_name: string; provider_label: string; text: string; style: string; pace: number; duration_ms: number }
 export interface HistoryView { item: HistoryItem; path: string }
+
+export interface ModelInfo { id: string; label: string; blurb: string; mb: number; installed: boolean; english_only: boolean }
+export interface WhisperStatus { program: boolean; models: ModelInfo[] }
