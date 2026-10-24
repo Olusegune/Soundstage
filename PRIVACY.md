@@ -19,6 +19,9 @@ Local engines, Piper, ComfyUI on this computer and Windows voices send nothing.
 
 Each service has its own privacy terms and billing. Soundstage cannot see or change how they store or use what you send.
 
+## Consent records
+Consent records (who agreed, for what) are kept in `Documents\Soundstage\.consent`, encrypted for your Windows account. They are never sent to any service.
+
 ## History
 The Speak and Audio tools screens keep a copy of what they make, with the text you typed, in `Documents\Soundstage\.history` on your computer (up to 200 items). It is never sent anywhere. Turn it off in Settings or clear it on the Speak screen.
 

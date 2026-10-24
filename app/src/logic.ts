@@ -110,3 +110,8 @@ export function splitTags(text: string): { text: string; tag: boolean; bad: bool
   if (last < text.length) out.push({ text: text.slice(last), tag: false, bad: false });
   return out;
 }
+
+/** A blank character profile. */
+export function emptyBible() {
+  return { age: "", background: "", speech_habits: "", emotional_range: "", notes: "" };
+}

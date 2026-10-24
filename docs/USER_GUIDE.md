@@ -60,6 +60,8 @@ You now have a master recording, three stem files and a record of what was used.
 
 _The recommended order, and how Soundstage keeps you on it without forcing you._
 
+> **Tip.** Press Do all the steps for me (under the Next button) to cast free voices, render every line and build a preview mix in one go. It stops before exporting so you can listen first. If a line uses an online voice, it asks before anything is sent.
+
 Making sound for a film goes best in a set order: Script, Cast, Direct, Render, Mix, Export. The sidebar shows these six steps and where you are.
 
 - A tick means the step is finished. A highlighted step is the one to do now.
@@ -95,6 +97,8 @@ Only these directions exist. Anything else in brackets is flagged so a typo neve
 ## Step 2: Cast
 
 _Choosing a voice for each character, and hearing samples first._
+
+In a hurry? Press Cast for me. Soundstage gives each speaker without a voice a different free voice from this computer, alternating between male and female voices where it can tell. Listen to each one and change any you like.
 
 Every speaker needs a voice. Pick one from the list and press Make a sample to hear it say that character's first line.
 
@@ -319,7 +323,7 @@ A person's voice is theirs. In the Voice library, Clone a voice makes a syntheti
 - Exports list the consent record of every cloned voice used.
 - Scripts that look like fraud or impersonation of officials are not rendered, and Soundstage tells you which rule applied.
 
-> **Tip.** Consent records are saved in Documents\Soundstage\.consent, outside your projects. They are not encrypted yet, so keep that folder private.
+> **Tip.** Consent records are saved in Documents\Soundstage\.consent, outside your projects. They are encrypted for your Windows account, so copying the folder to another computer will not open them.
 
 ## Saving, undo and recovery
 

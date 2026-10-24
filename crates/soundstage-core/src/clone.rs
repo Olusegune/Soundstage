@@ -226,11 +226,19 @@ impl ConsentStore {
     pub fn save_record(&self, rec: &ConsentRecord) -> Result<(), String> {
         std::fs::create_dir_all(&self.dir).map_err(|e| format!("Could not create the consent folder: {e}"))?;
         let json = serde_json::to_string_pretty(rec).map_err(|e| e.to_string())?;
-        write_atomic(&self.record_path(&rec.id)?, json.as_bytes())
+        // Records name a real person and what their voice may be used for, so they are encrypted for this Windows user.
+        write_atomic(&self.record_path(&rec.id)?, &crate::secure::seal(json.as_bytes())?)
     }
 
+    /// Read a record. A record saved by an older version (plain text) is read, then saved again encrypted.
     pub fn record(&self, id: &str) -> Option<ConsentRecord> {
-        serde_json::from_slice(&std::fs::read(self.record_path(id).ok()?).ok()?).ok()
+        let path = self.record_path(id).ok()?;
+        let (bytes, was_protected) = crate::secure::open(&std::fs::read(&path).ok()?).ok()?;
+        let rec: ConsentRecord = serde_json::from_slice(&bytes).ok()?;
+        if !was_protected {
+            let _ = self.save_record(&rec);
+        }
+        Some(rec)
     }
 
     fn voices(&self) -> Vec<ClonedVoice> {
@@ -370,6 +378,27 @@ mod tests {
         assert_eq!((r.spec().channels, r.spec().sample_rate, r.spec().bits_per_sample), (1, 24_000, 16));
         assert_eq!(r.duration(), 180 * 24_000);
         assert!(wav.len() < 9_000_000);
+    }
+
+    #[test]
+    fn records_are_encrypted_on_disk_and_older_plain_records_are_upgraded() {
+        let d = tmp();
+        let st = ConsentStore::new(d.join(".consent"));
+        let rec = build_record(&form(), "consent-enc").unwrap();
+        st.save_record(&rec).unwrap();
+        let on_disk = std::fs::read(d.join(".consent").join("consent-enc.json")).unwrap();
+        if cfg!(windows) {
+            assert!(!String::from_utf8_lossy(&on_disk).contains("Okafor"), "the owner's name must not be readable in the file");
+        }
+        assert_eq!(st.record("consent-enc").unwrap(), rec);
+        // A record written by version 0.2.0 or earlier is plain JSON.
+        std::fs::write(d.join(".consent").join("consent-old.json"), serde_json::to_vec_pretty(&build_record(&form(), "consent-old").unwrap()).unwrap()).unwrap();
+        assert_eq!(st.record("consent-old").unwrap().id, "consent-old");
+        if cfg!(windows) {
+            let upgraded = std::fs::read(d.join(".consent").join("consent-old.json")).unwrap();
+            assert!(!String::from_utf8_lossy(&upgraded).contains("Okafor"), "reading an old record encrypts it");
+        }
+        std::fs::remove_dir_all(d).ok();
     }
 
     #[test]

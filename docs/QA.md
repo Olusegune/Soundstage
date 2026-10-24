@@ -6,11 +6,11 @@ Last full run: 2026-10-23, Windows 11, release build of v0.1.0 plus the v0.2 add
 
 | Layer | Command (from the repo root unless noted) | Result at last run |
 |---|---|---|
-| Core and shell unit and integration tests (Rust) | `cargo test --workspace` | 174 passed, 0 failed |
-| Front-end unit tests (Vitest) | `npm run test` in `app/` (`npx vitest run`) | 73 passed, 0 failed |
+| Core and shell unit and integration tests (Rust) | `cargo test --workspace` | 219 passed, 0 failed |
+| Front-end unit tests (Vitest) | `npm run test` in `app/` (`npx vitest run`) | 77 passed, 0 failed |
 | Types | `npx tsc --noEmit` in `app/` | clean |
 | Lint | `cargo clippy --workspace --all-targets` | style warnings only, no errors |
-| Real-window end-to-end, accessibility and screenshots | `node tools/e2e/run.mjs` (needs a release build: `npx tauri build` in `app/`) | 142 of 142 passed |
+| Real-window end-to-end, accessibility and screenshots | `node tools/e2e/run.mjs` (needs a release build: `npx tauri build` in `app/`) | 172 of 172 passed |
 | Secrets | `rafter secrets .` | none found |
 | Dependencies | `npm audit --omit=dev` in `app/` | 0 vulnerabilities |
 

@@ -2,8 +2,9 @@ import { useState } from "react";
 import { api, messageOf } from "../api";
 import type { Ctx } from "../ctx";
 import { Flag } from "../flags";
-import { licenceNote } from "../logic";
+import { emptyBible, licenceNote } from "../logic";
 import { Confirm, Empty, LicenceChip, PlayButton } from "../ui";
+import { suggestCast } from "../castSuggest";
 import type { Voice } from "../types";
 
 const TAG_RE = /\[\s*([a-z]+)(?::[^\]]*)?\s*\]/gi;
@@ -58,9 +59,23 @@ export function CastStep({ ctx }: { ctx: Ctx }) {
 
   const byProvider = voices.reduce<Record<string, Voice[]>>((acc, v) => { (acc[v.provider_label] ??= []).push(v); return acc; }, {});
 
+  const uncast = analysis.parsed.speakers.filter((s) => !project.characters[s]?.voice_id);
+  const castForMe = () => {
+    const picks = suggestCast(analysis.parsed.speakers, Object.fromEntries(analysis.parsed.speakers.map((s) => [s, project.characters[s]?.voice_id ?? null])), voices);
+    if (!picks) { ctx.toast("There are no voices to choose from yet. Add one in Settings or Voice engines.", true); return; }
+    edit((p) => ({ ...p, characters: { ...p.characters, ...Object.fromEntries(Object.entries(picks).map(([s, id]) => [s, { voice_id: id, bible: p.characters[s]?.bible ?? emptyBible(), direction: p.characters[s]?.direction ?? {} }])) } }));
+    ctx.toast(`Chose a voice for ${Object.keys(picks).length} speaker${Object.keys(picks).length === 1 ? "" : "s"}. Listen to each and change any you like.`);
+  };
+
   return (
     <div className="page">
       {voices.length === 0 && <div className="callout warn"><strong>Looking for voices on this computer…</strong>This takes a moment the first time.</div>}
+      {uncast.length > 0 && voices.length > 0 && (
+        <div className="callout small" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ flex: 1, minWidth: 240 }}><strong>In a hurry?</strong>Let Soundstage choose a different free voice from this computer for {uncast.length === 1 ? "the speaker without one" : `each of the ${uncast.length} speakers without one`}. You can listen and change any of them.</span>
+          <button className="primary" onClick={castForMe}>Cast for me</button>
+        </div>
+      )}
       <div className="voice-grid">
       {analysis.parsed.speakers.map((speaker) => {
         const ch = project.characters[speaker];
@@ -135,8 +150,4 @@ export function CastStep({ ctx }: { ctx: Ctx }) {
       )}
     </div>
   );
-}
-
-function emptyBible() {
-  return { age: "", background: "", speech_habits: "", emotional_range: "", notes: "" };
 }

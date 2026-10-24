@@ -15,7 +15,7 @@ function ago(iso: string): string {
   return days <= 0 ? "Today" : days === 1 ? "Yesterday" : days < 14 ? `${days} days ago` : iso.slice(0, 10);
 }
 
-export function Home(props: { onSpeak: () => void; onOpen: (id: string) => void; toast: (t: string, bad?: boolean) => void; onQuickStart: () => void; onHelp: () => void }) {
+export function Home(props: { onTools: () => void; onEditor: () => void; onSpeak: () => void; onOpen: (id: string) => void; toast: (t: string, bad?: boolean) => void; onQuickStart: () => void; onHelp: () => void }) {
   const [list, setList] = useState<Summary[] | null>(null);
   const [attention, setAttention] = useState<Record<string, number>>({});
   const [name, setName] = useState("");
@@ -68,6 +68,25 @@ export function Home(props: { onSpeak: () => void; onOpen: (id: string) => void;
           </div>
         </div>
       </section>
+
+      <div className="card" role="group" aria-label="What would you like to do?">
+        <h2>What would you like to do?</h2>
+        <div className="voice-grid">
+          {([
+            [I.Speaker, "Hear some text spoken", "Type, pick a voice, listen, save.", props.onSpeak, "Speak"],
+            [I.Script, "Make a scene or a show", "Dialogue, music and effects, mixed.", () => document.getElementById("pname")?.focus(), "Start a project"],
+            [I.Sparkle, "Try it with an example", "A ready-made scene, in ten minutes.", props.onQuickStart, "Quick start"],
+            [I.Wave, "Transcribe, clean or translate", "Speech to text, noise removal, dubbing.", props.onTools, "Audio tools"],
+            [I.Mix, "Trim and join recordings", "Cut, layer and save one file.", props.onEditor, "Audio editor"],
+          ] as const).map(([Icon, title, blurb, run, cta]) => (
+            <div key={title} className="voice-card">
+              <div className="row" style={{ marginBottom: 4 }}><Icon size={18} /><strong>{title}</strong></div>
+              <p className="small muted">{blurb}</p>
+              <button className="small" onClick={run}>{cta}</button>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {first && (
         <div className="card">

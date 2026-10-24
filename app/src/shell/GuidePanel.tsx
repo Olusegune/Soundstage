@@ -7,7 +7,7 @@ import { CostBadge, Kbd } from "../ui";
 export function GuidePanel(props: {
   steps: GoldenStep[]; next: NextAction | null; current: number; viewing: number; busy: boolean; nextKey: string;
   onGoto: (i: number) => void; onNext: () => void; onHelp: (id: string) => void;
-  width: number; onResize: (w: number) => void; hideNext?: boolean;
+  width: number; onResize: (w: number) => void; hideNext?: boolean; onAuto?: () => void;
 }) {
   const s = props.steps[props.viewing];
   const done = props.steps.filter((x) => x.status === "done").length;
@@ -73,6 +73,11 @@ export function GuidePanel(props: {
             {props.busy ? <><span className="spin" aria-hidden="true" /> Working…</> : <>{props.next.paid ? <I.Cloud size={16} /> : <I.Zap size={16} />}{props.next.label}</>}
             <span style={{ marginLeft: "auto" }}><Kbd combo={props.nextKey} /></span>
           </button>
+          {props.onAuto && (
+            <button className="small ghost" style={{ marginTop: 8, width: "100%" }} onClick={props.onAuto} disabled={props.busy} data-tip="Casts free voices, renders every line and builds a preview mix, then stops so you can listen before exporting." data-tip-pos="top">
+              <I.Sparkle size={14} /> Do all the steps for me
+            </button>
+          )}
         </div>
       )}
     </aside>

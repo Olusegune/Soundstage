@@ -45,6 +45,7 @@ export const ARTICLES: Article[] = [
     summary: "The recommended order, and how Soundstage keeps you on it without forcing you.",
     tags: ["steps", "workflow", "guide", "order", "next"],
     body: [
+      { t: "tip", text: "Press Do all the steps for me (under the Next button) to cast free voices, render every line and build a preview mix in one go. It stops before exporting so you can listen first. If a line uses an online voice, it asks before anything is sent." },
       { t: "p", text: "Making sound for a film goes best in a set order: Script, Cast, Direct, Render, Mix, Export. The sidebar shows these six steps and where you are." },
       { t: "ul", items: [
         "A tick means the step is finished. A highlighted step is the one to do now.",
@@ -77,6 +78,7 @@ export const ARTICLES: Article[] = [
     summary: "Choosing a voice for each character, and hearing samples first.",
     tags: ["voice", "cast", "sample", "character", "elevenlabs", "windows"],
     body: [
+      { t: "p", text: "In a hurry? Press Cast for me. Soundstage gives each speaker without a voice a different free voice from this computer, alternating between male and female voices where it can tell. Listen to each one and change any you like." },
       { t: "p", text: "Every speaker needs a voice. Pick one from the list and press Make a sample to hear it say that character's first line." },
       { t: "ul", items: [
         "Windows voices run on your computer, are free, and work offline.",
@@ -291,7 +293,7 @@ export const ARTICLES: Article[] = [
         "Exports list the consent record of every cloned voice used.",
         "Scripts that look like fraud or impersonation of officials are not rendered, and Soundstage tells you which rule applied.",
       ] },
-      { t: "tip", text: "Consent records are saved in Documents\\Soundstage\\.consent, outside your projects. They are not encrypted yet, so keep that folder private." },
+      { t: "tip", text: "Consent records are saved in Documents\\Soundstage\\.consent, outside your projects. They are encrypted for your Windows account, so copying the folder to another computer will not open them." },
     ],
   },
   {

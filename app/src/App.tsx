@@ -18,6 +18,8 @@ import { Pronunciation } from "./screens/Pronunciation";
 import { AudioTools } from "./screens/AudioTools";
 import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
 import { GuidePanel } from "./shell/GuidePanel";
+import { suggestCast } from "./castSuggest";
+import { emptyBible } from "./logic";
 import { Splash, Welcome } from "./shell/Onboarding";
 import { Rail, type View } from "./shell/Rail";
 import { ShortcutsDialog } from "./shell/ShortcutsDialog";
@@ -323,6 +325,36 @@ export default function App() {
     try { setMixPreview(await api.mixPreview(p)); setMixPreviewed(true); } catch (e) { say(messageOf(e), true); } finally { setMixBuilding(false); }
   }, [say]);
 
+  /** Wait for a condition that depends on state React has not applied yet (a short, bounded wait). */
+  const until = useCallback(async (cond: () => boolean, ms = 8000) => {
+    const t0 = Date.now();
+    while (!cond() && Date.now() - t0 < ms) await new Promise((r) => setTimeout(r, 60));
+    return cond();
+  }, []);
+
+  /** Cast free voices, render every line and build a preview mix, then stop so the person can listen. */
+  const finishForMe = useCallback(async () => {
+    const cur = projectRef.current;
+    const a = analysisRef.current;
+    if (!cur || !a || a.parsed.speakers.length === 0) { say("Write some dialogue first.", true); return; }
+    const speakers = a.parsed.speakers;
+    if (speakers.some((s) => !cur.characters[s]?.voice_id)) {
+      const picks = suggestCast(speakers, Object.fromEntries(speakers.map((s) => [s, cur.characters[s]?.voice_id ?? null])), voicesRef.current);
+      if (!picks) { say("There are no voices to cast yet. Add one in Settings or Voice engines.", true); return; }
+      edit((p) => ({ ...p, characters: { ...p.characters, ...Object.fromEntries(Object.entries(picks).map(([s, id]) => [s, { voice_id: id, bible: p.characters[s]?.bible ?? emptyBible(), direction: p.characters[s]?.direction ?? {} }])) } }));
+      if (!(await until(() => speakers.every((s) => projectRef.current?.characters[s]?.voice_id) && (analysisRef.current?.lines.every((l) => l.voice_id !== null) ?? false)))) { say("Could not choose voices. Try the Cast step.", true); return; }
+    }
+    setStep(3);
+    const keys = (analysisRef.current?.lines ?? []).filter((l) => (l.status === "drafted" || l.status === "stale") && l.issues.length === 0).map((l) => l.line.key);
+    await renderBatch(keys);
+    await until(() => (analysisRef.current?.lines ?? []).every((l) => l.issues.length > 0 || l.status === "rendered" || l.status === "skipped"), 4000);
+    const left = (analysisRef.current?.lines ?? []).filter((l) => l.status !== "rendered" && l.status !== "skipped").length;
+    if (left > 0) { say(`${left} line${left === 1 ? "" : "s"} still need attention. Check the Render step.`, true); return; }
+    setStep(4);
+    await buildMix();
+    say("All set. Listen to the preview mix, then export when you are happy.");
+  }, [say, edit, until, renderBatch, buildMix]);
+
   /* ---------------------------------------------------------------- the one button */
   const doNext = useCallback(() => {
     const n = g?.next;
@@ -505,7 +537,7 @@ export default function App() {
           railCollapsed={railCollapsed} onEdit={edit} guideKey={keyOf("toggle-guide")} />
 
         <main className="stage" id="stage" tabIndex={-1}>
-          {view === "home" && <Home onSpeak={() => openAux("speak")} onOpen={(id) => void openProject(id)} toast={say} onQuickStart={() => void quickStart()} onHelp={() => openHelp("quick-start")} />}
+          {view === "home" && <Home onTools={() => openAux("tools")} onEditor={() => openAux("editor")} onSpeak={() => openAux("speak")} onOpen={(id) => void openProject(id)} toast={say} onQuickStart={() => void quickStart()} onHelp={() => openHelp("quick-start")} />}
           {view === "editor" && <AudioEditor keepHistory={prefs.keepHistory} toast={say} onBack={back} ffmpegPath={prefs.ffmpegPath} />}
           {view === "pronunciation" && <Pronunciation voices={voices} project={project} onEditProject={(fn) => edit(fn, "pronunciation")} toast={say} onBack={back} />}
           {view === "speak" && <Speak keepHistory={prefs.keepHistory} voices={voices} toast={say} onBack={back} ffmpegPath={prefs.ffmpegPath} onSettings={() => openAux("settings")} />}
@@ -540,7 +572,7 @@ export default function App() {
 
         {showGuide && prefs.guideOpen && g && (
           <GuidePanel steps={g.steps} next={g.next} current={currentIdx} viewing={step} busy={!!batch || mixBuilding} nextKey={keyOf("do-next")}
-            onGoto={goStep} onNext={doNext} onHelp={openHelp} width={prefs.guideWidth} onResize={(w) => setPrefs({ guideWidth: Math.max(260, Math.min(520, Math.round(w))) })} />
+            onGoto={goStep} onNext={doNext} onAuto={g.next && g.next.kind !== "export" && !batch && !mixBuilding ? () => void finishForMe() : undefined} onHelp={openHelp} width={prefs.guideWidth} onResize={(w) => setPrefs({ guideWidth: Math.max(260, Math.min(520, Math.round(w))) })} />
         )}
       </div>
 

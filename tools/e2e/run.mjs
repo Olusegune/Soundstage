@@ -371,6 +371,27 @@ try {
     await app.press("Ctrl+O"); await sleep(500);
     await app.resetSize();
   }
+  // Golden Path helpers: goal tiles on Home, and "Do all the steps for me" on a fresh project.
+  {
+    await app.press("Ctrl+O"); await sleep(600);
+    app.check("Home offers goal tiles", /What would you like to do\?/.test(await app.ev("document.body.textContent")));
+    await app.ev("window.__TAURI_INTERNALS__.invoke('create_project',{name:'e2e-scene auto',sample:false}).then(p=>{p.script=['# Test','AMA: Good morning, how are you today?','KOLA: [pause:short] I am fine, thank you.'].join(String.fromCharCode(10));return window.__TAURI_INTERNALS__.invoke('save_project',{project:p})})");
+    await app.press("Ctrl+O"); await sleep(300);
+    await app.ev("location.reload()"); await sleep(1800);
+    await app.ev("(()=>{const c=[...document.querySelectorAll('.proj-card')].find(x=>/e2e-scene auto/.test(x.textContent));[...c.querySelectorAll('button')].find(b=>b.textContent.trim()==='Open').click();})()"); await sleep(1200);
+    const hasAuto = await app.waitFor("[...document.querySelectorAll('button')].some(b=>/Do all the steps for me/.test(b.textContent))", 8000);
+    app.check("the guide offers Do all the steps for me", hasAuto);
+    if (hasAuto) {
+      await app.ev("[...document.querySelectorAll('button')].find(b=>/Do all the steps for me/.test(b.textContent)).click()");
+      const done = await app.waitFor("document.body.textContent.includes('Integrated')", 120000);
+      app.check("Do all the steps for me casts, renders and builds a preview mix", done);
+      await sleep(3000);
+      const cast = await app.ev("window.__TAURI_INTERNALS__.invoke('list_projects').then(l=>l.find(p=>/e2e-scene-auto/.test(p.id))).then(s=>window.__TAURI_INTERNALS__.invoke('load_project',{id:s.id})).then(p=>Object.values(p.characters).filter(c=>c.voice_id).length)");
+      app.check("it chose a voice for both speakers", cast === 2, String(cast));
+    }
+    await app.ev("window.__TAURI_INTERNALS__.invoke('list_projects').then(l=>Promise.all(l.filter(p=>/e2e-scene-auto/.test(p.id)).map(p=>window.__TAURI_INTERNALS__.invoke('delete_project',{id:p.id}))))");
+    await app.press("Ctrl+O"); await sleep(600);
+  }
   const screens = [["home", async () => { await app.press("Ctrl+O"); await sleep(600); }], ["library", async () => { await app.press("Ctrl+Shift+V"); await sleep(600); }]];
   for (const [theme, label] of [["light", "Light"], ["dark", "Dark"]]) {
     await app.press("Ctrl+,"); await sleep(400);

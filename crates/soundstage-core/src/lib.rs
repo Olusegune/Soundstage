@@ -25,6 +25,7 @@ pub mod pronounce;
 pub mod providers;
 pub mod render;
 pub mod safety;
+pub mod secure;
 pub mod script;
 pub mod tags;
 pub mod transcribe;
