@@ -298,11 +298,13 @@ pub struct Registry {
     pub generators: Vec<Box<dyn crate::generate::Generator>>,
     /// Consent record for every cloned voice, by voice id. A voice in this map is usable only while its record is clean.
     pub consents: std::collections::BTreeMap<String, crate::consent::ConsentRecord>,
+    /// App-wide pronunciation rules, applied after a project's own.
+    pub pronunciations: Vec<crate::pronounce::Rule>,
 }
 
 impl Registry {
     pub fn new(adapters: Vec<Box<dyn Adapter>>) -> Self {
-        let mut r = Registry { adapters, voices: vec![], generators: vec![], consents: Default::default() };
+        let mut r = Registry { adapters, voices: vec![], generators: vec![], consents: Default::default(), pronunciations: vec![] };
         r.refresh();
         r
     }
@@ -339,6 +341,11 @@ impl Registry {
         let mut reg = Registry::new(adapters);
         reg.generators = generators;
         reg
+    }
+
+    pub fn with_pronunciations(mut self, rules: Vec<crate::pronounce::Rule>) -> Self {
+        self.pronunciations = rules.into_iter().filter(|r| r.validate().is_ok()).take(crate::pronounce::MAX_RULES).collect();
+        self
     }
 
     /// Add the voices the user cloned, each tied to its consent record. They appear in the library like any other voice.

@@ -41,6 +41,7 @@ const shots = [
   ["dark-1280x720-library.png", "The voice library, with languages shown by flag."],
   ["dark-1280x720-voice-design.png", "Design a voice from a description, with the prompt helper."],
   ["dark-1280x720-speak.png", "Speak: type something, choose a voice, hear it and save it as WAV, MP3, FLAC and more."],
+  ["dark-1280x720-pronunciation.png", "Pronunciation: teach the voices how to say names and terms, and hear the result."],
   ["dark-1280x720-audio-tools.png", "Audio tools: speech to text with subtitles, and noise and music removal."],
   ["dark-1280x720-voice-engines.png", "Voice engines: local engines, Piper, music and effects, ComfyUI."],
   ["dark-1280x720-settings.png", "Settings, including the optional AI prompt helper."],

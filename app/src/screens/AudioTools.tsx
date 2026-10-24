@@ -10,7 +10,7 @@ const LANGS: [string, string][] = [["", "Detect automatically"], ["en", "English
 const SAVE_FILTERS = [{ name: "WAV (lossless)", extensions: ["wav"] }, { name: "MP3", extensions: ["mp3"] }, { name: "FLAC (lossless)", extensions: ["flac"] }, { name: "AAC (M4A)", extensions: ["m4a"] }];
 
 /** Speech to text, and removing noise and music from a recording. */
-export function AudioTools(props: { toast: (t: string, bad?: boolean) => void; onBack: () => void; ffmpegPath: string; onSettings: () => void; onEngines: () => void }) {
+export function AudioTools(props: { keepHistory: boolean; toast: (t: string, bad?: boolean) => void; onBack: () => void; ffmpegPath: string; onSettings: () => void; onEngines: () => void }) {
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [tab, setTab] = useState<Tab>("transcribe");
   const [file, setFile] = useState<string | null>(null);
@@ -35,7 +35,7 @@ export function AudioTools(props: { toast: (t: string, bad?: boolean) => void; o
     setAsk(false); setBusy(true);
     try {
       if (tab === "transcribe") setTr(await api.transcribeAudio(chosen.id, file, lang || null));
-      else setClean(await api.cleanAudio(chosen.id, file));
+      else setClean(await api.cleanAudio(chosen.id, file, props.keepHistory));
     } catch (e) { props.toast(messageOf(e), true); } finally { setBusy(false); }
   };
 

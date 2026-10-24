@@ -94,6 +94,7 @@ export interface Note {
 export type Rating = "all_ages" | "teen" | "adult" | "unrated";
 
 export interface Project {
+  pronunciations: PronRule[];
   schema_version: number;
   id: string;
   name: string;
@@ -382,7 +383,7 @@ export interface Attestation {
   commercial: boolean;
   expires: string | null;
 }
-export interface SpeakOut { path: string; duration_ms: number; voice_name: string }
+export interface SpeakOut { path: string; duration_ms: number; voice_name: string; history_id: string | null }
 export interface ToolInfo { id: string; label: string; ready: boolean; transcribe: boolean; isolate: boolean; sends_data: boolean }
 export interface TranscriptOut { text: string; language: string; srt: string; vtt: string; seconds: number; has_times: boolean }
 export interface CleanOut { path: string; duration_ms: number }
@@ -391,3 +392,7 @@ export interface RefReport { seconds: number; used_seconds: number; peak: number
 export interface ConsentRecord { id: string; voice_subject: string; subject_is_self: boolean; purpose: string; commercial_use_permitted: boolean; expires: string | null; signed_at: string | null; status: "active" | "revoked" | "expired" }
 export interface ClonedVoice { voice_id: string; adapter_id: string; name: string; consent_id: string; created: string }
 export interface CloneEntry { voice: ClonedVoice; consent: ConsentRecord }
+
+export interface PronRule { from: string; to: string; whole_word: boolean; ignore_case: boolean }
+export interface HistoryItem { id: string; created: string; kind: "speak" | "clean"; voice_id: string; voice_name: string; provider_label: string; text: string; style: string; pace: number; duration_ms: number }
+export interface HistoryView { item: HistoryItem; path: string }

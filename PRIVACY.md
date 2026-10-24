@@ -17,6 +17,9 @@ Local engines, Piper, ComfyUI on this computer and Windows voices send nothing.
 
 Each service has its own privacy terms and billing. Soundstage cannot see or change how they store or use what you send.
 
+## History
+The Speak and Audio tools screens keep a copy of what they make, with the text you typed, in `Documents\Soundstage\.history` on your computer (up to 200 items). It is never sent anywhere. Turn it off in Settings or clear it on the Speak screen.
+
 ## Keys
 API keys are stored in the Windows Credential Manager, never in a project, an export or a log. Soundstage does not show a saved key again.
 

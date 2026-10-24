@@ -183,6 +183,8 @@ pub struct Project {
     pub notes: Vec<Note>,
     /// Scene status by index: `not_started`, `in_progress`, `approved`.
     pub scene_status: BTreeMap<String, String>,
+    /// How this project's names and terms should be spoken. Applied before the app-wide rules.
+    pub pronunciations: Vec<crate::pronounce::Rule>,
 }
 
 impl Default for Project {
@@ -209,6 +211,7 @@ impl Default for Project {
             licence_checks: BTreeMap::new(),
             notes: vec![],
             scene_status: BTreeMap::new(),
+            pronunciations: vec![],
         }
     }
 }

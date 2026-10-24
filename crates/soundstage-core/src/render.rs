@@ -71,12 +71,22 @@ fn describe(r: &Resolved) -> String {
     )
 }
 
+/// The tokens a voice is actually given for a line: the script's own, with pronunciation rules applied to spoken text.
+pub fn spoken_tokens(project: &Project, reg: &Registry, text: &str) -> (Vec<Token>, Vec<crate::tags::TagIssue>) {
+    let (tokens, issues) = tokenize(text);
+    if project.pronunciations.is_empty() && reg.pronunciations.is_empty() {
+        return (tokens, issues);
+    }
+    let rules: Vec<crate::pronounce::Rule> = project.pronunciations.iter().chain(reg.pronunciations.iter()).cloned().collect();
+    (crate::pronounce::apply_tokens(tokens, &rules), issues)
+}
+
 pub fn analyze(project: &Project, reg: &Registry) -> Analysis {
     let parsed = script::parse(&project.script);
     let mut lines = Vec::new();
     for line in &parsed.lines {
         let resolved = resolved_for(project, line);
-        let (tokens, tag_issues) = tokenize(&line.text);
+        let (tokens, tag_issues) = spoken_tokens(project, reg, &line.text);
         let mut issues: Vec<LineIssue> = tag_issues
             .iter()
             .map(|i| LineIssue { kind: "unknown_tag".into(), message: i.message.clone(), tag: Some(i.tag.trim_matches(['[', ']']).to_string()) })
@@ -173,7 +183,7 @@ pub fn render_line(project: &mut Project, reg: &Registry, project_dir: &Path, li
     let line = parsed.lines.iter().find(|l| l.key == line_key).ok_or_else(|| err("not_found", "That line no longer exists in the script."))?.clone();
     let resolved = resolved_for(project, &line);
 
-    let (tokens, issues) = tokenize(&line.text);
+    let (tokens, issues) = spoken_tokens(project, reg, &line.text);
     if let Some(i) = issues.first() {
         return Err(err("unknown_tag", format!("{} Fix or remove it before rendering.", i.message)));
     }
@@ -294,6 +304,29 @@ mod tests {
         let dir = std::env::temp_dir().join(new_id("ss-render"));
         std::fs::create_dir_all(&dir).unwrap();
         (p, reg, calls, dir)
+    }
+
+    #[test]
+    fn pronunciation_rules_change_what_is_spoken_and_make_old_takes_stale_only_when_they_apply() {
+        let (mut p, mut reg, _calls, dir) = setup();
+        render_line(&mut p, &reg, &dir, "s0-l0").unwrap();
+        let status = |p: &Project, reg: &Registry| analyze(p, reg).lines.iter().find(|l| l.line.key == "s0-l0").unwrap().status;
+        assert_eq!(status(&p, &reg), LineStatus::Rendered);
+        // A rule that matches nothing in the line changes nothing, so paid takes are not thrown away.
+        p.pronunciations.push(crate::pronounce::Rule { from: "Okafor".into(), to: "Oh-kah-for".into(), ..Default::default() });
+        assert_eq!(status(&p, &reg), LineStatus::Rendered);
+        // A rule that applies changes what the voice is given, so the take is stale until it is made again.
+        p.pronunciations.push(crate::pronounce::Rule { from: "friend".into(), to: "frend".into(), ..Default::default() });
+        assert_eq!(status(&p, &reg), LineStatus::Stale);
+        render_line(&mut p, &reg, &dir, "s0-l0").unwrap();
+        assert_eq!(status(&p, &reg), LineStatus::Rendered);
+        // App-wide rules count too, and the script itself keeps its spelling.
+        reg = reg.with_pronunciations(vec![crate::pronounce::Rule { from: "hello".into(), to: "hullo".into(), ..Default::default() }]);
+        assert_eq!(status(&p, &reg), LineStatus::Stale);
+        assert!(p.script.contains("hello there friend"));
+        let (t, _) = spoken_tokens(&p, &reg, "hello there friend");
+        assert_eq!(t, vec![Token::Text("hullo there frend".into())]);
+        std::fs::remove_dir_all(dir).ok();
     }
 
     #[test]

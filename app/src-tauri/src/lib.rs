@@ -55,12 +55,25 @@ impl RegistryCell {
     fn get(&self) -> Arc<Registry> {
         let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         // A damaged engines file must never stop the app from starting; Settings shows what is wrong with it.
-        g.get_or_insert_with(|| Arc::new(Registry::standard(key_provider(), &EnginesConfig::load(&self.config_path).unwrap_or_default()).with_clones(self.consent_store().list()))).clone()
+        g.get_or_insert_with(|| Arc::new(Registry::standard(key_provider(), &EnginesConfig::load(&self.config_path).unwrap_or_default()).with_clones(self.consent_store().list()).with_pronunciations(self.pronunciation_rules()))).clone()
     }
     /// Consent records live beside the projects folder's other private data, never inside a project.
     fn consent_store(&self) -> soundstage_core::clone::ConsentStore {
         let root = self.config_path.parent().and_then(|p| p.parent()).map(|p| p.to_path_buf()).unwrap_or_default();
         soundstage_core::clone::ConsentStore::new(root.join(".consent"))
+    }
+    fn config_dir(&self) -> PathBuf {
+        self.config_path.parent().map(|p| p.to_path_buf()).unwrap_or_default()
+    }
+    fn pronunciation_path(&self) -> PathBuf {
+        self.config_dir().join("pronunciation.json")
+    }
+    /// App-wide pronunciation rules. A damaged file means no rules, never a failure to start.
+    fn pronunciation_rules(&self) -> Vec<soundstage_core::pronounce::Rule> {
+        std::fs::read(self.pronunciation_path()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+    }
+    fn history_store(&self) -> soundstage_core::history::HistoryStore {
+        soundstage_core::history::HistoryStore::new(self.config_dir().parent().map(|p| p.join(".history")).unwrap_or_default())
     }
     fn reset(&self) {
         *self.inner.lock().unwrap_or_else(|e| e.into_inner()) = None;
@@ -471,12 +484,14 @@ struct SpeakOut {
     path: String,
     duration_ms: u64,
     voice_name: String,
+    /// Set when a copy was kept in the history.
+    history_id: Option<String>,
 }
 
 /// Say some text in one voice, outside any project (the Speak screen). Goes through the same render path as a project
 /// line, so the consent gate, safety rules and tag checks all apply.
 #[tauri::command]
-async fn speak_text(state: State<'_, AppState>, voice_id: String, text: String, emotion: Option<String>, pace: Option<f32>) -> Result<SpeakOut, String> {
+async fn speak_text(state: State<'_, AppState>, voice_id: String, text: String, emotion: Option<String>, pace: Option<f32>, keep: bool) -> Result<SpeakOut, String> {
     let (store, reg) = shared(&state);
     let dir = store.root.join(".preview");
     blocking(move || {
@@ -488,7 +503,9 @@ async fn speak_text(state: State<'_, AppState>, voice_id: String, text: String, 
             return Err("Keep it under 5000 characters. Use a project for longer scripts.".to_string());
         }
         let registry = reg.get();
-        let voice_name = registry.voice(&voice_id).map(|v| v.name.clone()).ok_or("That voice is not available.")?;
+        let (voice_name, provider_label) = registry.voice(&voice_id).map(|v| (v.name.clone(), registry.adapter(&v.provider).map(|a| a.label().to_string()).unwrap_or_default())).ok_or("That voice is not available.")?;
+        let (style, speed) = (emotion.clone().unwrap_or_else(|| "neutral".into()), pace.unwrap_or(1.0));
+        let voice_for_history = voice_id.clone();
         let mut p = Project::new("speak", false);
         p.script = format!("SAMPLE: {text}");
         p.characters.insert("SAMPLE".into(), soundstage_core::project::Character { voice_id: Some(voice_id), ..Default::default() });
@@ -500,7 +517,15 @@ async fn speak_text(state: State<'_, AppState>, voice_id: String, text: String, 
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let r = render::render_line(&mut p, &registry, &dir, "s0-l0").map_err(|e| e.message)?;
         let take = p.take(&r.take_id).ok_or("The audio was not created.")?;
-        Ok(SpeakOut { path: dir.join(&take.file).to_string_lossy().to_string(), duration_ms: take.duration_ms, voice_name })
+        let made = dir.join(&take.file);
+        if keep {
+            let item = soundstage_core::history::HistoryItem { id: String::new(), created: String::new(), kind: "speak".into(), voice_id: voice_for_history, voice_name: voice_name.clone(), provider_label, text: text.clone(), style, pace: speed, duration_ms: take.duration_ms };
+            // History is a convenience: if keeping a copy fails, the audio is still returned.
+            if let Ok((item, stored)) = reg.history_store().add(item, &made) {
+                return Ok(SpeakOut { path: stored.to_string_lossy().to_string(), duration_ms: take.duration_ms, voice_name, history_id: Some(item.id) });
+            }
+        }
+        Ok(SpeakOut { path: made.to_string_lossy().to_string(), duration_ms: take.duration_ms, voice_name, history_id: None })
     })
     .await?
 }
@@ -524,10 +549,13 @@ fn codec_for_extension(ext: &str) -> Option<Codec> {
 async fn save_audio_copy(state: State<'_, AppState>, src: String, dest: String, ffmpeg_path: Option<String>) -> Result<String, String> {
     let (store, _) = shared(&state);
     let preview = store.root.join(".preview");
+    let history = store.root.join(".history");
     blocking(move || {
         let src = std::fs::canonicalize(&src).map_err(|_| "That audio is no longer available. Make it again.".to_string())?;
+        std::fs::create_dir_all(&preview).map_err(|e| e.to_string())?;
         let preview = std::fs::canonicalize(&preview).map_err(|e| e.to_string())?;
-        if !src.starts_with(&preview) {
+        let history = std::fs::canonicalize(&history).unwrap_or_else(|_| preview.clone());
+        if !src.starts_with(&preview) && !src.starts_with(&history) {
             return Err("Only audio made in Soundstage can be saved from here.".to_string());
         }
         let dest = PathBuf::from(dest);
@@ -612,7 +640,7 @@ struct CleanOut {
 
 /// Keep only the speech in a recording (removes noise and music). The result is a new file; the original is untouched.
 #[tauri::command]
-async fn clean_audio(state: State<'_, AppState>, adapter_id: String, path: String) -> Result<CleanOut, String> {
+async fn clean_audio(state: State<'_, AppState>, adapter_id: String, path: String, keep: bool) -> Result<CleanOut, String> {
     let (store, reg) = shared(&state);
     let dir = store.root.join(".preview");
     blocking(move || {
@@ -626,9 +654,80 @@ async fn clean_audio(state: State<'_, AppState>, adapter_id: String, path: Strin
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let out = dir.join(format!("{}.wav", new_id("clean")));
         soundstage_core::output::write_wav(&out, &stereo, soundstage_core::audio::SR, 24)?;
-        Ok(CleanOut { path: out.to_string_lossy().to_string(), duration_ms: stereo.len() as u64 * 1000 / soundstage_core::audio::SR as u64 })
+        let duration_ms = stereo.len() as u64 * 1000 / soundstage_core::audio::SR as u64;
+        if keep {
+            let name = std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let item = soundstage_core::history::HistoryItem { id: String::new(), created: String::new(), kind: "clean".into(), voice_id: String::new(), voice_name: "Cleaned audio".into(), provider_label: a.label().to_string(), text: name, style: "neutral".into(), pace: 1.0, duration_ms };
+            if let Ok((_, stored)) = reg.history_store().add(item, &out) {
+                return Ok(CleanOut { path: stored.to_string_lossy().to_string(), duration_ms });
+            }
+        }
+        Ok(CleanOut { path: out.to_string_lossy().to_string(), duration_ms })
     })
     .await?
+}
+
+#[derive(Serialize)]
+struct HistoryView {
+    item: soundstage_core::history::HistoryItem,
+    path: String,
+}
+
+#[tauri::command]
+async fn history_list(state: State<'_, AppState>) -> Result<Vec<HistoryView>, String> {
+    let (_, reg) = shared(&state);
+    blocking(move || {
+        let h = reg.history_store();
+        h.list().into_iter().filter_map(|item| h.file_for(&item.id).map(|p| HistoryView { path: p.to_string_lossy().to_string(), item })).collect()
+    })
+    .await
+}
+
+#[tauri::command]
+async fn history_delete(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    let (_, reg) = shared(&state);
+    blocking(move || reg.history_store().delete(&id)).await?
+}
+
+#[tauri::command]
+async fn history_clear(state: State<'_, AppState>) -> Result<(), String> {
+    let (_, reg) = shared(&state);
+    blocking(move || reg.history_store().clear()).await?
+}
+
+/// App-wide pronunciation rules.
+#[tauri::command]
+async fn pronunciation_get(state: State<'_, AppState>) -> Result<Vec<soundstage_core::pronounce::Rule>, String> {
+    let (_, reg) = shared(&state);
+    blocking(move || reg.pronunciation_rules()).await
+}
+
+/// What the voice would be given for some text, with the rules shown on screen (not yet saved).
+#[tauri::command]
+async fn pronunciation_preview(text: String, project_rules: Vec<soundstage_core::pronounce::Rule>, app_rules: Vec<soundstage_core::pronounce::Rule>) -> Result<String, String> {
+    blocking(move || {
+        let all: Vec<soundstage_core::pronounce::Rule> = project_rules.into_iter().chain(app_rules).collect();
+        soundstage_core::pronounce::validate_all(&all)?;
+        Ok(soundstage_core::pronounce::apply(&text.chars().take(500).collect::<String>(), &all))
+    })
+    .await?
+}
+
+#[tauri::command]
+async fn pronunciation_save(state: State<'_, AppState>, rules: Vec<soundstage_core::pronounce::Rule>) -> Result<(), String> {
+    let (_, reg) = shared(&state);
+    let cell = reg.clone();
+    blocking(move || {
+        soundstage_core::pronounce::validate_all(&rules)?;
+        let path = reg.pronunciation_path();
+        std::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new("."))).map_err(|e| e.to_string())?;
+        let tmp = path.with_extension("tmp");
+        std::fs::write(&tmp, serde_json::to_vec_pretty(&rules).map_err(|e| e.to_string())?).map_err(|e| format!("Could not save: {e}"))?;
+        std::fs::rename(&tmp, &path).map_err(|e| format!("Could not save: {e}"))
+    })
+    .await??;
+    cell.reset();
+    Ok(())
 }
 
 #[tauri::command]
@@ -1052,6 +1151,7 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .separator()
         .text("speak", "S&peak")
         .text("tools", "&Audio tools")
+        .text("pronunciation", "&Pronunciation")
         .text("voices", "&Voice library")
         .text("engines", "Voice &engines")
         .text("settings", "Se&ttings\tCtrl+,")
@@ -1131,6 +1231,12 @@ pub fn run() {
             clone_voice,
             register_clone,
             speak_text,
+            history_list,
+            history_delete,
+            history_clear,
+            pronunciation_get,
+            pronunciation_save,
+            pronunciation_preview,
             save_audio_copy,
             save_text_copy,
             list_audio_tools,

@@ -20,6 +20,7 @@ _Generated from the in-app Help centre (`app/src/help/content.ts`). Edit that fi
 - [What is free and what costs money](#what-is-free-and-what-costs-money)
 - [Voices and providers](#voices-and-providers)
 - [Speak, transcribe and clean audio](#speak-transcribe-and-clean-audio)
+- [Pronunciation and history](#pronunciation-and-history)
 - [The prompt helper](#the-prompt-helper)
 - [Consent and voice cloning](#consent-and-voice-cloning)
 - [Saving, undo and recovery](#saving-undo-and-recovery)
@@ -239,6 +240,25 @@ Not everything needs a project. The Speak and Audio tools screens (in the sideba
 
 Removes background noise and music and keeps the voice (ElevenLabs). Your original is not changed. Recordings up to 10 minutes.
 
+## Pronunciation and history
+
+_Teach voices how to say names and terms, and find what you made before._
+
+A voice sometimes says a name or term wrongly. In Pronunciation, add the word as it appears in your script and how it should sound, for example Okafor, said like Oh-kah-for.
+
+- Only what the voice is given changes. Your script, subtitles and exports keep the original spelling.
+- Whole word is on by default, so Ade does not change Adelaide. Match capitals is off by default.
+- All projects rules apply everywhere, including the Speak screen. This project rules apply only to the open project and win when both match.
+- A rule that matches nothing changes nothing, so lines you have already paid for are not thrown away. A line that is changed is marked out of date until you render it again.
+- Use Hear it to listen. Some voices follow spelling hints better than others.
+
+
+### History
+
+Everything the Speak and Audio tools screens make is kept on this computer (up to 200 items), with the text and settings. Play it, Use again to fill the form with the same text and voice, Save as, or delete it. Turn history off in Settings, or clear it at any time.
+
+> **Tip.** The history holds your text and audio in Documents\Soundstage\.history. Clear it before sharing the computer.
+
 ## The prompt helper
 
 _How to describe music, effects and voices, even if you have never written a prompt._
@@ -412,6 +432,9 @@ _Captured from the real app by `tools/e2e/run.mjs`._
 
 ![Speak: type something, choose a voice, hear it and save it as WAV, MP3, FLAC and more.](design/screens/dark-1280x720-speak.png)
 *Speak: type something, choose a voice, hear it and save it as WAV, MP3, FLAC and more.*
+
+![Pronunciation: teach the voices how to say names and terms, and hear the result.](design/screens/dark-1280x720-pronunciation.png)
+*Pronunciation: teach the voices how to say names and terms, and hear the result.*
 
 ![Audio tools: speech to text with subtitles, and noise and music removal.](design/screens/dark-1280x720-audio-tools.png)
 *Audio tools: speech to text with subtitles, and noise and music removal.*

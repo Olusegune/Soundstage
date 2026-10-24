@@ -93,6 +93,7 @@ export function Settings(props: {
         <div className="row" style={{ marginTop: 6 }}>
           <button onClick={props.onShortcuts}><I.Keyboard size={16} /> Keyboard shortcuts…</button>
           <button onClick={props.onTour}><I.Rocket size={16} /> Take the guided tour</button>
+          <label className="inline"><input type="checkbox" checked={props.prefs.keepHistory} onChange={(e) => props.onPrefs({ keepHistory: e.target.checked })} /> Keep a history of what Speak and Audio tools make</label>
           <button className="ghost" onClick={() => { props.onPrefs({ welcomed: false, toured: false }); props.toast("The welcome screen will show next time Soundstage starts."); }}>Show the welcome screen again</button>
         </div>
       </div>

@@ -19,10 +19,12 @@ export interface Prefs {
   /** The optional AI prompt helper: any OpenAI-compatible chat server (Ollama by default) and a model name. */
   assistantUrl: string;
   assistantModel: string;
+  /** Keep a copy of what the Speak and Audio tools screens make. */
+  keepHistory: boolean;
 }
 
 export const DEFAULT_PREFS: Prefs = {
-  theme: "dark", mode: "simple", railCollapsed: false, guideOpen: true, guideWidth: 352, welcomed: false, toured: false, shortcuts: {}, ffmpegPath: "", assistantUrl: "http://127.0.0.1:11434/v1", assistantModel: "",
+  theme: "dark", mode: "simple", railCollapsed: false, guideOpen: true, guideWidth: 352, welcomed: false, toured: false, shortcuts: {}, ffmpegPath: "", assistantUrl: "http://127.0.0.1:11434/v1", assistantModel: "", keepHistory: true,
 };
 
 const KEY = "soundstage.prefs.v1";
@@ -46,6 +48,7 @@ export function sanitize(raw: unknown): Prefs {
     toured: r.toured === true,
     shortcuts,
     assistantUrl: typeof r.assistantUrl === "string" && r.assistantUrl.length < 300 && !/[\s\0]/.test(r.assistantUrl) ? r.assistantUrl : DEFAULT_PREFS.assistantUrl,
+    keepHistory: r.keepHistory !== false,
     assistantModel: typeof r.assistantModel === "string" && r.assistantModel.length <= 100 && !/[\s\0]/.test(r.assistantModel) ? r.assistantModel : "",
     ffmpegPath: typeof r.ffmpegPath === "string" && r.ffmpegPath.length < 400 && !/[\r\n\0]/.test(r.ffmpegPath) ? r.ffmpegPath : "",
   };

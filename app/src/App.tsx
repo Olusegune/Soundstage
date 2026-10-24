@@ -13,6 +13,7 @@ import { Providers } from "./screens/Providers";
 import { Settings } from "./screens/Settings";
 import { VoiceLibrary } from "./screens/VoiceLibrary";
 import { Speak } from "./screens/Speak";
+import { Pronunciation } from "./screens/Pronunciation";
 import { AudioTools } from "./screens/AudioTools";
 import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
 import { GuidePanel } from "./shell/GuidePanel";
@@ -257,8 +258,8 @@ export default function App() {
     } catch (e) { say(messageOf(e), true); }
   }, [openProject, say]);
 
-  const openAux = useCallback((v: "library" | "settings" | "help" | "providers" | "speak" | "tools") => {
-    setReturnTo((r) => (view === "library" || view === "settings" || view === "help" || view === "providers" || view === "speak" || view === "tools" ? r : view));
+  const openAux = useCallback((v: "library" | "settings" | "help" | "providers" | "speak" | "tools" | "pronunciation") => {
+    setReturnTo((r) => (view === "library" || view === "settings" || view === "help" || view === "providers" || view === "speak" || view === "tools" || view === "pronunciation" ? r : view));
     setView(v);
   }, [view]);
   const back = () => setView(returnTo === "project" && project ? "project" : "home");
@@ -387,6 +388,7 @@ export default function App() {
         export: () => a["step-6"](),
         engines: () => openAux("providers"),
         speak: () => openAux("speak"),
+        pronunciation: () => openAux("pronunciation"),
         tools: () => openAux("tools"),
         "theme-dark": () => setTheme("dark"), "theme-light": () => setTheme("light"), "theme-system": () => setTheme("system"),
         "prompt-help": () => openHelp("prompt-helper"),
@@ -440,6 +442,7 @@ export default function App() {
     }
     out.push({ id: "home", group: "Go to", title: "Projects (Home)", icon: <I.Home size={16} />, keys: k("open-project"), run: () => void goHome() });
     out.push({ id: "voices", group: "Go to", title: "Voice library", icon: <I.Voices size={16} />, keys: k("voices"), run: () => openAux("library") });
+    out.push({ id: "pron", group: "Go to", title: "Pronunciation: teach voices names and terms", icon: <I.Book size={16} />, run: () => openAux("pronunciation") });
     out.push({ id: "speak", group: "Go to", title: "Speak: type and hear a voice", icon: <I.Speaker size={16} />, run: () => openAux("speak") });
     out.push({ id: "tools", group: "Go to", title: "Audio tools: transcribe and clean", icon: <I.Wave size={16} />, run: () => openAux("tools") });
     out.push({ id: "engines", group: "Go to", title: "Voice engines (local and custom)", icon: <I.Layers size={16} />, run: () => openAux("providers") });
@@ -463,7 +466,7 @@ export default function App() {
 
   const showGuide = view === "project" && !!g;
   const stepDef = g?.steps[step];
-  const hereLabel = view === "home" ? "Projects" : view === "library" ? "Voice library" : view === "providers" ? "Voice engines" : view === "settings" ? "Settings" : view === "help" ? "Help and guide" : view === "speak" ? "Speak" : view === "tools" ? "Audio tools" : (stepDef?.label ?? "");
+  const hereLabel = view === "home" ? "Projects" : view === "library" ? "Voice library" : view === "providers" ? "Voice engines" : view === "settings" ? "Settings" : view === "help" ? "Help and guide" : view === "speak" ? "Speak" : view === "pronunciation" ? "Pronunciation" : view === "tools" ? "Audio tools" : (stepDef?.label ?? "");
   const nextBlocked = g ? g.steps[Math.min(5, step + 1)]?.status === "blocked" : true;
 
   return (
@@ -472,7 +475,7 @@ export default function App() {
       <a className="skip" href="#stage">Skip to content</a>
       <div className="shell" data-rail={railCollapsed ? "collapsed" : "expanded"} data-guide={showGuide && prefs.guideOpen ? "open" : "closed"} style={{ ["--guide-w" as string]: `${prefs.guideWidth}px` }}>
         <Rail view={view} projectName={project?.name ?? null} steps={project && g ? g.steps : null} step={step} collapsed={railCollapsed}
-          onHome={() => void goHome()} onStep={goStep} onVoices={() => openAux("library")} onSpeak={() => openAux("speak")} onTools={() => openAux("tools")} onEngines={() => openAux("providers")} onHelp={() => openHelp()} onShortcuts={() => setShortcutsOpen(true)}
+          onHome={() => void goHome()} onStep={goStep} onVoices={() => openAux("library")} onPron={() => openAux("pronunciation")} onSpeak={() => openAux("speak")} onTools={() => openAux("tools")} onEngines={() => openAux("providers")} onHelp={() => openHelp()} onShortcuts={() => setShortcutsOpen(true)}
           onSettings={() => openAux("settings")} onToggle={() => setPrefs({ railCollapsed: !prefs.railCollapsed })} shortcutHint={(id) => keyOf(id as ShortcutId)} />
         <Toolbar hereLabel={hereLabel} project={view === "project" ? project : null} saveState={saved} canUndo={history.current.length > 0} canRedo={future.current.length > 0}
           onUndo={undo} onRedo={redo} mode={prefs.mode} onMode={setMode} onPalette={actions.palette} paletteKey={keyOf("palette")}
@@ -481,8 +484,9 @@ export default function App() {
 
         <main className="stage" id="stage" tabIndex={-1}>
           {view === "home" && <Home onOpen={(id) => void openProject(id)} toast={say} onQuickStart={() => void quickStart()} onHelp={() => openHelp("quick-start")} />}
-          {view === "speak" && <Speak voices={voices} toast={say} onBack={back} ffmpegPath={prefs.ffmpegPath} onSettings={() => openAux("settings")} />}
-          {view === "tools" && <AudioTools toast={say} onBack={back} ffmpegPath={prefs.ffmpegPath} onSettings={() => openAux("settings")} onEngines={() => openAux("providers")} />}
+          {view === "pronunciation" && <Pronunciation voices={voices} project={project} onEditProject={(fn) => edit(fn, "pronunciation")} toast={say} onBack={back} />}
+          {view === "speak" && <Speak keepHistory={prefs.keepHistory} voices={voices} toast={say} onBack={back} ffmpegPath={prefs.ffmpegPath} onSettings={() => openAux("settings")} />}
+          {view === "tools" && <AudioTools keepHistory={prefs.keepHistory} toast={say} onBack={back} ffmpegPath={prefs.ffmpegPath} onSettings={() => openAux("settings")} onEngines={() => openAux("providers")} />}
           {view === "library" && <VoiceLibrary onChanged={() => { void api.voices().then(setVoices).catch((e) => say(messageOf(e), true)); }} voices={voices} toast={say} onBack={back} inProject={returnTo === "project" && !!project} onSettings={() => openAux("settings")} onEngines={() => openAux("providers")} />}
           {view === "providers" && <Providers toast={say} onBack={back} inProject={returnTo === "project" && !!project} onChanged={() => { void api.voices().then(setVoices).catch((e) => say(messageOf(e), true)); }} />}
           {view === "settings" && <Settings info={info} toast={say} onBack={back} inProject={returnTo === "project" && !!project} prefs={prefs} onPrefs={setPrefs} onTheme={setTheme}
