@@ -1,5 +1,7 @@
 # Architecture
 
+> **Note (2026-10-25):** this describes v0.1 and is partly out of date. The target design is in `docs/spec/03-ARCHITECTURE-UPDATE.md`; together they are the dev spec (decision D-02).
+
 Status: describes what exists in v0.1. CLAUDE.md names this file; it was not in the supplied doc set, so this one is derived from the code. Review it.
 
 ## Components
