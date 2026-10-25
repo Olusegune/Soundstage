@@ -9,7 +9,7 @@ Last updated 2026-10-25.
 | App v0.1 and v0.2 (everything in `CHANGELOG.md`) | Built, tested, pushed. Last code commit `f5ff35f` |
 | Tests at that commit | 233 Rust, 82 front-end, 181 of 181 real-window checks, types clean, 0 audit findings |
 | PRD-002 (AI models update) | **MS0 spec written, awaiting owner approval.** No code written for it |
-| Next implementation milestone | MS1 Foundations, blocked on D-03 |
+| Next implementation milestone | MS1 Foundations: D-01, D-02, D-03, D-04, D-11, D-13 approved; awaiting the detailed MS1 task plan and the owner go-ahead |
 
 ## Milestones
 
