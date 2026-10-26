@@ -8,6 +8,7 @@
 - **Licence conditions.** A licence can now carry conditions (revenue limit, country limit, limited uses). A commercial export asks you to confirm each one; a credit line shows as a notice. Conditions a provider declares cannot be removed by recording your own check.
 - **Local-only mode** (Settings): refuses everything that would use the internet, including model downloads, until you turn it off.
 - **This computer** appears in the System check: memory, graphics card, free disk space, and a level that later decides which local models are offered.
+- **Director** (Direct step): suggests how each line should be played (what the character wants, what they hold back, pace, pauses, emphasis) using the chat server you set in Settings. It shows what will be sent and where before it sends anything, only suggests, and lets you accept line by line. What you edit is locked and never overwritten. "Simple rules only" works with no server. Action lines like `(She slams the door.)` are now understood and never spoken.
 - Behind the scenes: a performance-plan format with checks, and a model list that cannot call anything verified without evidence.
 
 

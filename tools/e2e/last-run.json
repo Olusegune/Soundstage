@@ -1,11 +1,11 @@
 {
-  "when": "2026-10-26T00:33:55.823Z",
-  "passed": 192,
-  "total": 192,
+  "when": "2026-10-26T00:51:08.627Z",
+  "passed": 208,
+  "total": 208,
   "failed": [],
   "timings": {
-    "paletteOpenMs": 77,
-    "stepSwitchMs": 434
+    "paletteOpenMs": 79,
+    "stepSwitchMs": 436
   },
   "accessibility": [
     {
@@ -54,6 +54,14 @@
     },
     {
       "screen": "Interrupted render dialog",
+      "violations": []
+    },
+    {
+      "screen": "Director consent dialog",
+      "violations": []
+    },
+    {
+      "screen": "Director suggestions",
       "violations": []
     },
     {

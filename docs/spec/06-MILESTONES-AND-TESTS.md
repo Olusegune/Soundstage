@@ -77,6 +77,8 @@ Needs C-16 decided and the Director host approved.
 
 **Exit gate:** AC-001 passes on three fixture scripts; the injection suite passes; privacy notice updated; no script text in any log; the owner reviews real plans from a real model on their own scripts and accepts the quality as a draft aid (not a claim).
 
+**MS2 status 2026-10-25: first slice built (208 of 208 real-window checks).** Done: T-2.1 action lines (no Fountain elements yet), T-2.3 Planner with fence, schema checks and rules fallback (tested against fake servers and hostile replies), T-2.4 consent and cost screen, T-2.5/2.6 plan panel with confidence, hold-back emotion, locks, accept per line. Not done: text PDF import (T-2.2, needs your approval of a PDF library), alternatives UI, multi-dimensional emotion editing beyond the main feeling, a real-model quality review by the owner (the exit gate). Host decision D-06 was applied as the existing Settings chat server only.
+
 ## 6. MS3. Performance v1 (about 4 weeks)
 
 | Task | Depends on | Size | Test |

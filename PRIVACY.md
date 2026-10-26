@@ -15,6 +15,7 @@ Soundstage asks before sending anything. Depending on what you set up:
 - **Speech to text and audio cleaning:** the recording you choose, converted on your computer, sent to the engine you chose.
 - **VoiceKiller:** the text of the lines you render and the voice name, sent to voicekiller.com.
 - **Music, effects and voice design:** the description you typed, sent to the service you chose (ElevenLabs, Kie, fal).
+- **Director:** the scene text (character names, dialogue and action lines) in batches, sent to the chat server you set in Settings, only after a screen shows what and where. If that is Ollama on your computer, nothing leaves it. "Simple rules only" sends nothing.
 - **AI prompt helper:** the description you typed, sent to the chat server you set in Settings. If that is Ollama on your computer, nothing leaves it.
 Local engines, Piper, ComfyUI on this computer and Windows voices send nothing.
 

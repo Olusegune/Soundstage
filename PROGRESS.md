@@ -7,7 +7,7 @@ Last updated 2026-10-25.
 | Area | State |
 |---|---|
 | App v0.1 and v0.2 (everything in `CHANGELOG.md`) | Built, tested, pushed. Last code commit `f5ff35f` |
-| Tests now | 279 Rust, 83 front-end, 192 of 192 real-window checks, types clean |
+| Tests now | 291 Rust, 83 front-end, 208 of 208 real-window checks, types clean |
 | PRD-002 (AI models update) | MS0 spec approved in part (see `DECISIONS.md`). **MS1 Foundations built 2026-10-25**, awaiting the owner's demo and sign-off |
 | Next implementation milestone | MS1 Foundations: D-01, D-02, D-03, D-04, D-11, D-13 approved; awaiting the detailed MS1 task plan and the owner go-ahead |
 
@@ -17,7 +17,7 @@ Last updated 2026-10-25.
 |---|---|---|
 | MS0 | Spec | Done |
 | MS1 | Foundations | Built and tested; awaiting owner demo and sign-off |
-| MS2 | Director v1 | Not started, needs D-06 and a host choice |
+| MS2 | Director v1 | First slice built and tested with fake servers; needs the owner to try it on a real model (Ollama or another chat server) and review plan quality; PDF import waits for approval |
 | MS3 | Performance v1 | Not started |
 | MS4 | Model Lab v1 | Not started |
 | MS5 | Local model packs | Not started |

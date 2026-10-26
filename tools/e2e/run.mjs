@@ -479,7 +479,7 @@ try {
     });
     await new Promise((r) => srv.listen(0, "127.0.0.1", r));
     const base = `http://127.0.0.1:${srv.address().port}/v1`;
-    const pid = await app.ev(`${inv("create_project", { name: "e2e director", sample: false })}.then(p=>{p.script=['# T','AMA: Where were you last night?','(He puts the keys down slowly.)','KOLA: Out. Does it matter?'].join(String.fromCharCode(10));return window.__TAURI_INTERNALS__.invoke('save_project',{project:p}).then(()=>p.id)})`);
+    const pid = await app.ev(`${inv("create_project", { name: "e2e director", sample: false })}.then(p=>{p.script=['# T','AMA: Where were you last night?','(He puts the keys down slowly.)','KOLA: Out. Does it matter?'].join(String.fromCharCode(10));return window.__TAURI_INTERNALS__.invoke('list_voices').then(v=>{const vid=v.find(x=>x.id.startsWith('sapi:')).id;p.characters={AMA:{voice_id:vid},KOLA:{voice_id:vid}};return window.__TAURI_INTERNALS__.invoke('save_project',{project:p}).then(()=>p.id)})})`);
     const proj = () => `${inv("load_project", { id: pid })}`;
     const run = (confirmed, useModel = true) => `${proj()}.then(p=>window.__TAURI_INTERNALS__.invoke('director_run',{project:p,baseUrl:'${base}',model:'fake',useModel:${useModel},confirmed:${confirmed}}).then(x=>x,e=>'ERR '+String(e)))`;
     const refused = await app.ev(run(false));

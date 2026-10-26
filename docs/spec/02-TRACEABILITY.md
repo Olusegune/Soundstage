@@ -11,7 +11,7 @@ Sources merged: PRD-002 (`docs/PRD_AI_MODELS_UPDATE.md`), the master `docs/PRD.m
 
 "Evidence" points to a module or test in the repository. A dash means there is none. `MS` is the milestone in `06-MILESTONES-AND-TESTS.md` that delivers the missing part.
 
-**Totals** (rows with a status, 171): **Existing 50**, **Partial 69**, **New 52**. Existing 29%, Partial 40%, New 30%. Counted by script from this file; update them when a row changes. (At MS0 the counts were 46, 68 and 57.)
+**Totals** (rows with a status, 171): **Existing 53**, **Partial 73**, **New 45**. Existing 30%, Partial 42%, New 26%. Counted by script from this file; update them when a row changes. (At MS0 the counts were 46, 68 and 57.)
 
 ---
 
@@ -61,14 +61,14 @@ Sources merged: PRD-002 (`docs/PRD_AI_MODELS_UPDATE.md`), the master `docs/PRD.m
 
 | ID | Requirement | Status | Evidence | Gap | MS |
 |---|---|---|---|---|---|
-| DIR-001 | Extract scenes, characters, dialogue, actions, stage directions | Partial | scenes, speakers, lines | actions and stage directions | MS2 |
-| DIR-002 | Dramatic objectives and relationships | New | - | LLM analysis | MS2 |
-| DIR-003 | Infer emotional subtext | New | - | LLM analysis | MS2 |
-| DIR-004 | Detect physical actions affecting voice | New | - | LLM analysis plus rules | MS2, MS3 |
-| DIR-005 | Recommend pacing, pauses, emphasis, reactions | New | manual direction and prompt helper only | automatic suggestions | MS2 |
-| DIR-006 | Alternative interpretations | New | - | n alternatives per line | MS2 |
-| DIR-007 | Preserve user changes when regenerating others | Partial | script is the source of truth | needs stable IDs and a plan object | MS1, MS2 |
-| DIR-008 | Confidence and uncertainty notes | New | - | schema field and UI | MS2 |
+| DIR-001 | Extract scenes, characters, dialogue, actions, stage directions | Existing | scenes, speakers, lines | actions and stage directions | MS2 |
+| DIR-002 | Dramatic objectives and relationships | Partial | `director.rs` asks the chat server in Settings; suggestions are drafts | LLM analysis | MS2 |
+| DIR-003 | Infer emotional subtext | Partial | `director.rs` asks the chat server in Settings; suggestions are drafts | LLM analysis | MS2 |
+| DIR-004 | Detect physical actions affecting voice | Partial | `director.rs` asks the chat server in Settings; suggestions are drafts | LLM analysis plus rules | MS2, MS3 |
+| DIR-005 | Recommend pacing, pauses, emphasis, reactions | Partial | manual direction and prompt helper only | automatic suggestions | MS2 |
+| DIR-006 | Alternative interpretations | Partial | `director.rs` asks the chat server in Settings; suggestions are drafts | n alternatives per line | MS2 |
+| DIR-007 | Preserve user changes when regenerating others | Existing | script is the source of truth | needs stable IDs and a plan object | MS1, MS2 |
+| DIR-008 | Confidence and uncertainty notes | Partial | `director.rs` asks the chat server in Settings; suggestions are drafts | schema field and UI | MS2 |
 | DIR-PLAN | PerformancePlan, versioned and validated (13 fields) | Partial | `plan.rs` has the schema, validation and store; `direction.rs` resolves a subset | nothing produces or uses a plan yet | MS2 |
 
 ## 4. Emotional Intelligence Engine (section 6)
@@ -117,7 +117,7 @@ Sources merged: PRD-002 (`docs/PRD_AI_MODELS_UPDATE.md`), the master `docs/PRD.m
 |---|---|---|---|---|---|
 | SCR-001 | Preserve original script text | Existing | script text is stored unchanged | none | - |
 | SCR-002 | Identify scenes and speakers | Existing | `script.rs` tests | none | - |
-| SCR-003 | Extract action descriptions | New | - | parser support | MS2 |
+| SCR-003 | Extract action descriptions | Existing | `(parenthesised)` and `> ` lines parsed as actions, not spoken | none | - |
 | SCR-004 | Correct mis-parsed elements | Partial | edit the text | per-element correction UI | MS2 |
 | SCR-005 | Preserve source references | Partial | row numbers | stable source spans | MS1 |
 | SCR-006 | Editable scene plan | Partial | scene list, scene directions | plan with cues and notes | MS2 |
