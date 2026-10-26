@@ -151,6 +151,43 @@ impl LabSet {
     }
 }
 
+/// The English set that ships with the app, so the Lab works without any download.
+const BUILTIN_ENGLISH: &[(&str, &str)] = &[
+    ("set.json", include_str!("../../../fixtures/lab/english-v1/set.json")),
+    ("CHECKSUM", include_str!("../../../fixtures/lab/english-v1/CHECKSUM")),
+    ("scenes/01-narration.txt", include_str!("../../../fixtures/lab/english-v1/scenes/01-narration.txt")),
+    ("scenes/02-calm-conversation.txt", include_str!("../../../fixtures/lab/english-v1/scenes/02-calm-conversation.txt")),
+    ("scenes/03-argument.txt", include_str!("../../../fixtures/lab/english-v1/scenes/03-argument.txt")),
+    ("scenes/04-grief.txt", include_str!("../../../fixtures/lab/english-v1/scenes/04-grief.txt")),
+    ("scenes/05-joy.txt", include_str!("../../../fixtures/lab/english-v1/scenes/05-joy.txt")),
+    ("scenes/06-whisper.txt", include_str!("../../../fixtures/lab/english-v1/scenes/06-whisper.txt")),
+    ("scenes/07-shout.txt", include_str!("../../../fixtures/lab/english-v1/scenes/07-shout.txt")),
+    ("scenes/08-laugh-in-line.txt", include_str!("../../../fixtures/lab/english-v1/scenes/08-laugh-in-line.txt")),
+    ("scenes/09-cough.txt", include_str!("../../../fixtures/lab/english-v1/scenes/09-cough.txt")),
+    ("scenes/10-gasp.txt", include_str!("../../../fixtures/lab/english-v1/scenes/10-gasp.txt")),
+    ("scenes/11-names-and-long-sentence.txt", include_str!("../../../fixtures/lab/english-v1/scenes/11-names-and-long-sentence.txt")),
+    ("scenes/12-code-switch.txt", include_str!("../../../fixtures/lab/english-v1/scenes/12-code-switch.txt")),
+    ("scenes/13-multi-speaker.txt", include_str!("../../../fixtures/lab/english-v1/scenes/13-multi-speaker.txt")),
+];
+
+/// Write the built-in English set under `lab_root/sets/english-v1` if it is not there or has been changed, and return
+/// its folder. The copy is checked like any other set when it is loaded.
+pub fn install_builtin(lab_root: &Path) -> Result<std::path::PathBuf, String> {
+    let dir = lab_root.join("sets").join("english-v1");
+    let intact = load(&dir).is_ok();
+    if !intact {
+        let _ = std::fs::remove_dir_all(&dir);
+        for (name, text) in BUILTIN_ENGLISH {
+            let p = dir.join(name);
+            if let Some(parent) = p.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| format!("Could not set up the test set: {e}"))?;
+            }
+            std::fs::write(&p, text).map_err(|e| format!("Could not set up the test set: {e}"))?;
+        }
+    }
+    Ok(dir)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,6 +275,21 @@ mod tests {
         std::fs::write(d.join("set.json"), &evil).unwrap();
         assert!(load(&d).unwrap_err().contains("not a file inside"));
         std::fs::remove_dir_all(d).ok();
+    }
+
+    #[test]
+    fn the_built_in_set_installs_repairs_itself_and_matches_the_files_in_the_repo() {
+        let root = std::env::temp_dir().join(new_id("ss-labroot2"));
+        std::fs::create_dir_all(&root).unwrap();
+        let dir = install_builtin(&root).unwrap();
+        let set = load(&dir).unwrap();
+        assert_eq!(set.checksum, load(&fixture()).unwrap().checksum, "the embedded copy is the repo copy");
+        std::fs::write(dir.join("scenes/01-narration.txt"), "AMA: tampered words for a test run here today.
+").unwrap();
+        assert!(load(&dir).is_err());
+        install_builtin(&root).unwrap();
+        assert!(load(&dir).is_ok(), "a changed copy is replaced");
+        std::fs::remove_dir_all(root).ok();
     }
 
     #[test]

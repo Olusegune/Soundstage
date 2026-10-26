@@ -626,6 +626,38 @@ try {
     await app.press("Ctrl+O"); await sleep(500);
     fs.rmSync(base, { recursive: true, force: true });
   }
+  // Model Lab runner: free local voices only. Online voices are estimated and refused, never run, in this test.
+  {
+    const fs = await import("node:fs");
+    const inv = (cmd, args) => `window.__TAURI_INTERNALS__.invoke('${cmd}',${JSON.stringify(args)})`;
+    const set = await app.ev(`${inv("lab_set", {})}.then(s=>({n:s.scenes.length,sum:s.checksum.length,ready:s.scenes.filter(x=>!x.needs_native_review).length}),e=>String(e))`);
+    app.check("the built-in English test set loads with its 13 scenes", set.n === 13 && set.sum === 64 && set.ready === 12, JSON.stringify(set));
+    const voices = await app.ev(`${inv("list_voices", {})}.then(v=>v.map(x=>({id:x.id,sends:x.sends_data})))`);
+    const local = voices.filter((v) => v.id.startsWith("sapi:"));
+    const online = voices.find((v) => v.sends);
+    const spec = { candidates: [{ voice_id: local[0].id, label: "Windows one" }, { voice_id: local[1].id, label: "Windows two" }], scene_ids: ["narration", "calm-conversation"], include_unreviewed: false, cap_chars: null };
+    const est = await app.ev(`${inv("lab_estimate", { spec })}.then(x=>x,e=>'ERR '+String(e))`);
+    app.check("a local run estimates no online spending", est.clips === 4 && est.online_chars === 0 && est.local_clips === 4, JSON.stringify(est).slice(0, 160));
+    if (online) {
+      const spec2 = { ...spec, candidates: [{ voice_id: online.id, label: "Online" }] };
+      const est2 = await app.ev(`${inv("lab_estimate", { spec: spec2 })}.then(x=>x,e=>'ERR '+String(e))`);
+      app.check("an online voice shows the characters it would send before anything runs", est2.online_chars > 100 && est2.online.length === 1, JSON.stringify(est2).slice(0, 200));
+      const noCap = await app.ev(`${inv("lab_start", { spec: spec2, approvedChars: est2.online_chars })}.then(()=>'ran',e=>String(e))`);
+      app.check("an online run without a spending cap is refused", /cap/.test(String(noCap)), String(noCap));
+      const wrong = await app.ev(`${inv("lab_start", { spec: { ...spec2, cap_chars: 99999 }, approvedChars: 1 })}.then(()=>'ran',e=>String(e))`);
+      app.check("an online run without the exact approval is refused", /Approve exactly/.test(String(wrong)), String(wrong));
+    }
+    const run = await app.ev(`${inv("lab_start", { spec, approvedChars: 0 })}.then(x=>x,e=>'ERR '+String(e))`);
+    app.check("a local run makes a clip for every scene and voice", run.state === "done" && run.clips.length === 4 && run.clips.every((c) => c.ok), JSON.stringify(run).slice(0, 200));
+    const info = await app.ev(`${inv("app_info", {})}`);
+    const clip = `${info.projects_root}/.lab/runs/${run.id}/${run.clips[0].file}`;
+    app.check("the clips are real audio files in the Lab folder, not in any project", fs.existsSync(clip) && fs.statSync(clip).size > 50000 && !clip.includes("/takes/"), clip);
+    app.check("each clip records its length, characters and time", run.clips.every((c) => c.duration_ms > 1500 && c.chars > 20 && c.latency_ms >= 0 && !c.online) && run.sent_chars === 0);
+    const listed = await app.ev(`${inv("lab_runs", {})}.then(r=>r.some(x=>x.id==='${run.id}'))`);
+    app.check("finished runs are listed", listed === true);
+    await app.ev(`${inv("lab_delete_run", { runId: run.id })}`);
+    app.check("a run can be deleted, taking its clips with it", !fs.existsSync(clip));
+  }
   const screens = [["home", async () => { await app.press("Ctrl+O"); await sleep(600); }], ["library", async () => { await app.press("Ctrl+Shift+V"); await sleep(600); }]];
   for (const [theme, label] of [["light", "Light"], ["dark", "Dark"]]) {
     await app.press("Ctrl+,"); await sleep(400);

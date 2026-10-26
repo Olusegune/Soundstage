@@ -350,6 +350,70 @@ struct ListenClip {
     path: String,
 }
 
+static LAB_CANCEL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn lab_root(store: &Store) -> PathBuf {
+    store.root.join(".lab")
+}
+
+/// The built-in English test set, set up on first use and checked every time.
+#[tauri::command]
+fn lab_set(state: State<'_, AppState>) -> Result<soundstage_core::labset::LabSet, String> {
+    let root = lab_root(&state.store);
+    soundstage_core::labset::load(&soundstage_core::labset::install_builtin(&root)?)
+}
+
+/// What a Lab run would do and send. Nothing is rendered or sent by asking.
+#[tauri::command]
+fn lab_estimate(state: State<'_, AppState>, spec: soundstage_core::lab::Spec) -> Result<soundstage_core::lab::Estimate, String> {
+    let (store, reg) = shared(&state);
+    let set = soundstage_core::labset::load(&soundstage_core::labset::install_builtin(&lab_root(&store))?)?;
+    soundstage_core::lab::estimate(&set, &spec, &reg.get(), soundstage_core::net::local_only())
+}
+
+/// Start a Lab run. Online voices need a cap and `approved_chars` equal to the estimate.
+#[tauri::command]
+async fn lab_start(app: AppHandle, state: State<'_, AppState>, spec: soundstage_core::lab::Spec, approved_chars: u64) -> Result<soundstage_core::lab::RunRecord, String> {
+    let (store, reg) = shared(&state);
+    blocking(move || {
+        let root = lab_root(&store);
+        let set = soundstage_core::labset::load(&soundstage_core::labset::install_builtin(&root)?)?;
+        let total = spec.candidates.len() * set.scenes_ready(spec.include_unreviewed).len();
+        soundstage_core::lab::start(&root, &set, spec, approved_chars, &reg.get(), soundstage_core::net::local_only(), &LAB_CANCEL, &mut |r| {
+            let _ = app.emit("lab-progress", serde_json::json!({ "done": r.clips.len(), "total": total, "run": r.id }));
+        })
+    })
+    .await?
+}
+
+#[tauri::command]
+async fn lab_resume(app: AppHandle, state: State<'_, AppState>, run_id: String) -> Result<soundstage_core::lab::RunRecord, String> {
+    let (store, reg) = shared(&state);
+    blocking(move || {
+        let root = lab_root(&store);
+        let set = soundstage_core::labset::load(&soundstage_core::labset::install_builtin(&root)?)?;
+        soundstage_core::lab::resume(&root, &run_id, &set, &reg.get(), soundstage_core::net::local_only(), &LAB_CANCEL, &mut |r| {
+            let _ = app.emit("lab-progress", serde_json::json!({ "done": r.clips.len(), "run": r.id }));
+        })
+    })
+    .await?
+}
+
+#[tauri::command]
+fn lab_cancel() {
+    LAB_CANCEL.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+#[tauri::command]
+fn lab_runs(state: State<'_, AppState>) -> Vec<soundstage_core::lab::RunRecord> {
+    soundstage_core::lab::list_runs(&lab_root(&state.store))
+}
+
+#[tauri::command]
+fn lab_delete_run(state: State<'_, AppState>, run_id: String) -> Result<(), String> {
+    soundstage_core::lab::delete_run(&lab_root(&state.store), &run_id)
+}
+
 /// Other voices that could stand in on a line that failed or cannot be done. Nothing is called here.
 #[tauri::command]
 fn fallback_options(state: State<'_, AppState>, project: Project, line_key: String) -> Vec<render::FallbackOption> {
@@ -1725,6 +1789,13 @@ pub fn run() {
             render_lines,
             job_begin,
             audition_line,
+            lab_set,
+            lab_estimate,
+            lab_start,
+            lab_resume,
+            lab_cancel,
+            lab_runs,
+            lab_delete_run,
             make_listening_pack,
             fallback_options,
             director_estimate,
