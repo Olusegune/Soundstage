@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, messageOf } from "../api";
-import { licenceNote } from "../logic";
+import { filterVoices, licenceNote, NO_VOICE_FILTER, type VoiceFilter } from "../logic";
 import { Flag, languageName } from "../flags";
 import { LicenceChip, PlayButton } from "../ui";
 import { PromptHelper } from "../shell/PromptHelper";
@@ -11,9 +11,12 @@ const ALL_TAGS = [...NON_VERBAL, "whisper", "shout", "excited", "sad", "tired", 
 
 export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: boolean) => void; onBack: () => void; inProject: boolean; onSettings: () => void; onEngines: () => void; onChanged?: () => void }) {
   const { voices } = props;
-  const [q, setQ] = useState("");
-  const [lang, setLang] = useState("");
-  const [lic, setLic] = useState("");
+  const [flt, setFlt] = useState<VoiceFilter>(NO_VOICE_FILTER);
+  const { q, lang, lic } = flt;
+  const setQ = (v: string) => setFlt((f) => ({ ...f, q: v }));
+  const setLang = (v: string) => setFlt((f) => ({ ...f, lang: v }));
+  const setLic = (v: string) => setFlt((f) => ({ ...f, lic: v }));
+  const setBy = (k: keyof VoiceFilter) => (v: string) => { setFlt((f) => ({ ...f, [k]: v })); setLimit(100); };
   const [paths, setPaths] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [limit, setLimit] = useState(100);
@@ -46,9 +49,12 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
   };
 
   const languages = useMemo(() => [...new Set(voices.map((v) => v.language))].sort(), [voices]);
-  const shown = voices.filter((v) =>
-    (!lang || v.language === lang) && (!lic || v.licence.licence === lic) &&
-    (!q || `${v.name} ${v.accent} ${v.provider_label}`.toLowerCase().includes(q.toLowerCase())));
+  const distinct = (pick: (v: Voice) => string) => [...new Set(voices.map(pick).filter(Boolean))].sort();
+  const genders = useMemo(() => distinct((v) => v.gender), [voices]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ages = useMemo(() => distinct((v) => v.age_range), [voices]); // eslint-disable-line react-hooks/exhaustive-deps
+  const accents = useMemo(() => distinct((v) => v.accent), [voices]); // eslint-disable-line react-hooks/exhaustive-deps
+  const providers = useMemo(() => [...new Map(voices.map((v) => [v.provider, v.provider_label])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [voices]);
+  const shown = filterVoices(voices, flt);
 
   const sample = async (v: Voice) => {
     if (v.sends_data && !window.confirm(`This sends a short sample line to ${v.provider_label} and uses your account's credits. Continue?`)) return;
@@ -68,6 +74,12 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
           <div><label htmlFor="vq">Search</label><input id="vq" type="text" value={q} onChange={(e) => { setQ(e.target.value); setLimit(100); }} placeholder="Name or accent" /></div>
           <div><label htmlFor="vl">Language</label><select id="vl" value={lang} onChange={(e) => { setLang(e.target.value); setLimit(100); }}><option value="">All</option>{languages.map((l) => <option key={l} value={l}>{languageName(l)}</option>)}</select></div>
           <div><label htmlFor="vli">Licence</label><select id="vli" value={lic} onChange={(e) => setLic(e.target.value)}><option value="">All</option><option value="commercial">Commercial</option><option value="unknown">Unknown</option><option value="non-commercial">Non-commercial</option></select></div>
+          <div><label htmlFor="vg">Gender</label><select id="vg" value={flt.gender} onChange={(e) => setBy("gender")(e.target.value)}><option value="">All</option>{genders.map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
+          <div><label htmlFor="va">Age</label><select id="va" value={flt.age} onChange={(e) => setBy("age")(e.target.value)}><option value="">All</option>{ages.map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
+          <div><label htmlFor="vac">Accent</label><select id="vac" value={flt.accent} onChange={(e) => setBy("accent")(e.target.value)}><option value="">All</option>{accents.map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
+          <div><label htmlFor="vp">Provider</label><select id="vp" value={flt.provider} onChange={(e) => setBy("provider")(e.target.value)}><option value="">All</option>{providers.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></div>
+          <div><label htmlFor="vc">Can make</label><select id="vc" value={flt.can} onChange={(e) => setBy("can")(e.target.value)}><option value="">Anything</option>{ALL_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+          {Object.values(flt).some(Boolean) && <button className="small" onClick={() => { setFlt(NO_VOICE_FILTER); setLimit(100); }}>Clear filters</button>}
         </div>
       </div>
       {!voices.some((v) => v.sends_data) && <div className="callout small"><strong>Want cloud voices?</strong>Save an ElevenLabs key, or add a local engine, and more voices appear here. Cloned and professional voices from your account are never listed, because they need a consent record.<div className="row" style={{ marginTop: 8 }}><button className="small" onClick={props.onSettings}>Open Settings</button><button className="small" onClick={props.onEngines}>Add a local engine</button></div></div>}
@@ -79,7 +91,7 @@ export function VoiceLibrary(props: { voices: Voice[]; toast: (t: string, bad?: 
             {shown.slice(0, limit).map((v) => (
               <tr key={v.id}>
                 <td><strong>{v.name}</strong><div className="small muted">{v.provider_label}{v.sends_data ? " · sends text online" : " · on this computer"}</div></td>
-                <td><Flag locale={v.language} name /><div className="small muted">{v.accent}</div></td>
+                <td><Flag locale={v.language} name /><div className="small muted">{v.accent || "Accent not stated"} <span className="chip" data-tip="Soundstage lists an accent as verified only after native speakers have rated it. None have been rated yet.">not rated</span></div></td>
                 <td>{v.gender} · {v.age_range}</td>
                 <td><LicenceChip licence={v.licence.licence} note={v.licence.notes} /><div className="small muted">{licenceNote(v.licence)}</div></td>
                 <td className="small" style={{ maxWidth: 260 }}>

@@ -482,6 +482,11 @@ pub mod contract {
         if !caps.tags.contains(&"sarcastic".to_string()) {
             assert_eq!(adapter.render(&bad_emotion).unwrap_err(), AdapterError::UnsupportedTag("sarcastic".into()));
         }
+        // PHY-001: every tag the adapter declares really renders, and a tag it declares is never refused as unknown.
+        for t in caps.tags.iter().filter(|t| crate::tags::NON_VERBAL.contains(&t.as_str())) {
+            let ok = req(adapter, voice, &format!("Hello [{t}] there my friend"), "neutral");
+            adapter.render(&ok).unwrap_or_else(|e| panic!("declared tag [{t}] failed: {e}"));
+        }
         // Unknown language is rejected.
         let mut lang = req(adapter, voice, "Hello there", "neutral");
         lang.language = "xx-YY".into();

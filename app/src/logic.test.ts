@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canEnter, insertAt, removeTagFromRow, splitTags, stepComplete, withConditions } from "./logic";
+import { canEnter, insertAt, removeTagFromRow, splitTags, stepComplete, withConditions, filterVoices, NO_VOICE_FILTER } from "./logic";
 import type { Analysis, Project } from "./types";
 
 const project = {} as Project;
@@ -60,5 +60,19 @@ describe("withConditions", () => {
     const mine = { ...base, conditions: [{ ...cap, confirmed: "2026-10-01" }] };
     expect(withConditions(mine, [cap]).conditions).toEqual([{ ...cap, confirmed: "2026-10-01" }]);
     expect(withConditions(base, undefined).conditions).toEqual([]);
+  });
+});
+
+describe("filterVoices", () => {
+  const v = (id: string, o: Partial<import("./types").Voice>) => ({ id, name: id, provider: "p1", provider_label: "P1", language: "en-GB", accent: "British", gender: "female", age_range: "adult", licence: { licence: "unknown", source: null, checked: null, notes: "" }, sample_text: "", notes: "", tags: ["whisper"], sends_data: false, ...o }) as import("./types").Voice;
+  const all = [v("a", {}), v("b", { gender: "male", provider: "p2", tags: ["laugh", "whisper"] }), v("c", { gender: "", accent: "", language: "fr-FR" })];
+  it("combines filters and never guesses a blank value", () => {
+    expect(filterVoices(all, { ...NO_VOICE_FILTER }).length).toBe(3);
+    expect(filterVoices(all, { ...NO_VOICE_FILTER, gender: "male" }).map((x) => x.id)).toEqual(["b"]);
+    expect(filterVoices(all, { ...NO_VOICE_FILTER, gender: "female" }).map((x) => x.id)).toEqual(["a"]);
+    expect(filterVoices(all, { ...NO_VOICE_FILTER, can: "laugh" }).map((x) => x.id)).toEqual(["b"]);
+    expect(filterVoices(all, { ...NO_VOICE_FILTER, provider: "p2", gender: "male" }).map((x) => x.id)).toEqual(["b"]);
+    expect(filterVoices(all, { ...NO_VOICE_FILTER, lang: "fr-FR" }).map((x) => x.id)).toEqual(["c"]);
+    expect(filterVoices(all, { ...NO_VOICE_FILTER, q: "BRIT" }).length).toBe(2);
   });
 });

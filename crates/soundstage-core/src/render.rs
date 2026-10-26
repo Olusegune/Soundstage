@@ -207,6 +207,34 @@ pub struct RenderResult {
 
 /// Render one line into a take and select it. Reuses an identical earlier take without calling the provider.
 pub fn render_line(project: &mut Project, reg: &Registry, project_dir: &Path, line_key: &str) -> Result<RenderResult, RenderError> {
+    render_line_as(project, reg, project_dir, line_key, None, true)
+}
+
+/// The most voices tried on one line in a single audition (decision D-20).
+pub const AUDITION_CAP: usize = 4;
+
+/// Try one line with other voices. Each voice makes its own take; the cast and the chosen take do not change.
+/// At most `AUDITION_CAP` voices, each only once. Stops at the first voice that cannot be used and says which.
+pub fn audition_line(project: &mut Project, reg: &Registry, project_dir: &Path, line_key: &str, voice_ids: &[String]) -> Vec<(String, Result<RenderResult, RenderError>)> {
+    let mut seen: Vec<&String> = vec![];
+    let mut out = vec![];
+    for v in voice_ids {
+        if seen.contains(&v) {
+            continue;
+        }
+        if seen.len() >= AUDITION_CAP {
+            out.push((v.clone(), Err(err("audition_cap", format!("An audition tries at most {AUDITION_CAP} voices at a time.")))));
+            continue;
+        }
+        seen.push(v);
+        out.push((v.clone(), render_line_as(project, reg, project_dir, line_key, Some(v), false)));
+    }
+    out
+}
+
+/// Render a line with its cast voice, or with `voice_override` for an audition. `select` makes the new take the
+/// chosen one; an audition leaves the choice alone.
+pub fn render_line_as(project: &mut Project, reg: &Registry, project_dir: &Path, line_key: &str, voice_override: Option<&str>, select: bool) -> Result<RenderResult, RenderError> {
     let parsed = project.parsed();
     let line = parsed.lines.iter().find(|l| l.key == line_key).ok_or_else(|| err("not_found", "That line no longer exists in the script."))?.clone();
     let mut resolved = resolved_for(project, &line);
@@ -221,11 +249,14 @@ pub fn render_line(project: &mut Project, reg: &Registry, project_dir: &Path, li
     if let Some(r) = crate::safety::check(&line.text) {
         return Err(err("refused", format!("{} {}", r.message, r.alternative)));
     }
-    let voice_id = project
-        .characters
-        .get(&line.speaker)
-        .and_then(|c| c.voice_id.clone())
-        .ok_or_else(|| err("no_voice", format!("{} has no voice yet. Pick one in the Cast step.", line.speaker)))?;
+    let voice_id = match voice_override {
+        Some(v) => v.to_string(),
+        None => project
+            .characters
+            .get(&line.speaker)
+            .and_then(|c| c.voice_id.clone())
+            .ok_or_else(|| err("no_voice", format!("{} has no voice yet. Pick one in the Cast step.", line.speaker)))?,
+    };
     let voice = reg.voice(&voice_id).ok_or_else(|| err("voice_missing", "The cast voice is not available on this computer."))?.clone();
     let adapter: &dyn Adapter = reg.adapter(&voice.provider).ok_or_else(|| err("voice_missing", "The voice's provider is not available."))?;
     // A cloned voice is used only while its owner's consent is clean. This runs before the cache, so a revoked voice
@@ -248,7 +279,9 @@ pub fn render_line(project: &mut Project, reg: &Registry, project_dir: &Path, li
     let key = cache_key(adapter.id(), &adapter.provider_version(), &voice_id, &tokens, &resolved.emotion.value, resolved.pace.value, &voice.language);
     if let Some(existing) = project.takes.iter().find(|t| t.cache_key == key && t.line_key == line_key && project_dir.join(&t.file).exists()) {
         let (id, ms) = (existing.id.clone(), existing.duration_ms);
-        project.selected.insert(line_key.to_string(), id.clone());
+        if select {
+            project.selected.insert(line_key.to_string(), id.clone());
+        }
         return Ok(RenderResult { take_id: id, cached: true, duration_ms: ms, quality: None });
     }
 
@@ -298,7 +331,9 @@ pub fn render_line(project: &mut Project, reg: &Registry, project_dir: &Path, li
         status: TakeStatus::Pending,
         approver: None,
     });
-    project.selected.insert(line_key.to_string(), id.clone());
+    if select {
+        project.selected.insert(line_key.to_string(), id.clone());
+    }
     Ok(RenderResult { take_id: id, cached: false, duration_ms, quality: Some(q) })
 }
 
@@ -500,6 +535,50 @@ AMA: hello there friend
         let before = analyze(&p, &reg).lines[0].cache_key.clone();
         p.plan.lines.insert(key.clone(), crate::plan::LinePlan { pace: None, ..Default::default() });
         assert_eq!(analyze(&p, &reg).lines[0].cache_key, before, "an empty plan line changes nothing");
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn an_audition_makes_one_take_per_voice_up_to_the_cap_and_leaves_the_cast_and_choice_alone() {
+        let (mut p, reg, calls, dir) = setup();
+        p.script = "# S
+AMA: hello there friend
+".into();
+        p.sync_ids();
+        let key = p.parsed().lines[0].key.clone();
+        render_line(&mut p, &reg, &dir, &key).unwrap();
+        let chosen = p.selected[&key].clone();
+        let cast = p.characters["AMA"].voice_id.clone();
+        let before = calls.load(Ordering::SeqCst);
+        let voices: Vec<String> = ["tone:low", "tone:high", "tone:low", "tone:mid"].iter().map(|s| s.to_string()).collect();
+        let out = audition_line(&mut p, &reg, &dir, &key, &voices);
+        assert_eq!(out.len(), 3, "a repeated voice is tried once");
+        assert!(out.iter().all(|(_, r)| r.is_ok()));
+        assert_eq!(calls.load(Ordering::SeqCst), before + 2, "tone:mid is the cast voice and was already rendered, so it is reused");
+        assert_eq!(p.selected[&key], chosen, "the chosen take does not change");
+        assert_eq!(p.characters["AMA"].voice_id, cast, "the cast does not change");
+        assert_eq!(p.takes.iter().filter(|t| t.line_key == key).count(), 3);
+        let used: Vec<&str> = p.takes.iter().map(|t| t.voice_id.as_str()).collect();
+        assert!(used.contains(&"tone:low") && used.contains(&"tone:high"));
+        // More than the cap: the extras are refused, not rendered.
+        let many: Vec<String> = ["tone:low", "tone:mid", "tone:high", "sapi:a", "sapi:b", "sapi:c"].iter().map(|s| s.to_string()).collect();
+        let out = audition_line(&mut p, &reg, &dir, &key, &many);
+        assert_eq!(out.iter().filter(|(_, r)| matches!(r, Err(e) if e.kind == "audition_cap")).count(), 2);
+        assert_eq!(out.iter().filter(|(_, r)| matches!(r, Err(e) if e.kind == "audition_cap")).count() + 4, 6);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn an_audition_voice_that_does_not_exist_or_lacks_consent_fails_alone() {
+        let (mut p, reg, _calls, dir) = setup();
+        p.script = "# S
+AMA: hello there friend
+".into();
+        p.sync_ids();
+        let key = p.parsed().lines[0].key.clone();
+        let out = audition_line(&mut p, &reg, &dir, &key, &["tone:nope".to_string(), "tone:low".to_string()]);
+        assert!(matches!(&out[0].1, Err(e) if e.kind == "voice_missing"));
+        assert!(out[1].1.is_ok(), "one bad voice does not stop the others");
         std::fs::remove_dir_all(dir).ok();
     }
 

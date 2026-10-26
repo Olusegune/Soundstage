@@ -1,4 +1,4 @@
-import type { Analysis, Licence, LicenceCondition, LicenceInfo, Project, StepName } from "./types";
+import type { Analysis, Licence, LicenceCondition, LicenceInfo, Project, StepName, Voice } from "./types";
 import { STEPS } from "./types";
 
 export const REQUIRED: Record<StepName, boolean> = {
@@ -121,4 +121,22 @@ export function splitTags(text: string): { text: string; tag: boolean; bad: bool
 /** A blank character profile. */
 export function emptyBible() {
   return { age: "", background: "", speech_habits: "", emotional_range: "", notes: "" };
+}
+
+export interface VoiceFilter { q: string; lang: string; lic: string; gender: string; age: string; provider: string; accent: string; can: string }
+export const NO_VOICE_FILTER: VoiceFilter = { q: "", lang: "", lic: "", gender: "", age: "", provider: "", accent: "", can: "" };
+
+/** Narrow the voice list by what is stored about each voice. Nothing is inferred: a blank gender or accent only
+ *  matches "All", never a guess. */
+export function filterVoices(voices: Voice[], f: VoiceFilter): Voice[] {
+  const q = f.q.trim().toLowerCase();
+  return voices.filter((v) =>
+    (!f.lang || v.language === f.lang) &&
+    (!f.lic || v.licence.licence === f.lic) &&
+    (!f.gender || v.gender.toLowerCase() === f.gender.toLowerCase()) &&
+    (!f.age || v.age_range.toLowerCase() === f.age.toLowerCase()) &&
+    (!f.provider || v.provider === f.provider) &&
+    (!f.accent || v.accent === f.accent) &&
+    (!f.can || v.tags.includes(f.can)) &&
+    (!q || `${v.name} ${v.accent} ${v.provider_label}`.toLowerCase().includes(q)));
 }

@@ -5,6 +5,7 @@ import type { Ctx } from "../ctx";
 import * as I from "../icons";
 import { fmtMs } from "../logic";
 import { Empty, Help, PlayButton, Waveform } from "../ui";
+import { AuditionPanel } from "./AuditionPanel";
 import type { LineInfo, LineStatus, TakeStatus } from "../types";
 
 const STATUS: Record<LineStatus, { label: string; cls: string; icon: React.ReactNode }> = {
@@ -17,6 +18,7 @@ const STATUS: Record<LineStatus, { label: string; cls: string; icon: React.React
 export function RenderStep({ ctx }: { ctx: Ctx }) {
   const { project, analysis, edit } = ctx;
   const [open, setOpen] = useState<string | null>(null);
+  const [trying, setTrying] = useState<string | null>(null);
   const advanced = ctx.mode === "advanced";
 
   if (!analysis || analysis.lines.length === 0) {
@@ -117,9 +119,11 @@ export function RenderStep({ ctx }: { ctx: Ctx }) {
                   <button className="small" disabled={busy || l.issues.length > 0 || l.status === "skipped" || batch !== null} onClick={() => void ctx.render([key])}>
                     {busy ? <span className="spin" aria-hidden="true" /> : null}{l.status === "drafted" ? "Render" : "Render again"}
                   </button>
+                  <button className="small ghost" disabled={!l.voice_id || l.status === "skipped" || batch !== null} aria-expanded={trying === key} onClick={() => setTrying(trying === key ? null : key)}>Try other voices</button>
                   <button className="small ghost" onClick={() => setSkip(key, l.status !== "skipped")}>{l.status === "skipped" ? "Include" : "Skip"}</button>
                   {takes.length > 0 && <button className="small ghost" aria-expanded={open === key} onClick={() => setOpen(open === key ? null : key)}>Takes ({takes.length}) <I.ChevronDown size={14} /></button>}
                 </div>
+                {trying === key && <AuditionPanel ctx={ctx} info={l} onClose={() => setTrying(null)} />}
                 {open === key && (
                   <div className="take-detail col">
                     {takes.slice().reverse().map((t) => {

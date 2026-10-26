@@ -37,6 +37,7 @@ export const api = {
   planDirections: (project: Project, plan: PerformancePlan) => invoke<[Record<string, Direction>, number]>("plan_directions", { project, plan }),
   getLocalOnly: () => invoke<boolean>("get_local_only"),
   setLocalOnly: (on: boolean) => invoke<void>("set_local_only", { on }),
+  auditionLine: (project: Project, lineKey: string, voiceIds: string[], confirmed: boolean) => invoke<RenderOutcome>("audition_line", { project, lineKey, voiceIds, confirmed }),
   jobBegin: (projectId: string, keys: string[]) => invoke<string>("job_begin", { projectId, keys }),
   jobFinish: (projectId: string, jobId: string, outcome: "succeeded" | "cancelled" | "failed") => invoke<void>("job_finish", { projectId, jobId, outcome }),
   pendingJobs: (projectId: string) => invoke<Interrupted[]>("pending_jobs", { projectId }),

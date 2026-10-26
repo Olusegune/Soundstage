@@ -326,6 +326,34 @@ async fn render_lines(app: AppHandle, state: State<'_, AppState>, project: Proje
     .await
 }
 
+/// Try one line with other voices (at most four). Each voice makes its own take. The cast and the chosen take do not
+/// change, so the person decides afterwards. Voices that send text over the internet need `confirmed`.
+#[tauri::command]
+async fn audition_line(state: State<'_, AppState>, project: Project, line_key: String, voice_ids: Vec<String>, confirmed: bool) -> Result<RenderOutcome, String> {
+    let (store, reg) = shared(&state);
+    let dir = store.dir(&project.id)?;
+    let project = with_plan(&store, project);
+    blocking(move || {
+        let reg = reg.get();
+        let reg = &*reg;
+        let sends = voice_ids.iter().any(|v| reg.adapter_for_voice(v).is_some_and(|a| a.sends_data()));
+        if sends && !confirmed {
+            return Err("Confirm what will be sent before the audition runs.".to_string());
+        }
+        let mut p = project;
+        let before = p.takes.len();
+        let results = render::audition_line(&mut p, reg, &dir, &line_key, &voice_ids)
+            .into_iter()
+            .map(|(voice, r)| match r {
+                Ok(r) => LineOutcome { key: voice, ok: true, cached: r.cached, error_kind: None, message: None, result: Some(r) },
+                Err(e) => LineOutcome { key: voice, ok: false, cached: false, error_kind: Some(e.kind), message: Some(e.message), result: None },
+            })
+            .collect();
+        Ok(RenderOutcome { new_takes: p.takes[before..].to_vec(), selected: BTreeMap::new(), results })
+    })
+    .await?
+}
+
 /// Start a record for a batch of lines, so a cut-short run can be picked up again.
 #[tauri::command]
 fn job_begin(state: State<'_, AppState>, project_id: String, keys: Vec<String>) -> Result<String, String> {
@@ -1664,6 +1692,7 @@ pub fn run() {
             analyze_project,
             render_lines,
             job_begin,
+            audition_line,
             director_estimate,
             director_run,
             plan_load,

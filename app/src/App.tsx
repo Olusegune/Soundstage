@@ -339,6 +339,15 @@ export default function App() {
 
   const stopBatch = useCallback(() => { stopBatchRef.current = true; }, []);
 
+  const audition = useCallback(async (lineKey: string, voiceIds: string[], confirmed: boolean) => {
+    const cur = projectRef.current;
+    if (!cur) return null;
+    const out = await api.auditionLine(cur, lineKey, voiceIds, confirmed);
+    // Only the new takes are added; the chosen take and the cast stay as they were.
+    edit((p) => ({ ...p, takes: [...p.takes, ...out.new_takes] }));
+    return out;
+  }, [edit]);
+
   /** Keep what an interrupted run finished; optionally render the lines it did not reach. */
   const recover = useCallback(async (finish: boolean) => {
     const job = interrupted;
@@ -560,7 +569,7 @@ export default function App() {
   /* ---------------------------------------------------------------- render */
   const ctx: Ctx | null = project && g ? {
     project, analysis, voices, dir, mode: prefs.mode, ffmpegPath: prefs.ffmpegPath, setFfmpegPath: (p) => setPrefs({ ffmpegPath: p }), edit, toast: say, goto: (n) => goStep(n),
-    openLibrary: () => openAux("library"), openPronunciation: () => openAux("pronunciation"), newProject: () => void newProject(), exportMemory: prefs.exportMemory, setExportMemory: (json) => { if (json !== prefs.exportMemory) setPrefs({ exportMemory: json }); }, voiceMemory: prefs.voiceMemory, assistantUrl: prefs.assistantUrl, assistantModel: prefs.assistantModel, rememberVoices: (picks) => setPrefs({ voiceMemory: { ...prefs.voiceMemory, ...picks } }), openHelp, render, confirmSend, renderBatch, stopBatch, planChanged: () => setPlanVersion((v) => v + 1), batch, errors, busy,
+    openLibrary: () => openAux("library"), openPronunciation: () => openAux("pronunciation"), newProject: () => void newProject(), exportMemory: prefs.exportMemory, setExportMemory: (json) => { if (json !== prefs.exportMemory) setPrefs({ exportMemory: json }); }, voiceMemory: prefs.voiceMemory, assistantUrl: prefs.assistantUrl, assistantModel: prefs.assistantModel, rememberVoices: (picks) => setPrefs({ voiceMemory: { ...prefs.voiceMemory, ...picks } }), openHelp, render, confirmSend, renderBatch, stopBatch, audition, planChanged: () => setPlanVersion((v) => v + 1), batch, errors, busy,
     steps: g.steps, next: g.next, mixPreview, mixBuilding, buildMix, markExported: () => setExported(true), focusKey,
   } : null;
 

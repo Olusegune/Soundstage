@@ -93,6 +93,12 @@ pub fn tokenize(input: &str) -> (Vec<Token>, Vec<TagIssue>) {
                 i = j + 1;
                 continue;
             }
+            // `[laugh` with no closing bracket would be read out as the word. It is reported so it is fixed, never spoken.
+            let rest: String = chars[i + 1..].iter().take_while(|c| **c != '[').collect();
+            let first = rest.split(|c: char| !c.is_alphanumeric() && c != ':').next().unwrap_or("").to_lowercase();
+            if classify(&first).is_some() || first.starts_with("pause") {
+                issues.push(TagIssue { tag: format!("[{first}"), message: format!("[{first} looks like a tag with no closing bracket. Add the ] or remove it.") });
+            }
         }
         text.push(chars[i]);
         i += 1;
@@ -177,5 +183,19 @@ mod tests {
     fn required_tags_dedupes() {
         let (t, _) = tokenize("[laugh] a [laugh] b [whisper] c");
         assert_eq!(required_tags(&t), vec!["laugh", "whisper"]);
+    }
+
+    /// PHY-001: whatever is written between brackets, an instruction is never turned into words to be spoken.
+    #[test]
+    fn bracketed_instructions_never_become_spoken_text() {
+        for input in ["He said [laugh] loudly", "[ LAUGH ] ok", "Wait [giggle] what", "[laugh", "x [laugh:loudly] y", "[[laugh]]", "say [pause:99999] now"] {
+            let (tokens, issues) = tokenize(input);
+            if !issues.is_empty() {
+                continue;
+            }
+            let spoken: String = tokens.iter().filter_map(|t| if let Token::Text(s) = t { Some(s.as_str()) } else { None }).collect::<Vec<_>>().join(" ");
+            let words = spoken.to_lowercase();
+            assert!(!words.contains("giggle") && !words.contains("laugh") && !words.contains("pause"), "{input:?} -> {spoken:?}");
+        }
     }
 }

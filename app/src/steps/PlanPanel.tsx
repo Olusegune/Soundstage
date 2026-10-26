@@ -5,6 +5,8 @@ import { Confirm, Help } from "../ui";
 import type { DirectorEstimate, DirectorProposal, LineChange, LinePlan, PerformancePlan } from "../types";
 import { EMOTIONS } from "../types";
 
+const SOUNDS = ["laugh", "chuckle", "sigh", "cough", "sneeze", "gasp", "cry", "breath", "sniff"];
+
 const FIELD_LABEL: Record<string, string> = {
   objective: "goal", subtext: "subtext", relationship: "relationship", emotion: "emotion", pace: "pace", pauses: "pauses",
   emphasis: "emphasis", events: "sounds", languages: "languages", alternatives: "other readings",
@@ -93,6 +95,22 @@ export function PlanPanel({ ctx }: { ctx: Ctx }) {
   };
 
   const lineInfo = (id: string) => analysis?.lines.find((l) => l.line.key === id);
+  const [soundLine, setSoundLine] = useState("");
+  const [soundKind, setSoundKind] = useState("laugh");
+  const [soundWhere, setSoundWhere] = useState<"start" | "end">("start");
+
+  const blank = (): LinePlan => ({ emotion: [], pauses: [], emphasis: [], events: [], languages: [], alternatives: [], user_locked: [] });
+  const addSound = async () => {
+    const li = lineInfo(soundLine);
+    if (!li) return;
+    const at = soundWhere === "start" ? 0 : [...li.line.text].length;
+    const cur = plan.lines[soundLine] ?? blank();
+    await edit(soundLine, { ...cur, events: [...cur.events, { kind: soundKind, at, intensity: 0.5, source: "provider-tag" }] });
+  };
+  const removeSound = async (id: string, i: number) => {
+    const cur = plan.lines[id];
+    if (cur) await edit(id, { ...cur, events: cur.events.filter((_, k) => k !== i) });
+  };
 
   return (
     <section className="card" aria-labelledby="director-h">
@@ -138,6 +156,19 @@ export function PlanPanel({ ctx }: { ctx: Ctx }) {
         </div>
       )}
 
+      <div className="row tight small" style={{ marginTop: 12, alignItems: "end" }} role="group" aria-label="Add a sound to a line">
+        <div><label htmlFor="snd-line">Add a sound to</label>
+          <select id="snd-line" value={soundLine} onChange={(e) => setSoundLine(e.target.value)}>
+            <option value="">Choose a line</option>
+            {(analysis?.lines ?? []).map((l) => <option key={l.line.key} value={l.line.key}>{l.line.speaker}: {l.line.text.slice(0, 40)}</option>)}
+          </select></div>
+        <div><label htmlFor="snd-kind">Sound</label>
+          <select id="snd-kind" value={soundKind} onChange={(e) => setSoundKind(e.target.value)}>{SOUNDS.map((x) => <option key={x} value={x}>{x}</option>)}</select></div>
+        <div><label htmlFor="snd-where">Where</label>
+          <select id="snd-where" value={soundWhere} onChange={(e) => setSoundWhere(e.target.value as "start" | "end")}><option value="start">At the start</option><option value="end">At the end</option></select></div>
+        <button className="small" disabled={!soundLine} onClick={() => void addSound()} data-tip="Voices that can make the sound do it themselves. Voices that cannot will say so before you render.">Add sound</button>
+      </div>
+
       {planned > 0 && (
         <div style={{ marginTop: 12 }}>
           <div className="row">
@@ -168,6 +199,13 @@ export function PlanPanel({ ctx }: { ctx: Ctx }) {
                     {(lp.objective || lp.subtext) && <div className="small muted">{lp.objective ? `Wants: ${lp.objective}. ` : ""}{lp.subtext ? `Underneath: ${lp.subtext}` : ""}</div>}
                     {top.filter((e) => !e.surface).length > 0 && <div className="small muted">Holding back: {top.filter((e) => !e.surface).map((e) => e.name).join(", ")}</div>}
                     {lp.uncertainty_note && <div className="small muted">{lp.uncertainty_note}</div>}
+                    {lp.events.length > 0 && (
+                      <div className="row tight small" aria-label="Sounds on this line">
+                        {lp.events.map((e, i) => (
+                          <span key={i} className="chip">{e.kind} at the {e.at === 0 ? "start" : "end"} <button className="small ghost" aria-label={`Remove ${e.kind}`} onClick={() => void removeSound(id, i)}>×</button></span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
