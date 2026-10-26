@@ -14,6 +14,7 @@
 - **Try other voices:** audition one line with up to four voices side by side, optionally blind. Your cast and chosen take change only when you choose. Online voices ask first.
 - **Suggest other voices** when a line cannot be rendered: voices that can really do it, free ones first, never online ones in local-only mode.
 - **Voice library filters:** gender, age, accent, provider and what a voice can make. Accents are marked "not rated" because none have been listened to yet.
+- **Listening pack** (Audio tools): make a fair, blind listening test from a few clips: matched loudness, random codes and order for each listener, score sheets, and a private key for you.
 - The side panel no longer squashes the project name in a short window.
 - Behind the scenes: a performance-plan format with checks, and a model list that cannot call anything verified without evidence.
 

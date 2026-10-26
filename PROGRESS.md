@@ -7,7 +7,7 @@ Last updated 2026-10-25.
 | Area | State |
 |---|---|
 | App v0.1 and v0.2 (everything in `CHANGELOG.md`) | Built, tested, pushed. Last code commit `f5ff35f` |
-| Tests now | 304 Rust, 84 front-end, 225 of 225 real-window checks, types clean |
+| Tests now | 310 Rust, 84 front-end, 232 of 232 real-window checks, types clean |
 | PRD-002 (AI models update) | MS0 spec approved in part (see `DECISIONS.md`). **MS1 Foundations built 2026-10-25**, awaiting the owner's demo and sign-off |
 | Next implementation milestone | MS1 Foundations: D-01, D-02, D-03, D-04, D-11, D-13 approved; awaiting the detailed MS1 task plan and the owner go-ahead |
 

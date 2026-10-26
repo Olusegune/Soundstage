@@ -70,11 +70,13 @@ Use **three short scenes of 10 to 25 seconds each**, written by you or taken fro
 
 Then:
 1. **Export each version** as WAV (Export step, WAV 24-bit, master only).
-2. **Match the loudness.** The app targets a loudness setting for each destination. Use the same destination (for example "Streaming") for every export so they come out about equally loud. If you can, open the three files in the Audio editor, play one after another, and fix any that are clearly louder.
-3. **Rename the files with codes, not names:** `S1-4F.wav`, `S1-9K.wav`, `S1-2M.wav`, and so on. Keep a private key (a table: code to version) that listeners never see. **Use a different random order and different codes for each listener.**
+2. **Use the Listening pack tool** (Audio tools, **Listening pack** tab). Add one scene per test scene, add its three exported clips, label each (plain, planned, planned+sounds), choose the number of listeners (5 or 6) and press **Make the pack**. It:
+   - matches every clip to the same loudness (a clip that cannot be raised without clipping is left quieter and noted),
+   - makes one folder per listener with the clips renamed to random codes such as `S1-4F.wav`, in a different random order for each listener,
+   - writes a score sheet (`score-sheet.csv`) and a short instruction sheet in each listener folder,
+   - writes `PRIVATE-KEY-do-not-share.csv` in the pack folder, saying which code is which clip.
+3. **Give each listener only their own `listener-L#` folder.** Keep the private key until every score sheet is back.
 4. **Do not tell listeners which version is which, or which voice is which.**
-
-(A built-in blind package and score sheet arrive with MS4, the Model Lab. For this round it is done by hand.)
 
 ### Running a session (read this out)
 > "Thank you for helping. You will hear short scenes. For each one you will hear three versions, in a random order. There are no right answers; I want your honest reaction. You can replay each clip as often as you like but please do not skip ahead. I am recording only your score and short comments next to a code, not your name."
