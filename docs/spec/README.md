@@ -12,6 +12,7 @@ Status: **MS0, written 2026-10-25, awaiting owner approval.** No application cod
 | [`05-CAPABILITY-AND-HARDWARE.md`](05-CAPABILITY-AND-HARDWARE.md) | Capability matrix, hardware profiles, verdicts |
 | [`06-MILESTONES-AND-TESTS.md`](06-MILESTONES-AND-TESTS.md) | MS0 to MS9, tasks, tests, exit gates, risks |
 | [`07-LISTENING-TEST-PROTOCOL.md`](07-LISTENING-TEST-PROTOCOL.md) | How human evaluation promotes a model's status |
+| [`08-MS3-PLAN.md`](08-MS3-PLAN.md) | Detailed plan for MS3 (performance), proposed |
 | [`../../DECISIONS.md`](../../DECISIONS.md) | Decisions, Approved and Proposed |
 | [`../../PROGRESS.md`](../../PROGRESS.md) | Current state and what waits on the owner |
 
