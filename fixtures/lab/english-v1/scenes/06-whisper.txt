@@ -1,0 +1,3 @@
+AMA: [whisper] Stay low. They are right outside.
+KOLA: [whisper] Is the back door locked?
+AMA: [whisper] I checked it twice. Do not move. [pause:long] Listen.

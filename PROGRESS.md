@@ -7,7 +7,7 @@ Last updated 2026-10-25.
 | Area | State |
 |---|---|
 | App v0.1 and v0.2 (everything in `CHANGELOG.md`) | Built, tested, pushed. Last code commit `f5ff35f` |
-| Tests now | 310 Rust, 84 front-end, 232 of 232 real-window checks, types clean |
+| Tests now | 314 Rust, 84 front-end, 232 of 232 real-window checks, types clean |
 | PRD-002 (AI models update) | MS0 spec approved in part (see `DECISIONS.md`). **MS1 Foundations built 2026-10-25**, awaiting the owner's demo and sign-off |
 | Next implementation milestone | MS1 Foundations: D-01, D-02, D-03, D-04, D-11, D-13 approved; awaiting the detailed MS1 task plan and the owner go-ahead |
 
@@ -19,7 +19,7 @@ Last updated 2026-10-25.
 | MS1 | Foundations | Built and tested; awaiting owner demo and sign-off |
 | MS2 | Director v1 | First slice built and tested with fake servers; needs the owner to try it on a real model (Ollama or another chat server) and review plan quality; PDF import waits for approval |
 | MS3 | Performance v1 | MS3a built (plan to render, sounds, filters, audition of 4, fallback); awaiting listening runs and owner demo. MS3b (hybrid events, reference) after listening |
-| MS4 | Model Lab v1 | Not started |
+| MS4 | Model Lab v1 | Decisions D-21 to D-25 approved; T-4.1 built (test-set format and 13 English scenes). Next T-4.2 runner |
 | MS5 | Local model packs | Not started |
 | MS6 | Sound design | Not started |
 | MS7 | Timeline v2 | Not started |

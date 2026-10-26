@@ -2,6 +2,8 @@
 
 Status: **Proposed, planning only. No code until the owner approves it.** Written 2026-10-25. Expands section 7 of `06-MILESTONES-AND-TESTS.md`. Follows the listening method in `07-LISTENING-TEST-PROTOCOL.md`.
 
+**Status 2026-10-25: D-21 to D-25 approved. T-4.1 built** (test-set format, loader, checksum, 13 English scenes in `fixtures/lab/english-v1/`, 314 Rust tests). Owner answers: English only at first; no in-app blind player in version 1 (folder-and-spreadsheet method, score import in T-4.5); first dry run compares ElevenLabs with the Windows voices as a free baseline (assumed from "ElevenLabs"; change if you want a second paid provider). The code-switching scene is marked as needing native review and is left out of general results.
+
 ## 1. Goal
 
 Replace opinion with evidence. The Model Lab runs the **same short scripts** through **several voices and providers**, lets **blind listeners** score them, and turns the scores into **a report and a status** for each voice, language, accent and sound. Soundstage then shows the status honestly: `unverified` until a run exists, `experimental` when there is a run that did not pass, `verified` only when the gates in the protocol are met and the owner approves.
@@ -104,5 +106,5 @@ About 4 weeks, and the owner's own time for the listening sessions is on top of 
 
 1. Approve D-21 to D-25, or change them?
 2. Start with the English set only and add other languages as native reviewers become available?
-3. Do you want the in-app blind player (so listeners can score in Soundstage itself), or is the folder-and-spreadsheet method from the listening pack enough for now?
+3. Do you want the in-app blind player? (Answered: owner deferred; decision is no, not in version 1.)
 4. Which two providers should the first dry run compare? (For example one local voice and ElevenLabs.)

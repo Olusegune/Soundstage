@@ -40,11 +40,11 @@ One line per decision, newest group last. **Approved** means the owner said yes 
 | D-18 | Pauses become pause tags; emphasis goes only to voices that declare it, otherwise it is reported as not honoured | MS3 planning | MS3 | Approved 2026-10-25 (owner) |
 | D-19 | Event sounds come from the provider's own tag, or a library or generated clip on a separate track; no new model | MS3 planning | MS3b | Approved 2026-10-25 (owner) |
 | D-20 | Each extra audition take is its own approved send, with a per-audition cap (owner chose 4 takes) | MS3 planning | MS3 | Approved 2026-10-25 (owner) |
-| D-21 | Lab data lives in its own folder (`.lab`), never inside a project and never sent anywhere | MS4 planning | MS4 | Proposed |
-| D-22 | Only the owner promotes a status, after reading the report; automatic scores never promote | MS4 planning | MS4 | Proposed |
-| D-23 | A Lab run lists its paid calls and needs one approval and a per-run cap | MS4 planning | MS4 | Proposed |
-| D-24 | Lab scripts are short, original, safety-checked, native-reviewed for other languages, and checksummed in `fixtures/lab/` | MS4 planning | MS4 | Proposed |
-| D-25 | Minimum reviewers: 5 for naturalness and events; 2 native speakers per accent or language | MS4 planning | MS4 | Proposed |
+| D-21 | Lab data lives in its own folder (`.lab`), never inside a project and never sent anywhere | MS4 planning | MS4 | Approved 2026-10-25 (owner) |
+| D-22 | Only the owner promotes a status, after reading the report; automatic scores never promote | MS4 planning | MS4 | Approved 2026-10-25 (owner) |
+| D-23 | A Lab run lists its paid calls and needs one approval and a per-run cap | MS4 planning | MS4 | Approved 2026-10-25 (owner) |
+| D-24 | Lab scripts are short, original, safety-checked, native-reviewed for other languages, and checksummed in `fixtures/lab/` | MS4 planning | MS4 | Approved 2026-10-25 (owner) |
+| D-25 | Minimum reviewers: 5 for naturalness and events; 2 native speakers per accent or language | MS4 planning | MS4 | Approved 2026-10-25 (owner) |
 
 ## C. How decisions change
 

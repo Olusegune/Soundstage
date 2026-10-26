@@ -1,0 +1,166 @@
+{
+  "id": "english-v1",
+  "version": 1,
+  "title": "English listening set, version 1",
+  "language": "en",
+  "accent_claim": null,
+  "note": "Original scripts written for Soundstage. No real person's words, voice or likeness. The scene marked needs_native_review uses non-English words and must be checked by native speakers before any language status is recorded.",
+  "scenes": [
+    {
+      "id": "narration",
+      "title": "Neutral narration",
+      "file": "scenes/01-narration.txt",
+      "needs_native_review": false,
+      "reference_direction": "Calm, even, a little warm. Steady pace, no drama.",
+      "checklist": [
+        "Is the pace steady and natural?",
+        "Does it sound read aloud, or like someone telling you?",
+        "Are pauses placed where a person would breathe?"
+      ]
+    },
+    {
+      "id": "calm-conversation",
+      "title": "A calm conversation",
+      "file": "scenes/02-calm-conversation.txt",
+      "needs_native_review": false,
+      "reference_direction": "Two tired friends, quiet and kind. Low energy, close together.",
+      "checklist": [
+        "Do the two voices sound like two different people?",
+        "Does it sound like a conversation and not two readings?",
+        "Is the kindness audible?"
+      ]
+    },
+    {
+      "id": "argument",
+      "title": "An argument",
+      "file": "scenes/03-argument.txt",
+      "needs_native_review": false,
+      "reference_direction": "Rising anger from Ama, defensive and sarcastic from Kola. It escalates, then cools into bitterness.",
+      "checklist": [
+        "Does the anger build, or is it flat?",
+        "Is Kola's sarcasm audible?",
+        "Do the raised words sound angry rather than just loud?"
+      ]
+    },
+    {
+      "id": "grief",
+      "title": "Grief",
+      "file": "scenes/04-grief.txt",
+      "needs_native_review": false,
+      "reference_direction": "Quiet, heavy, slow. Held-back tears more than crying. The long pause should feel like a held breath.",
+      "checklist": [
+        "Does it sound sad without being theatrical?",
+        "Is the sigh a sound and not the word 'sigh'?",
+        "Does the long pause feel natural?"
+      ]
+    },
+    {
+      "id": "joy",
+      "title": "Joy",
+      "file": "scenes/05-joy.txt",
+      "needs_native_review": false,
+      "reference_direction": "Bright, fast, breathless. Ama starts stunned and ends laughing.",
+      "checklist": [
+        "Does it sound happy rather than just fast?",
+        "Is the laugh a real laugh and not the word 'laugh'?",
+        "Does Ama's voice stay the same person through the laugh?"
+      ]
+    },
+    {
+      "id": "whisper",
+      "title": "Whispering",
+      "file": "scenes/06-whisper.txt",
+      "needs_native_review": false,
+      "reference_direction": "Tense whispers, close to the microphone, afraid of being heard.",
+      "checklist": [
+        "Is it really a whisper, not just quiet speech?",
+        "Can every word still be understood?",
+        "Does the tension come through?"
+      ]
+    },
+    {
+      "id": "shout",
+      "title": "Shouting a warning",
+      "file": "scenes/07-shout.txt",
+      "needs_native_review": false,
+      "reference_direction": "Panic. Loud, urgent, no time to breathe.",
+      "checklist": [
+        "Does it sound urgent, or just loud?",
+        "Is there distortion or harshness?",
+        "Can every word still be understood?"
+      ]
+    },
+    {
+      "id": "laugh-in-line",
+      "title": "A laugh inside a line",
+      "file": "scenes/08-laugh-in-line.txt",
+      "needs_native_review": false,
+      "reference_direction": "Amused storytelling. The laughs come out of the words, not on top of them.",
+      "checklist": [
+        "Do the laughs sound like part of the sentence?",
+        "Is the word 'laugh' ever spoken? (It must not be.)",
+        "Is it the same voice before and after each laugh?"
+      ]
+    },
+    {
+      "id": "cough",
+      "title": "A cough and an interruption",
+      "file": "scenes/09-cough.txt",
+      "needs_native_review": false,
+      "reference_direction": "A professional trying to carry on through a tickly throat. Embarrassed, polite.",
+      "checklist": [
+        "Does it sound like a real cough?",
+        "Is the word 'cough' ever spoken? (It must not be.)",
+        "Does the sentence recover naturally after each cough?"
+      ]
+    },
+    {
+      "id": "gasp",
+      "title": "A gasp of surprise",
+      "file": "scenes/10-gasp.txt",
+      "needs_native_review": false,
+      "reference_direction": "Awe turning into fear. The gasps are sudden and real.",
+      "checklist": [
+        "Does the gasp sound sudden and real?",
+        "Is the word 'gasp' ever spoken? (It must not be.)",
+        "Does the mood shift from awe to fear?"
+      ]
+    },
+    {
+      "id": "names-and-long-sentence",
+      "title": "Names and a very long sentence",
+      "file": "scenes/11-names-and-long-sentence.txt",
+      "needs_native_review": false,
+      "reference_direction": "A warm announcer introducing a guest. One long sentence with a hard name; breathe at the commas.",
+      "checklist": [
+        "Is the name pronounced convincingly?",
+        "Does the long sentence hold together, with breaths in sensible places?",
+        "Does it run out of energy before the end?"
+      ]
+    },
+    {
+      "id": "code-switch",
+      "title": "Greetings in several languages",
+      "file": "scenes/12-code-switch.txt",
+      "needs_native_review": true,
+      "reference_direction": "Cheerful and welcoming. The non-English words should sound like the languages they belong to.",
+      "checklist": [
+        "Do the French and German words sound like French and German?",
+        "Does the Yoruba greeting sound right? (Needs a native Yoruba speaker.)",
+        "Does the voice stay the same person across languages?"
+      ]
+    },
+    {
+      "id": "multi-speaker",
+      "title": "A busy scene with three speakers",
+      "file": "scenes/13-multi-speaker.txt",
+      "needs_native_review": false,
+      "reference_direction": "Light, busy, good-humoured. Four distinct voices, quick turns.",
+      "checklist": [
+        "Can you tell all four speakers apart?",
+        "Is the turn-taking quick and natural?",
+        "Does the humour land?"
+      ]
+    }
+  ]
+}

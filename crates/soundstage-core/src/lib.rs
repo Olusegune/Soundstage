@@ -19,6 +19,7 @@ pub mod history;
 pub mod ids;
 pub mod jobrec;
 pub mod jobs;
+pub mod labset;
 pub mod layout;
 pub mod listening;
 pub mod licence;
