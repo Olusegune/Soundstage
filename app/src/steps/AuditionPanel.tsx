@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
-import { joinPath, messageOf } from "../api";
+import { useEffect, useMemo, useState } from "react";
+import { api, joinPath, messageOf } from "../api";
 import type { Ctx } from "../ctx";
 import { Confirm, PlayButton, Waveform } from "../ui";
-import type { LineInfo, Take, Voice } from "../types";
+import type { FallbackOption, LineInfo, Take, Voice } from "../types";
 
 /** The most voices tried on one line at a time. Matches the cap in the core (decision D-20). */
 export const AUDITION_CAP = 4;
@@ -109,6 +109,60 @@ export function AuditionPanel(props: { ctx: Ctx; info: LineInfo; onClose: () => 
         <Confirm title="Send this line to try other voices?" confirmLabel="Send and make takes" danger={false}
           body={<p>{chars} characters of dialogue will be sent over the internet to {[...new Set(cloud.map((v) => v.provider_label))].join(" and ")}, once for each of {cloud.length} voice{cloud.length === 1 ? "" : "s"}. It is billed to your account there, and Soundstage cannot show the price in advance.</p>}
           onCancel={() => setAsk(false)} onConfirm={() => void go(true)} />
+      )}
+    </div>
+  );
+}
+
+/** When a line cannot be rendered as cast, suggest voices that can do what it needs. Choosing one is a separate,
+ *  approved step, and the plan is left exactly as it was. */
+export function FallbackList(props: { ctx: Ctx; info: LineInfo; onClose: () => void }) {
+  const { ctx, info } = props;
+  const key = info.line.key;
+  const [options, setOptions] = useState<FallbackOption[] | null>(null);
+  const [ask, setAsk] = useState<FallbackOption | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    api.fallbackOptions(ctx.project, key).then((o) => { if (live) setOptions(o); }).catch((e) => { if (live) { setOptions([]); ctx.toast(messageOf(e), true); } });
+    return () => { live = false; };
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const use = async (o: FallbackOption, confirmed: boolean) => {
+    setAsk(null);
+    setBusy(o.voice_id);
+    try {
+      const out = await ctx.audition(key, [o.voice_id], confirmed);
+      const take = out?.new_takes[0] ?? (out?.results[0]?.result ? ctx.project.takes.find((t) => t.id === out.results[0]?.result?.take_id) : undefined);
+      if (out && out.results.every((r) => r.ok) && take) {
+        ctx.edit((p) => ({ ...p, selected: { ...p.selected, [key]: take.id } }));
+        ctx.toast(`Used ${o.name} for this line. Your cast and plan are unchanged.`);
+        props.onClose();
+      } else if (out) ctx.toast(out.results.find((r) => !r.ok)?.message ?? "That voice could not be used.", true);
+    } catch (e) { ctx.toast(messageOf(e), true); } finally { setBusy(null); }
+  };
+
+  const chars = info.line.text.replace(/\[[^\]]*\]/g, "").length;
+  return (
+    <div className="take-detail col" role="region" aria-label="Other voices that could do this line">
+      <div className="row"><strong style={{ flex: 1 }}>Other voices that could do this line</strong><button className="small ghost" onClick={props.onClose}>Close</button></div>
+      {options === null && <p className="small muted">Looking…</p>}
+      {options !== null && options.length === 0 && <p className="small muted">No other voice here can do everything this line needs{ctx.project ? "" : ""}. You can remove the tag that is the problem, or add a voice engine.</p>}
+      {(options ?? []).map((o) => (
+        <div key={o.voice_id} className="linecard row" style={{ margin: 0, alignItems: "center" }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <strong>{o.name}</strong> <span className="muted small">{o.provider_label}</span>{" "}
+            {o.sends_data ? <span className="chip gold">sends text, may be billed</span> : <span className="chip ok">free, on this computer</span>}
+            {o.plan && o.plan.ignored.length > 0 && <div className="small muted">Would not use from the plan: {o.plan.ignored.join("; ")}.</div>}
+          </div>
+          <button className="small" disabled={busy !== null} onClick={() => (o.sends_data ? setAsk(o) : void use(o, false))}>{busy === o.voice_id ? <span className="spin" aria-hidden="true" /> : null}Use for this line</button>
+        </div>
+      ))}
+      {ask && (
+        <Confirm title={`Send this line to ${ask.provider_label}?`} confirmLabel="Send and use" danger={false}
+          body={<p>{chars} characters of dialogue will be sent over the internet to {ask.provider_label} to be spoken by {ask.name}. It is billed to your account there, and Soundstage cannot show the price in advance. The character&apos;s cast voice and the plan do not change.</p>}
+          onCancel={() => setAsk(null)} onConfirm={() => void use(ask, true)} />
       )}
     </div>
   );

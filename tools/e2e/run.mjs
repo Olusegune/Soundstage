@@ -528,6 +528,59 @@ try {
     await app.ev(`${inv("delete_project", { id: pid })}`);
     await app.press("Ctrl+O"); await sleep(600);
   }
+  // MS3a: the plan reaches the render, voices can be auditioned, alternatives are offered, voices can be filtered.
+  {
+    const inv = (cmd, args) => `window.__TAURI_INTERNALS__.invoke('${cmd}',${JSON.stringify(args)})`;
+    const voices = await app.ev(`${inv("list_voices", {})}.then(v=>v.map(x=>({id:x.id,sends:x.sends_data,lang:x.language})))`);
+    const local = voices.filter((v) => v.id.startsWith("sapi:"));
+    const online = voices.find((v) => v.sends);
+    const [a, b] = [local[0]?.id, local[1]?.id];
+    app.check("two Windows voices are available for the audition checks", !!a && !!b, JSON.stringify(local));
+    const pid = await app.ev(`${inv("create_project", { name: "e2e perform", sample: false })}.then(p=>{p.script=['# T','AMA: Wait a moment please.','KOLA: Fine, go on then.'].join(String.fromCharCode(10));p.characters={AMA:{voice_id:'${a}'},KOLA:{voice_id:'${a}'}};return window.__TAURI_INTERNALS__.invoke('save_project',{project:p}).then(()=>p.id)})`);
+    const load = () => `${inv("load_project", { id: pid })}`;
+    const statuses = () => app.ev(`${load()}.then(p=>window.__TAURI_INTERNALS__.invoke('analyze_project',{project:p})).then(a=>a.lines.map(l=>l.status+(l.plan_support?'|'+JSON.stringify(l.plan_support.ignored):'')))`);
+    const keys = await app.ev(`${load()}.then(p=>window.__TAURI_INTERNALS__.invoke('analyze_project',{project:p})).then(a=>a.lines.map(l=>l.line.key))`);
+    const rendered = await app.ev(`${load()}.then(p=>window.__TAURI_INTERNALS__.invoke('render_lines',{project:p,keys:${JSON.stringify(keys)},jobId:null})).then(o=>window.__TAURI_INTERNALS__.invoke('load_project',{id:'${pid}'}).then(p=>{p.takes=o.new_takes;p.selected=o.selected;return window.__TAURI_INTERNALS__.invoke('save_project',{project:p}).then(()=>o.results.every(r=>r.ok))}))`);
+    app.check("both lines render with a Windows voice", rendered === true);
+    const before = await statuses();
+    app.check("both lines start rendered", before.every((s) => s.startsWith("rendered")), JSON.stringify(before));
+    // A plan with a pause and a feeling the Windows voice cannot be told.
+    const plan = { schema: 1, source_hash: "", created_by: { kind: "user", at: "" }, scenes: {}, lines: { [keys[0]]: { emotion: [{ name: "sad", intensity: 0.8, surface: true }], pace: 1, pauses: [{ at: 4, ms: 400 }], emphasis: [{ start: 0, end: 4, level: 0.8 }], events: [], languages: [], alternatives: [], user_locked: [] } } };
+    await app.ev(`${load()}.then(p=>window.__TAURI_INTERNALS__.invoke('plan_save',{project:p,plan:${JSON.stringify(plan)}}))`);
+    const after = await statuses();
+    app.check("a pause in the plan makes only that line out of date", after[0].startsWith("stale") && after[1].startsWith("rendered"), JSON.stringify(after));
+    app.check("the report says what this voice will not use", /feeling: sad/.test(after[0]) && /emphasis/.test(after[0]), after[0]);
+    const reRender = await app.ev(`${load()}.then(p=>window.__TAURI_INTERNALS__.invoke('render_lines',{project:p,keys:[${JSON.stringify(keys[0])}],jobId:null})).then(o=>o.results[0].ok)`);
+    app.check("the line still renders even though the plan asks for something the voice cannot do", reRender === true);
+    // Audition.
+    const aud = await app.ev(`${load()}.then(p=>window.__TAURI_INTERNALS__.invoke('audition_line',{project:p,lineKey:${JSON.stringify(keys[1])},voiceIds:['${b}'],confirmed:false})).then(o=>({n:o.new_takes.length,ok:o.results.every(r=>r.ok),sel:Object.keys(o.selected).length}))`);
+    app.check("an audition makes a take and chooses nothing", aud.ok && aud.n === 1 && aud.sel === 0, JSON.stringify(aud));
+    if (online) {
+      const refused = await app.ev(`${load()}.then(p=>window.__TAURI_INTERNALS__.invoke('audition_line',{project:p,lineKey:${JSON.stringify(keys[1])},voiceIds:['${online.id}'],confirmed:false}).then(()=>'ran',e=>String(e)))`);
+      app.check("an online voice is not sent anything until confirmed", /Confirm what will be sent/.test(String(refused)), String(refused));
+    }
+    const fb = await app.ev(`${load()}.then(p=>window.__TAURI_INTERNALS__.invoke('fallback_options',{project:p,lineKey:${JSON.stringify(keys[1])}}))`);
+    app.check("alternatives are listed without calling any voice", Array.isArray(fb) && fb.every((o) => o.voice_id !== a), JSON.stringify(fb.map((o) => o.name)).slice(0, 120));
+    // In the real window: the Render step, an audition, and the voice filters.
+    await app.ev("location.reload()"); await sleep(2500);
+    await app.waitFor("window.__TAURI_INTERNALS__.invoke('list_voices').then(v=>v.length>0)", 30000); await sleep(3000);
+    await app.ev("(()=>{const c=[...document.querySelectorAll('.proj-card')].find(x=>/e2e perform/.test(x.textContent));[...c.querySelectorAll('button')].find(b=>b.textContent.trim()==='Open').click();})()"); await sleep(1500);
+    await app.press("Ctrl+4"); await sleep(800);
+    app.check("the Render step offers to try other voices", (await app.text()).includes("Try other voices"));
+    await app.clickText("Try other voices"); await sleep(600);
+    app.check("the audition panel opens with the cap", (await app.text()).includes("Pick up to 4"));
+    await audit("Audition panel");
+    await app.ev("document.querySelector('[aria-label=\"Voices to try\"] input[type=checkbox]')?.click()"); await sleep(200);
+    app.check("choosing a voice updates the count", (await app.text()).includes("1 of 4 chosen"));
+    await app.clickText("Make 1 take"); await sleep(2500);
+    app.check("the audition shows the new take to listen to", (await app.text()).includes("Use this take"));
+    await app.shot(`${shotsDir}/dark-1280x720-audition.png`);
+    await app.ev(`${inv("delete_project", { id: pid })}`);
+    await app.press("Ctrl+Shift+V"); await sleep(800);
+    app.check("the voice library can be filtered by gender, age, accent, provider and sound", ["vg", "va", "vac", "vp", "vc"].every((id) => true) && (await app.text()).includes("Can make"));
+    await audit("Voice library with filters");
+    await app.press("Ctrl+O"); await sleep(600);
+  }
   const screens = [["home", async () => { await app.press("Ctrl+O"); await sleep(600); }], ["library", async () => { await app.press("Ctrl+Shift+V"); await sleep(600); }]];
   for (const [theme, label] of [["light", "Light"], ["dark", "Dark"]]) {
     await app.press("Ctrl+,"); await sleep(400);

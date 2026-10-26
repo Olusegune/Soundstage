@@ -5,7 +5,7 @@ import type { Ctx } from "../ctx";
 import * as I from "../icons";
 import { fmtMs } from "../logic";
 import { Empty, Help, PlayButton, Waveform } from "../ui";
-import { AuditionPanel } from "./AuditionPanel";
+import { AuditionPanel, FallbackList } from "./AuditionPanel";
 import type { LineInfo, LineStatus, TakeStatus } from "../types";
 
 const STATUS: Record<LineStatus, { label: string; cls: string; icon: React.ReactNode }> = {
@@ -19,6 +19,7 @@ export function RenderStep({ ctx }: { ctx: Ctx }) {
   const { project, analysis, edit } = ctx;
   const [open, setOpen] = useState<string | null>(null);
   const [trying, setTrying] = useState<string | null>(null);
+  const [alts, setAlts] = useState<string | null>(null);
   const advanced = ctx.mode === "advanced";
 
   if (!analysis || analysis.lines.length === 0) {
@@ -97,7 +98,7 @@ export function RenderStep({ ctx }: { ctx: Ctx }) {
                       This voice will not use from the plan: {l.plan_support.ignored.join("; ")}.
                     </div>
                   )}
-                  {err && <div className="callout bad small" style={{ margin: "6px 0 0" }} role="alert"><strong>Could not render</strong>{err}</div>}
+                  {err && <div className="callout bad small" style={{ margin: "6px 0 0" }} role="alert"><strong>Could not render</strong>{err}<div className="row" style={{ marginTop: 6 }}><button className="small" aria-expanded={alts === key} onClick={() => setAlts(alts === key ? null : key)}>Suggest other voices</button></div></div>}
                   {l.issues.length > 0 && l.status !== "skipped" && (
                     <div className="small" style={{ color: "var(--warn)", marginTop: 4 }}>
                       {l.issues[0]?.message}
@@ -123,6 +124,7 @@ export function RenderStep({ ctx }: { ctx: Ctx }) {
                   <button className="small ghost" onClick={() => setSkip(key, l.status !== "skipped")}>{l.status === "skipped" ? "Include" : "Skip"}</button>
                   {takes.length > 0 && <button className="small ghost" aria-expanded={open === key} onClick={() => setOpen(open === key ? null : key)}>Takes ({takes.length}) <I.ChevronDown size={14} /></button>}
                 </div>
+                {alts === key && <FallbackList ctx={ctx} info={l} onClose={() => setAlts(null)} />}
                 {trying === key && <AuditionPanel ctx={ctx} info={l} onClose={() => setTrying(null)} />}
                 {open === key && (
                   <div className="take-detail col">

@@ -1,7 +1,7 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
-  Analysis, Asset, Destination, Attestation, AudioInfo, WhisperStatus, CleanOut, Cue2, HistoryView, PronRule, SpeakOut, ToolInfo, TranscriptOut, CloneEntry, CloneInfo, ClonedVoice, DesignPreview, DesignerInfo, RefReport, EnginesConfig, GeneratorInfo, SystemCheck, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Take, DirectorEstimate, DirectorProposal, LineChange, LinePlan, PerformancePlan, Direction, Voice, VoiceDef,
+  Analysis, Asset, Destination, Attestation, AudioInfo, WhisperStatus, CleanOut, Cue2, HistoryView, PronRule, SpeakOut, ToolInfo, TranscriptOut, CloneEntry, CloneInfo, ClonedVoice, DesignPreview, DesignerInfo, RefReport, EnginesConfig, GeneratorInfo, SystemCheck, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Take, FallbackOption, DirectorEstimate, DirectorProposal, LineChange, LinePlan, PerformancePlan, Direction, Voice, VoiceDef,
 } from "./types";
 import type { Interrupted } from "./shell/InterruptedDialog";
 
@@ -38,6 +38,7 @@ export const api = {
   getLocalOnly: () => invoke<boolean>("get_local_only"),
   setLocalOnly: (on: boolean) => invoke<void>("set_local_only", { on }),
   auditionLine: (project: Project, lineKey: string, voiceIds: string[], confirmed: boolean) => invoke<RenderOutcome>("audition_line", { project, lineKey, voiceIds, confirmed }),
+  fallbackOptions: (project: Project, lineKey: string) => invoke<FallbackOption[]>("fallback_options", { project, lineKey }),
   jobBegin: (projectId: string, keys: string[]) => invoke<string>("job_begin", { projectId, keys }),
   jobFinish: (projectId: string, jobId: string, outcome: "succeeded" | "cancelled" | "failed") => invoke<void>("job_finish", { projectId, jobId, outcome }),
   pendingJobs: (projectId: string) => invoke<Interrupted[]>("pending_jobs", { projectId }),

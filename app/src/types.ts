@@ -463,3 +463,11 @@ export interface PerformancePlan {
 export interface DirectorEstimate { scenes: number; lines: number; chars: number; approx_input_tokens: number; max_output_tokens: number; calls: number }
 export interface DirectorProposal { plan: PerformancePlan; source: "model" | "rules"; dropped: number; notes: string[] }
 export interface LineChange { line_id: string; fields: string[] }
+
+export interface FallbackOption {
+  voice_id: string;
+  name: string;
+  provider_label: string;
+  sends_data: boolean;
+  plan?: { used: string[]; ignored: string[] } | null;
+}

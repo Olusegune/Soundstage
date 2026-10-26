@@ -326,6 +326,14 @@ async fn render_lines(app: AppHandle, state: State<'_, AppState>, project: Proje
     .await
 }
 
+/// Other voices that could stand in on a line that failed or cannot be done. Nothing is called here.
+#[tauri::command]
+fn fallback_options(state: State<'_, AppState>, project: Project, line_key: String) -> Vec<render::FallbackOption> {
+    let (store, reg) = shared(&state);
+    let project = with_plan(&store, project);
+    render::fallback_options(&project, &reg.get(), &line_key, soundstage_core::net::local_only())
+}
+
 /// Try one line with other voices (at most four). Each voice makes its own take. The cast and the chosen take do not
 /// change, so the person decides afterwards. Voices that send text over the internet need `confirmed`.
 #[tauri::command]
@@ -1693,6 +1701,7 @@ pub fn run() {
             render_lines,
             job_begin,
             audition_line,
+            fallback_options,
             director_estimate,
             director_run,
             plan_load,

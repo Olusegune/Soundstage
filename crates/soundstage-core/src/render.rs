@@ -210,6 +210,62 @@ pub fn render_line(project: &mut Project, reg: &Registry, project_dir: &Path, li
     render_line_as(project, reg, project_dir, line_key, None, true)
 }
 
+/// A voice that could stand in for the cast voice on one line.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct FallbackOption {
+    pub voice_id: String,
+    pub name: String,
+    pub provider_label: String,
+    /// True when using it sends the line over the internet and may be billed.
+    pub sends_data: bool,
+    /// What it would use and not use from the line's plan.
+    pub plan: Option<crate::perform::SupportReport>,
+}
+
+/// Other voices that can really do what this line needs (its language, the sounds and feeling it asks for), with local
+/// ones first. Nothing is called and nothing is chosen; picking one is a separate, approved step. In local-only mode
+/// voices that send text are never offered. Voices whose clone consent is not clean are never offered.
+pub fn fallback_options(project: &Project, reg: &Registry, line_key: &str, local_only: bool) -> Vec<FallbackOption> {
+    let parsed = project.parsed();
+    let Some(line) = parsed.lines.iter().find(|l| l.key == line_key) else { return vec![] };
+    let current = project.characters.get(&line.speaker).and_then(|c| c.voice_id.clone());
+    let cur_voice = current.as_deref().and_then(|v| reg.voice(v));
+    let resolved = resolved_for(project, line);
+    let commercial = project.licence_target == crate::licence::LicenceTarget::Commercial;
+    let plan_line = project.plan.lines.get(line_key);
+    let primary = |l: &str| l.split(['-', '_']).next().unwrap_or("").to_lowercase();
+    let mut out: Vec<(u8, FallbackOption)> = vec![];
+    for v in &reg.voices {
+        if Some(&v.id) == current.as_ref() || v.language == "zxx" {
+            continue;
+        }
+        let Some(a) = reg.adapter_for_voice(&v.id) else { continue };
+        let sends = a.sends_data();
+        if (sends && local_only) || reg.consent_problems(&v.id, commercial).is_some() {
+            continue;
+        }
+        let caps = a.capabilities();
+        if cur_voice.is_some_and(|c| primary(&c.language) != primary(&v.language)) || !caps.languages.iter().any(|l| primary(l) == primary(&v.language)) {
+            continue;
+        }
+        let text = match plan_line {
+            Some(lp) => crate::perform::plan_text(&line.text, lp, &caps),
+            None => line.text.clone(),
+        };
+        let (tokens, _) = spoken_tokens(project, reg, &text);
+        let mut res = resolved.clone();
+        drop_unusable_plan_feeling(&mut res, &caps);
+        if !unsupported_tags(&caps, &tokens, &res.emotion.value).is_empty() {
+            continue;
+        }
+        // Local first, then the same gender as the voice being replaced.
+        let rank = u8::from(sends) * 2 + u8::from(cur_voice.is_some_and(|c| !c.gender.is_empty() && c.gender != v.gender));
+        out.push((rank, FallbackOption { voice_id: v.id.clone(), name: v.name.clone(), provider_label: a.label().to_string(), sends_data: sends, plan: plan_line.map(|lp| crate::perform::support(a.id(), &caps, lp)) }));
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.name.cmp(&b.1.name)));
+    out.into_iter().map(|(_, o)| o).take(8).collect()
+}
+
 /// The most voices tried on one line in a single audition (decision D-20).
 pub const AUDITION_CAP: usize = 4;
 
@@ -580,6 +636,56 @@ AMA: hello there friend
         assert!(matches!(&out[0].1, Err(e) if e.kind == "voice_missing"));
         assert!(out[1].1.is_ok(), "one bad voice does not stop the others");
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// A stand-in voice provider for choosing alternatives: English voices with chosen tags, local or online.
+    struct Stand {
+        id: &'static str,
+        tags: Vec<&'static str>,
+        online: bool,
+        voices: Vec<(&'static str, &'static str)>,
+    }
+    impl Adapter for Stand {
+        fn id(&self) -> &'static str { self.id }
+        fn label(&self) -> &'static str { self.id }
+        fn licence(&self) -> crate::licence::LicenceInfo { ScratchAdapter.licence() }
+        fn capabilities(&self) -> crate::providers::Capabilities {
+            crate::providers::Capabilities { languages: vec!["en".into()], tags: self.tags.iter().map(|s| s.to_string()).collect(), voice_design: false, cloning: false, max_chars_per_request: 500, streaming: false }
+        }
+        fn list_voices(&self) -> Vec<crate::providers::Voice> {
+            self.voices.iter().map(|(id, gender)| crate::providers::Voice { id: format!("{}:{id}", self.id), name: id.to_string(), provider: self.id.into(), language: "en-GB".into(), accent: "British".into(), gender: gender.to_string(), age_range: "adult".into(), licence: Default::default(), sample_text: "hi".into(), notes: String::new() }).collect()
+        }
+        fn provider_version(&self) -> String { "1".into() }
+        fn sends_data(&self) -> bool { self.online }
+        fn render(&self, _r: &RenderRequest) -> Result<crate::providers::RenderOutput, AdapterError> { Err(AdapterError::Network) }
+    }
+
+    #[test]
+    fn fallback_options_offer_only_voices_that_can_do_the_line_local_first_and_respect_local_only() {
+        let reg = Registry::new(vec![
+            Box::new(Stand { id: "here", tags: vec!["laugh"], online: false, voices: vec![("anna", "female"), ("ben", "male")] }),
+            Box::new(Stand { id: "cloud", tags: vec!["laugh", "sad"], online: true, voices: vec![("cleo", "female")] }),
+            Box::new(Stand { id: "plain", tags: vec![], online: false, voices: vec![("pat", "female")] }),
+        ]);
+        let mut p = Project::new("F", false);
+        p.script = "# S
+AMA: ha [laugh] ok
+".into();
+        p.sync_ids();
+        p.characters.insert("AMA".into(), Character { voice_id: Some("here:anna".into()), ..Default::default() });
+        let key = p.parsed().lines[0].key.clone();
+        let o = fallback_options(&p, &reg, &key, false);
+        let names: Vec<&str> = o.iter().map(|x| x.name.as_str()).collect();
+        assert_eq!(names, vec!["ben", "cleo"], "local before online; the current voice and the voice that cannot laugh are left out: {names:?}");
+        assert!(o[1].sends_data && !o[0].sends_data);
+        let local = fallback_options(&p, &reg, &key, true);
+        assert_eq!(local.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["ben"], "local-only never offers an online voice");
+        assert!(fallback_options(&p, &reg, "nope", false).is_empty());
+        // The plan is untouched and each option reports what it would use of it.
+        p.plan.lines.insert(key.clone(), crate::plan::LinePlan { pace: Some(0.9), ..Default::default() });
+        let with_plan = fallback_options(&p, &reg, &key, false);
+        assert!(with_plan[0].plan.as_ref().unwrap().ignored.iter().any(|i| i.starts_with("pace")));
+        assert_eq!(p.plan.lines[&key].pace, Some(0.9));
     }
 
     #[test]
