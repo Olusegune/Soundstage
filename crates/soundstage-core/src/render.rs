@@ -6,7 +6,7 @@ use crate::audio::{quality, resample, write_wav_16_mono, QualityReport};
 use crate::direction::{resolve, Level, Resolved};
 use crate::project::{Project, Take, TakeStatus};
 use crate::providers::{split_tokens, unsupported_tags, Adapter, AdapterError, RenderRequest, Registry};
-use crate::script::{self, ParsedLine, Parsed};
+use crate::script::{ParsedLine, Parsed};
 use crate::tags::{token_canonical, tokenize, Token};
 use crate::util::{iso_now, new_id, sha256_hex};
 use serde::{Deserialize, Serialize};
@@ -82,7 +82,7 @@ pub fn spoken_tokens(project: &Project, reg: &Registry, text: &str) -> (Vec<Toke
 }
 
 pub fn analyze(project: &Project, reg: &Registry) -> Analysis {
-    let parsed = script::parse(&project.script);
+    let parsed = project.parsed();
     let mut lines = Vec::new();
     for line in &parsed.lines {
         let resolved = resolved_for(project, line);
@@ -179,7 +179,7 @@ pub struct RenderResult {
 
 /// Render one line into a take and select it. Reuses an identical earlier take without calling the provider.
 pub fn render_line(project: &mut Project, reg: &Registry, project_dir: &Path, line_key: &str) -> Result<RenderResult, RenderError> {
-    let parsed = script::parse(&project.script);
+    let parsed = project.parsed();
     let line = parsed.lines.iter().find(|l| l.key == line_key).ok_or_else(|| err("not_found", "That line no longer exists in the script."))?.clone();
     let resolved = resolved_for(project, &line);
 
@@ -355,6 +355,40 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst), before, "no provider call is made for a revoked voice");
         let gate = crate::exporter::check(&p, &reg);
         assert!(!gate.allowed && gate.blocking.iter().any(|b| b.kind == "consent" && b.reason.contains("revoked")));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// AC-006: adding a line must not disturb the lines that were already rendered.
+    #[test]
+    fn inserting_a_line_leaves_every_other_line_rendered_and_costs_no_calls() {
+        let (mut p, reg, calls, dir) = setup();
+        p.script = "# S
+AMA: hello there friend
+KOLA: bless you
+AMA: second line".into();
+        p.sync_ids();
+        let keys: Vec<String> = p.parsed().lines.iter().map(|l| l.key.clone()).collect();
+        for k in &keys {
+            render_line(&mut p, &reg, &dir, k).unwrap();
+        }
+        let made = calls.load(Ordering::SeqCst);
+        p.script = format!("# S
+AMA: A brand new opening.
+{}", p.script.trim_start_matches("# S
+"));
+        p.sync_ids();
+        let a = analyze(&p, &reg);
+        assert_eq!(a.lines.len(), 4);
+        for k in &keys {
+            let l = a.lines.iter().find(|l| &l.line.key == k).expect("old line keeps its id");
+            assert_eq!(l.status, LineStatus::Rendered, "{k} stays rendered");
+        }
+        let fresh = a.lines.iter().filter(|l| !keys.contains(&l.line.key)).count();
+        assert_eq!(fresh, 1);
+        for k in &keys {
+            render_line(&mut p, &reg, &dir, k).unwrap();
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), made, "re-rendering old lines makes no provider calls");
         std::fs::remove_dir_all(dir).ok();
     }
 

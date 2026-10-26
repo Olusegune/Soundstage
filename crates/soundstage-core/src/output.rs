@@ -576,7 +576,7 @@ mod tests {
         use crate::project::{Take, TakeStatus};
         let mut p = Project::new("S", false);
         p.script = "# One\nAMA: [sigh] Hello there, this is a rather long line of dialogue that must wrap onto two lines <ok> & fine\nKOLA: [laugh]\nKOLA: Bye --> now".into();
-        let parsed = crate::script::parse(&p.script);
+        let parsed = p.parsed();
         for (k, id) in [("s0-l0", "t1"), ("s0-l1", "t2"), ("s0-l2", "t3")] {
             p.takes.push(Take { id: id.into(), line_key: k.into(), speaker: "X".into(), text: "x".into(), voice_id: "v".into(), adapter_id: "a".into(), provider_version: "1".into(), cache_key: "k".into(), file: "takes/x.wav".into(), duration_ms: 2000, sample_rate: 22050, direction_summary: String::new(), created: String::new(), status: TakeStatus::Pending, approver: None });
             p.selected.insert(k.into(), id.into());

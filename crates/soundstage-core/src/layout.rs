@@ -78,7 +78,7 @@ mod tests {
             p.takes.push(take(id, k, ms));
             p.selected.insert(k.into(), id.into());
         }
-        let parsed = crate::script::parse(&p.script);
+        let parsed = p.parsed();
         (p, parsed)
     }
 

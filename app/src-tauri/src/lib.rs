@@ -311,7 +311,7 @@ async fn waveform(state: State<'_, AppState>, project_id: String, file: String, 
 
 #[tauri::command]
 fn compute_layout(project: Project) -> Layout {
-    layout::compute(&project, &soundstage_core::script::parse(&project.script))
+    layout::compute(&project, &project.parsed())
 }
 
 #[tauri::command]

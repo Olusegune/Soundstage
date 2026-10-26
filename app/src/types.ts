@@ -93,7 +93,23 @@ export interface Note {
 
 export type Rating = "all_ages" | "teen" | "adult" | "unrated";
 
+export interface LineIdRecord {
+  id: string;
+  speaker: string;
+  text: string;
+  scene: string;
+}
+
+/** Stable line ids (D-03). The app passes this back unchanged; the core keeps it matched to the script. */
+export interface IdTable {
+  seq: number;
+  script_hash: string;
+  lines: LineIdRecord[];
+  orphans: LineIdRecord[];
+}
+
 export interface Project {
+  line_ids?: IdTable;
   pronunciations: PronRule[];
   schema_version: number;
   id: string;

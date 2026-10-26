@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-pub const SCHEMA_VERSION: u32 = 1;
+/// 2: lines carry stable ids (`line_ids`).
+pub const SCHEMA_VERSION: u32 = 2;
 
 pub const SAMPLE_SCRIPT: &str = "# Kitchen, morning\nAMA: Good morning! [pause:short] You're up early.\nKOLA: [sigh] I couldn't sleep. [pause:long] The rain was loud.\nAMA: [whisper] Then let's not wake the others.\n\n# Market, later\nKOLA: [excited] Look at these mangoes!\nAMA: Careful. [pause:350] Last time you bought the whole stall.\n";
 
@@ -185,6 +186,8 @@ pub struct Project {
     pub scene_status: BTreeMap<String, String>,
     /// How this project's names and terms should be spoken. Applied before the app-wide rules.
     pub pronunciations: Vec<crate::pronounce::Rule>,
+    /// Stable line ids, matched to the script on every save. See `ids`.
+    pub line_ids: crate::ids::IdTable,
 }
 
 impl Default for Project {
@@ -212,6 +215,7 @@ impl Default for Project {
             notes: vec![],
             scene_status: BTreeMap::new(),
             pronunciations: vec![],
+            line_ids: Default::default(),
         }
     }
 }
@@ -229,6 +233,16 @@ impl Project {
             script: if sample { SAMPLE_SCRIPT.to_string() } else { String::new() },
             ..Default::default()
         }
+    }
+
+    /// The script parsed, with each line's stable id in `key`.
+    pub fn parsed(&self) -> crate::script::Parsed {
+        crate::ids::parse_with(&self.line_ids, &self.script).0
+    }
+
+    /// Match the ids to the current script and keep the result. Called before every save.
+    pub fn sync_ids(&mut self) {
+        self.line_ids = crate::ids::parse_with(&self.line_ids, &self.script).1;
     }
 
     pub fn take(&self, id: &str) -> Option<&Take> {
@@ -270,7 +284,9 @@ pub fn migrate(mut v: serde_json::Value) -> Result<Project, String> {
     if let Some(o) = v.as_object_mut() {
         o.insert("schema_version".into(), SCHEMA_VERSION.into());
     }
-    serde_json::from_value(v).map_err(|e| format!("The project file is damaged: {e}"))
+    let mut p: Project = serde_json::from_value(v).map_err(|e| format!("The project file is damaged: {e}"))?;
+    p.sync_ids();
+    Ok(p)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -307,6 +323,13 @@ impl Store {
         std::fs::create_dir_all(dir.join("takes")).map_err(|e| format!("Could not create the project folder: {e}"))?;
         std::fs::create_dir_all(dir.join("assets")).map_err(|e| e.to_string())?;
         let mut p = p.clone();
+        // A caller that never learned about line ids must not wipe them: keep the saved table.
+        if p.line_ids.lines.is_empty() && p.line_ids.orphans.is_empty() && p.line_ids.seq == 0 {
+            if let Ok(old) = self.read_file(&dir.join("project.json")) {
+                p.line_ids = old.line_ids;
+            }
+        }
+        p.sync_ids();
         p.schema_version = SCHEMA_VERSION;
         p.modified = iso_now();
         let json = serde_json::to_string_pretty(&p).map_err(|e| e.to_string())?;
@@ -318,13 +341,29 @@ impl Store {
         std::fs::rename(&tmp, &file).map_err(|e| format!("Could not save the project: {e}"))
     }
 
+    fn read_file(&self, p: &Path) -> Result<Project, String> {
+        let text = std::fs::read_to_string(p).map_err(|e| format!("Could not read the project: {e}"))?;
+        let v: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("The project file is damaged: {e}"))?;
+        migrate(v)
+    }
+
+    /// Before an older project is upgraded in place, keep a copy of the file exactly as it was.
+    fn backup_before_migration(&self, file: &Path) {
+        let Ok(text) = std::fs::read_to_string(file) else { return };
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else { return };
+        let ver = v.get("schema_version").and_then(|x| x.as_u64()).unwrap_or(1) as u32;
+        if ver < SCHEMA_VERSION {
+            let bak = file.with_file_name(format!("project.v{ver}.bak"));
+            if !bak.exists() {
+                let _ = std::fs::copy(file, bak);
+            }
+        }
+    }
+
     pub fn load(&self, id: &str) -> Result<Project, String> {
         let file = self.file(id)?;
-        let read = |p: &Path| -> Result<Project, String> {
-            let text = std::fs::read_to_string(p).map_err(|e| format!("Could not read the project: {e}"))?;
-            let v: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("The project file is damaged: {e}"))?;
-            migrate(v)
-        };
+        self.backup_before_migration(&file);
+        let read = |p: &Path| self.read_file(p);
         match read(&file) {
             Ok(p) if p.id == id => Ok(p),
             Ok(_) => Err("The project file does not match its folder.".into()),
@@ -386,6 +425,91 @@ mod tests {
         assert_eq!(q.licence_target, LicenceTarget::Commercial);
         assert_eq!(s.list().len(), 1);
         assert_eq!(s.list()[0].lines, 5);
+        std::fs::remove_dir_all(&s.root).ok();
+    }
+
+    fn fake_take(line_key: &str) -> Take {
+        Take {
+            id: new_id("take"), line_key: line_key.into(), speaker: "AMA".into(), text: "x".into(), voice_id: "v".into(), adapter_id: "a".into(),
+            provider_version: "1".into(), cache_key: "k".into(), file: "takes/x.wav".into(), duration_ms: 1000, sample_rate: 24000,
+            direction_summary: String::new(), created: String::new(), status: TakeStatus::default(), approver: None,
+        }
+    }
+
+    #[test]
+    fn inserting_a_line_keeps_takes_directions_and_selection_on_the_right_text() {
+        let s = store();
+        let mut p = Project::new("Ids", false);
+        p.script = "# A
+AMA: First line.
+KOLA: Second line.
+".into();
+        s.save(&p).unwrap();
+        let mut p = s.load(&p.id).unwrap();
+        let second = p.parsed().lines[1].key.clone();
+        let t = fake_take(&second);
+        p.selected.insert(second.clone(), t.id.clone());
+        p.takes.push(t.clone());
+        p.line_directions.insert(second.clone(), Direction::default());
+        p.script = "# A
+AMA: First line.
+ZED: A brand new line.
+KOLA: Second line.
+".into();
+        s.save(&p).unwrap();
+        let p = s.load(&p.id).unwrap();
+        let lines = p.parsed().lines;
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[2].text, "Second line.");
+        assert_eq!(lines[2].key, second);
+        assert_ne!(lines[1].key, second);
+        assert_eq!(p.selected_take(&lines[2].key).map(|x| x.id.clone()), Some(t.id));
+        assert!(p.selected_take(&lines[1].key).is_none());
+        std::fs::remove_dir_all(&s.root).ok();
+    }
+
+    #[test]
+    fn a_save_from_a_caller_without_ids_keeps_the_saved_ids() {
+        let s = store();
+        let mut p = Project::new("Ids2", false);
+        p.script = "# A
+AMA: One.
+KOLA: Two.
+".into();
+        s.save(&p).unwrap();
+        let mut p = s.load(&p.id).unwrap();
+        let two = p.parsed().lines[1].key.clone();
+        p.script = "# A
+ZED: New.
+AMA: One.
+KOLA: Two.
+".into();
+        p.line_ids = Default::default();
+        s.save(&p).unwrap();
+        let p = s.load(&p.id).unwrap();
+        assert_eq!(p.parsed().lines[2].key, two);
+        std::fs::remove_dir_all(&s.root).ok();
+    }
+
+    #[test]
+    fn opening_a_version_1_project_backs_it_up_and_keeps_its_keys() {
+        let s = store();
+        let id = "old-proj";
+        let dir = s.root.join(id);
+        std::fs::create_dir_all(&dir).unwrap();
+        let v1 = serde_json::json!({
+            "schema_version": 1, "id": id, "name": "Old", "script": "# A
+AMA: One.
+KOLA: Two.
+",
+            "selected": {"s0-l1": "take-1"}, "line_directions": {"s0-l1": {}}
+        });
+        std::fs::write(dir.join("project.json"), serde_json::to_string(&v1).unwrap()).unwrap();
+        let p = s.load(id).unwrap();
+        assert_eq!(p.schema_version, SCHEMA_VERSION);
+        assert_eq!(p.parsed().lines[1].key, "s0-l1");
+        let bak = std::fs::read_to_string(dir.join("project.v1.bak")).unwrap();
+        assert!(bak.contains("\"schema_version\":1"));
         std::fs::remove_dir_all(&s.root).ok();
     }
 

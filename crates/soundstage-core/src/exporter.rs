@@ -9,7 +9,7 @@ use crate::loudness::{destination, Loudness};
 use crate::mix::{mix, MixParams, Placed};
 use crate::project::{safe_relative, AssetKind, Project, TakeStatus};
 use crate::providers::Registry;
-use crate::script;
+
 use crate::util::{iso_now, safe_file_stem, sha256_hex, today_days};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -22,7 +22,7 @@ fn effective(project: &Project, key: &str, base: LicenceInfo) -> LicenceInfo {
 
 /// Everything the export gate must judge: voices, models, music and effects actually used.
 pub fn subjects(project: &Project, reg: &Registry) -> Vec<Subject> {
-    let parsed = script::parse(&project.script);
+    let parsed = project.parsed();
     let layout = compute(project, &parsed);
     let mut out = Vec::new();
     for slot in &layout.lines {
@@ -64,7 +64,7 @@ pub fn subjects(project: &Project, reg: &Registry) -> Vec<Subject> {
 
 /// Consent record ids of every cloned voice that has a take in the mix.
 pub fn consent_ids_used(project: &Project, reg: &Registry) -> Vec<String> {
-    let layout = compute(project, &script::parse(&project.script));
+    let layout = compute(project, &project.parsed());
     let mut ids: Vec<String> = layout.lines.iter().filter_map(|s| project.take(&s.take_id)).filter_map(|t| reg.consents.get(&t.voice_id)).map(|c| c.id.clone()).collect();
     ids.sort();
     ids.dedup();
@@ -75,7 +75,7 @@ pub fn check(project: &Project, reg: &Registry) -> GateReport {
     let mut r = gate(project.licence_target, &subjects(project, reg), &project.mix.destination, today_days());
     let commercial = project.licence_target == LicenceTarget::Commercial;
     let mut seen: Vec<String> = vec![];
-    for slot in &compute(project, &script::parse(&project.script)).lines {
+    for slot in &compute(project, &project.parsed()).lines {
         let Some(take) = project.take(&slot.take_id) else { continue };
         if seen.contains(&take.voice_id) {
             continue;
@@ -93,7 +93,7 @@ pub fn check(project: &Project, reg: &Registry) -> GateReport {
             r.allowed = false;
         }
     }
-    let parsed = script::parse(&project.script);
+    let parsed = project.parsed();
     let layout = compute(project, &parsed);
     let unplaced = parsed.lines.len().saturating_sub(layout.lines.len());
     if unplaced > 0 && !layout.lines.is_empty() {
@@ -155,7 +155,7 @@ pub struct Built {
 }
 
 pub fn build(project: &Project, project_dir: &Path) -> Result<Built, ExportError> {
-    let parsed = script::parse(&project.script);
+    let parsed = project.parsed();
     let layout = compute(project, &parsed);
     let mut dialogue = Vec::new();
     for slot in &layout.lines {
@@ -373,7 +373,7 @@ fn write_everything(
     }
 
     if !opts.subtitles.is_empty() {
-        let parsed = script::parse(&project.script);
+        let parsed = project.parsed();
         let cues = subtitle_cues(project, &parsed, layout, opts.speaker_labels);
         let mut seen: Vec<SubtitleFormat> = vec![];
         for f in &opts.subtitles {
