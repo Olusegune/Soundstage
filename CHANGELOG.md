@@ -15,6 +15,8 @@
 - **Suggest other voices** when a line cannot be rendered: voices that can really do it, free ones first, never online ones in local-only mode.
 - **Voice library filters:** gender, age, accent, provider and what a voice can make. Accents are marked "not rated" because none have been listened to yet.
 - **Listening pack** (Audio tools): make a fair, blind listening test from a few clips: matched loudness, random codes and order for each listener, score sheets, and a private key for you.
+- **Listening results** (Audio tools, Listening pack): choose the private key and the listeners' score sheets. Soundstage checks every row, reports any it cannot use, and judges each version against the pass levels (natural, understood, sounds believable, no spoken tag words, same voice, preferred over a reference). Too few listeners can never count as a pass. Save the report as a document or spreadsheet.
+- **Model Lab runner** (behind the scenes for now): renders a built-in English test set with several voices, with an estimate, exact approval and a spending cap for online voices, resume, and a record of characters and time per clip.
 - The side panel no longer squashes the project name in a short window.
 - Behind the scenes: a performance-plan format with checks, and a model list that cannot call anything verified without evidence.
 

@@ -1,11 +1,11 @@
 {
-  "when": "2026-10-26T02:16:43.245Z",
-  "passed": 242,
-  "total": 242,
+  "when": "2026-10-26T02:29:37.620Z",
+  "passed": 251,
+  "total": 251,
   "failed": [],
   "timings": {
-    "paletteOpenMs": 81,
-    "stepSwitchMs": 435
+    "paletteOpenMs": 78,
+    "stepSwitchMs": 434
   },
   "accessibility": [
     {
@@ -74,6 +74,10 @@
     },
     {
       "screen": "Listening pack",
+      "violations": []
+    },
+    {
+      "screen": "Listening results",
       "violations": []
     },
     {
