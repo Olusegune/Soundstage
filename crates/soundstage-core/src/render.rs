@@ -3,7 +3,7 @@
 //! and editing one line marks only that line stale.
 
 use crate::audio::{quality, resample, write_wav_16_mono, QualityReport};
-use crate::direction::{resolve, Level, Resolved};
+use crate::direction::{resolve_with_plan, Field, Level, Resolved};
 use crate::project::{Project, Take, TakeStatus};
 use crate::providers::{split_tokens, unsupported_tags, Adapter, AdapterError, RenderRequest, Registry};
 use crate::script::{ParsedLine, Parsed};
@@ -39,6 +39,9 @@ pub struct LineInfo {
     pub voice_id: Option<String>,
     pub selected_take: Option<String>,
     pub take_count: usize,
+    /// What the cast voice will and will not use from this line's plan. Absent when the line has no plan.
+    #[serde(default)]
+    pub plan_support: Option<crate::perform::SupportReport>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -57,7 +60,24 @@ pub fn resolved_for(project: &Project, line: &ParsedLine) -> Resolved {
     let ch = project.characters.get(&line.speaker).map(|c| c.direction.clone()).unwrap_or_default();
     let sc = project.scene_directions.get(&line.scene.to_string()).cloned().unwrap_or_default();
     let ln = project.line_directions.get(&line.key).cloned().unwrap_or_default();
-    resolve(&project.project_direction, &ch, &sc, &ln)
+    let plan_dir = project.plan.lines.get(&line.key).map(crate::perform::plan_direction).unwrap_or_default();
+    resolve_with_plan(&plan_dir, &project.project_direction, &ch, &sc, &ln)
+}
+
+/// The line's text as the voice should get it: the script's own, plus the plan's pauses and sounds when there is a
+/// plan for this line. A project without a plan gets exactly the script's text.
+fn text_for(project: &Project, line: &ParsedLine, caps: &crate::providers::Capabilities) -> String {
+    match project.plan.lines.get(&line.key) {
+        Some(lp) => crate::perform::plan_text(&line.text, lp, caps),
+        None => line.text.clone(),
+    }
+}
+
+/// A plan never blocks a render: a feeling that came from the plan, and that the voice cannot be told, is dropped.
+fn drop_unusable_plan_feeling(resolved: &mut Resolved, caps: &crate::providers::Capabilities) {
+    if resolved.emotion.source == Level::Plan && !caps.tags.contains(&resolved.emotion.value) {
+        resolved.emotion = Field { value: "neutral".to_string(), source: Level::Default };
+    }
 }
 
 fn describe(r: &Resolved) -> String {
@@ -85,8 +105,9 @@ pub fn analyze(project: &Project, reg: &Registry) -> Analysis {
     let parsed = project.parsed();
     let mut lines = Vec::new();
     for line in &parsed.lines {
-        let resolved = resolved_for(project, line);
-        let (tokens, tag_issues) = spoken_tokens(project, reg, &line.text);
+        let mut resolved = resolved_for(project, line);
+        let (mut tokens, tag_issues) = spoken_tokens(project, reg, &line.text);
+        let mut plan_support = None;
         let mut issues: Vec<LineIssue> = tag_issues
             .iter()
             .map(|i| LineIssue { kind: "unknown_tag".into(), message: i.message.clone(), tag: Some(i.tag.trim_matches(['[', ']']).to_string()) })
@@ -103,6 +124,12 @@ pub fn analyze(project: &Project, reg: &Registry) -> Analysis {
             None => issues.push(LineIssue { kind: "no_voice".into(), message: format!("{} has no voice yet.", line.speaker), tag: None }),
             Some(vid) => match (reg.voice(vid), reg.adapter_for_voice(vid)) {
                 (Some(v), Some(a)) => {
+                    let caps = a.capabilities();
+                    if let Some(lp) = project.plan.lines.get(&line.key) {
+                        plan_support = Some(crate::perform::support(a.id(), &caps, lp));
+                        tokens = spoken_tokens(project, reg, &text_for(project, line, &caps)).0;
+                        drop_unusable_plan_feeling(&mut resolved, &caps);
+                    }
                     for t in unsupported_tags(&a.capabilities(), &tokens, &resolved.emotion.value) {
                         issues.push(LineIssue {
                             kind: "unsupported_tag".into(),
@@ -134,6 +161,7 @@ pub fn analyze(project: &Project, reg: &Registry) -> Analysis {
             voice_id,
             selected_take: selected.map(|t| t.id.clone()),
             take_count: project.takes.iter().filter(|t| t.line_key == line.key).count(),
+            plan_support,
         });
     }
     let speakers_without_voice = parsed
@@ -181,9 +209,9 @@ pub struct RenderResult {
 pub fn render_line(project: &mut Project, reg: &Registry, project_dir: &Path, line_key: &str) -> Result<RenderResult, RenderError> {
     let parsed = project.parsed();
     let line = parsed.lines.iter().find(|l| l.key == line_key).ok_or_else(|| err("not_found", "That line no longer exists in the script."))?.clone();
-    let resolved = resolved_for(project, &line);
+    let mut resolved = resolved_for(project, &line);
 
-    let (tokens, issues) = spoken_tokens(project, reg, &line.text);
+    let (mut tokens, issues) = spoken_tokens(project, reg, &line.text);
     if let Some(i) = issues.first() {
         return Err(err("unknown_tag", format!("{} Fix or remove it before rendering.", i.message)));
     }
@@ -206,6 +234,11 @@ pub fn render_line(project: &mut Project, reg: &Registry, project_dir: &Path, li
         return Err(err("consent", format!("{} cannot be used: {}", voice.name, problems.join(" "))));
     }
 
+    let caps = adapter.capabilities();
+    if project.plan.lines.contains_key(&line.key) {
+        tokens = spoken_tokens(project, reg, &text_for(project, &line, &caps)).0;
+        drop_unusable_plan_feeling(&mut resolved, &caps);
+    }
     let missing = unsupported_tags(&adapter.capabilities(), &tokens, &resolved.emotion.value);
     if !missing.is_empty() {
         let list = missing.iter().map(|t| format!("[{t}]")).collect::<Vec<_>>().join(", ");
@@ -389,6 +422,84 @@ AMA: A brand new opening.
             render_line(&mut p, &reg, &dir, k).unwrap();
         }
         assert_eq!(calls.load(Ordering::SeqCst), made, "re-rendering old lines makes no provider calls");
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    fn status_of(p: &Project, reg: &Registry, key: &str) -> LineStatus {
+        analyze(p, reg).lines.iter().find(|l| l.line.key == key).unwrap().status
+    }
+
+    #[test]
+    fn a_plan_changes_only_the_lines_it_touches_and_only_with_things_the_voice_uses() {
+        use crate::plan::{Emphasis, LinePlan, Pause};
+        let (mut p, reg, calls, dir) = setup();
+        p.script = "# S
+AMA: hello there friend
+KOLA: bless you
+AMA: second line".into();
+        p.sync_ids();
+        let keys: Vec<String> = p.parsed().lines.iter().map(|l| l.key.clone()).collect();
+        for k in &keys {
+            render_line(&mut p, &reg, &dir, k).unwrap();
+        }
+        let made = calls.load(Ordering::SeqCst);
+        // A pause in the plan is spoken, so that one line is out of date and the others are not.
+        p.plan.lines.insert(keys[0].clone(), LinePlan { pauses: vec![Pause { at: 5, ms: 400 }], ..Default::default() });
+        assert_eq!(status_of(&p, &reg, &keys[0]), LineStatus::Stale);
+        assert_eq!(status_of(&p, &reg, &keys[1]), LineStatus::Rendered);
+        assert_eq!(status_of(&p, &reg, &keys[2]), LineStatus::Rendered);
+        render_line(&mut p, &reg, &dir, &keys[0]).unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), made + 1);
+        let take = p.selected_take(&keys[0]).unwrap();
+        assert!(take.text.contains("pause"), "the pause was part of what the voice was given: {}", take.text);
+        assert!(take.direction_summary.contains("(default)") || take.direction_summary.contains("emotion"));
+        // Emphasis is not used by this voice, so adding it changes nothing and costs nothing.
+        p.plan.lines.get_mut(&keys[0]).unwrap().emphasis = vec![Emphasis { start: 0, end: 5, level: 0.9 }];
+        assert_eq!(status_of(&p, &reg, &keys[0]), LineStatus::Rendered);
+        let info = analyze(&p, &reg);
+        let sup = info.lines.iter().find(|l| l.line.key == keys[0]).unwrap().plan_support.clone().unwrap();
+        assert!(sup.ignored.iter().any(|i| i.starts_with("emphasis")), "{sup:?}");
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_plan_can_never_stop_a_line_from_rendering_and_the_persons_direction_wins() {
+        use crate::plan::{EmotionPart, LinePlan, VocalEvent};
+        let (mut p, reg, _calls, dir) = setup();
+        p.script = "# S
+AMA: hello there friend
+".into();
+        p.sync_ids();
+        let key = p.parsed().lines[0].key.clone();
+        // The plan asks for a feeling and a sound this test voice cannot do.
+        p.plan.lines.insert(key.clone(), LinePlan {
+            emotion: vec![EmotionPart { name: "sarcastic".into(), intensity: 0.9, surface: true }],
+            events: vec![VocalEvent { kind: "sneeze".into(), at: 0, duration_ms: None, intensity: 0.5, source: "provider-tag".into() }],
+            ..Default::default()
+        });
+        let a = analyze(&p, &reg);
+        assert!(a.lines[0].issues.is_empty(), "the plan adds no problems: {:?}", a.lines[0].issues);
+        render_line(&mut p, &reg, &dir, &key).expect("renders anyway");
+        let sup = analyze(&p, &reg).lines[0].plan_support.clone().unwrap();
+        assert!(sup.ignored.iter().any(|i| i == "sound: sneeze"), "{sup:?}");
+        // The person sets a feeling on the line: it beats the plan.
+        p.line_directions.insert(key.clone(), Direction { emotion: Some("serious".into()), ..Default::default() });
+        let r = analyze(&p, &reg).lines[0].resolved.clone();
+        assert_eq!((r.emotion.value.as_str(), r.emotion.source), ("serious", Level::Line));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_project_with_no_plan_gets_exactly_the_script_text_and_the_same_keys_as_before() {
+        let (mut p, reg, _calls, dir) = setup();
+        p.script = "# S
+AMA: hello there friend
+".into();
+        p.sync_ids();
+        let key = p.parsed().lines[0].key.clone();
+        let before = analyze(&p, &reg).lines[0].cache_key.clone();
+        p.plan.lines.insert(key.clone(), crate::plan::LinePlan { pace: None, ..Default::default() });
+        assert_eq!(analyze(&p, &reg).lines[0].cache_key, before, "an empty plan line changes nothing");
         std::fs::remove_dir_all(dir).ok();
     }
 

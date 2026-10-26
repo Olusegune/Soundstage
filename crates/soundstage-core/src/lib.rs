@@ -28,6 +28,7 @@ pub mod plan;
 pub mod output;
 pub mod project;
 pub mod projectpack;
+pub mod perform;
 pub mod pronounce;
 pub mod providers;
 pub mod render;

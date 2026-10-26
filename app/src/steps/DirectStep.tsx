@@ -8,7 +8,7 @@ import { PlanPanel } from "./PlanPanel";
 import type { Direction, Level, LineInfo } from "../types";
 import { EMOTIONS } from "../types";
 
-const LEVEL_LABEL: Record<Level, string> = { default: "default", project: "project", character: "character", scene: "scene", line: "this line" };
+const LEVEL_LABEL: Record<Level, string> = { default: "default", plan: "the plan", project: "project", character: "character", scene: "scene", line: "this line" };
 const EMOTION_HINT: Record<string, string> = {
   neutral: "Even and natural", whisper: "Quiet and close", shout: "Loud and urgent", excited: "Fast and bright", sad: "Slow and heavy",
   tired: "Slow and low energy", sarcastic: "Dry, with an edge", curious: "Questioning and light", serious: "Measured and firm",

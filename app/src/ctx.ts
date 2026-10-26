@@ -33,6 +33,8 @@ export interface Ctx {
   /** Render many lines one at a time with progress, asking once up front. */
   renderBatch: (keys: string[]) => Promise<void>;
   stopBatch: () => void;
+  /** The saved plan changed on disk, so line statuses must be worked out again. */
+  planChanged: () => void;
   batch: { done: number; total: number } | null;
   errors: Record<string, string>;
   busy: Set<string>;

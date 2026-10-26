@@ -43,7 +43,8 @@ export function PlanPanel({ ctx }: { ctx: Ctx }) {
   const save = useCallback(async (next: PerformancePlan) => {
     await api.planSave(project, next);
     setPlan(next);
-  }, [project]);
+    ctx.planChanged();
+  }, [project, ctx]);
 
   const receive = useCallback(async (p: DirectorProposal) => {
     const ch = await api.planChanges(plan, p.plan);

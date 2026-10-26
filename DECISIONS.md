@@ -36,10 +36,10 @@ One line per decision, newest group last. **Approved** means the owner said yes 
 | D-14 | Keep `eleven_v3` as default; add v4 only after official-page verification, as an explicit choice | C-21 | MS3 | Proposed |
 | D-15 | Product name stays Soundstage; PRD working titles are not user-facing | C-14 | - | Proposed |
 | D-16 | Use `tools/bakeoff` and the Lab for evaluation; scoring method from `TEST_PLAN` section 4.3 | C-13, C-27 | MS4 | Proposed |
-| D-17 | The person's direction beats the plan, the plan beats defaults; a plan change makes only touched lines stale | MS3 planning | MS3 | Proposed |
-| D-18 | Pauses become pause tags; emphasis goes only to voices that declare it, otherwise it is reported as not honoured | MS3 planning | MS3 | Proposed |
-| D-19 | Event sounds come from the provider's own tag, or a library or generated clip on a separate track; no new model | MS3 planning | MS3b | Proposed |
-| D-20 | Each extra audition take is its own approved send, with a per-audition cap (default 3) | MS3 planning | MS3 | Proposed |
+| D-17 | The person's direction beats the plan, the plan beats defaults; a plan change makes only touched lines stale | MS3 planning | MS3 | Approved 2026-10-25 (owner) |
+| D-18 | Pauses become pause tags; emphasis goes only to voices that declare it, otherwise it is reported as not honoured | MS3 planning | MS3 | Approved 2026-10-25 (owner) |
+| D-19 | Event sounds come from the provider's own tag, or a library or generated clip on a separate track; no new model | MS3 planning | MS3b | Approved 2026-10-25 (owner) |
+| D-20 | Each extra audition take is its own approved send, with a per-audition cap (owner chose 4 takes) | MS3 planning | MS3 | Approved 2026-10-25 (owner) |
 
 ## C. How decisions change
 

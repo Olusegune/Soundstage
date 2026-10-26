@@ -188,6 +188,10 @@ pub struct Project {
     pub pronunciations: Vec<crate::pronounce::Rule>,
     /// Stable line ids, matched to the script on every save. See `ids`.
     pub line_ids: crate::ids::IdTable,
+    /// The performance plan from `plan.json`. Not part of `project.json`: the app attaches it when it loads or
+    /// receives a project, so rendering can read it.
+    #[serde(skip)]
+    pub plan: crate::plan::PerformancePlan,
 }
 
 impl Default for Project {
@@ -216,6 +220,7 @@ impl Default for Project {
             scene_status: BTreeMap::new(),
             pronunciations: vec![],
             line_ids: Default::default(),
+            plan: Default::default(),
         }
     }
 }
@@ -361,6 +366,13 @@ impl Store {
     }
 
     pub fn load(&self, id: &str) -> Result<Project, String> {
+        let mut p = self.load_file_only(id)?;
+        // A damaged plan must never stop a project from opening; it simply has no plan.
+        p.plan = crate::plan::PlanStore::new(&self.dir(id)?).load().unwrap_or_default();
+        Ok(p)
+    }
+
+    fn load_file_only(&self, id: &str) -> Result<Project, String> {
         let file = self.file(id)?;
         self.backup_before_migration(&file);
         let read = |p: &Path| self.read_file(p);

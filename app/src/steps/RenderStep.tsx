@@ -90,6 +90,11 @@ export function RenderStep({ ctx }: { ctx: Ctx }) {
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <div className="words" title={l.line.text}>{l.line.text}</div>
+                  {l.plan_support && l.plan_support.ignored.length > 0 && (
+                    <div className="small muted" style={{ marginTop: 4 }} data-testid="plan-ignored">
+                      This voice will not use from the plan: {l.plan_support.ignored.join("; ")}.
+                    </div>
+                  )}
                   {err && <div className="callout bad small" style={{ margin: "6px 0 0" }} role="alert"><strong>Could not render</strong>{err}</div>}
                   {l.issues.length > 0 && l.status !== "skipped" && (
                     <div className="small" style={{ color: "var(--warn)", marginTop: 4 }}>

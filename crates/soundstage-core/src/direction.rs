@@ -15,6 +15,8 @@ pub struct Direction {
 #[serde(rename_all = "snake_case")]
 pub enum Level {
     Default,
+    /// A suggestion from the Director or the person's plan. Below everything the person set.
+    Plan,
     Project,
     Character,
     Scene,
@@ -44,7 +46,13 @@ pub fn clamp_pace(p: f32) -> f32 {
 }
 
 pub fn resolve(project: &Direction, character: &Direction, scene: &Direction, line: &Direction) -> Resolved {
+    resolve_with_plan(&Direction::default(), project, character, scene, line)
+}
+
+/// Like `resolve`, with the line's plan underneath the four levels the person controls.
+pub fn resolve_with_plan(plan: &Direction, project: &Direction, character: &Direction, scene: &Direction, line: &Direction) -> Resolved {
     let levels = [
+        (Level::Plan, plan),
         (Level::Project, project),
         (Level::Character, character),
         (Level::Scene, scene),
@@ -96,6 +104,24 @@ mod tests {
         let after_b = resolve(&none, &none, &d(Some("excited"), None), &none);
         assert_eq!(before_a, after_a, "line with its own emotion is unaffected");
         assert_ne!(before_b, after_b, "line that inherits from the scene changes");
+    }
+
+    #[test]
+    fn the_plan_beats_defaults_but_every_level_the_person_sets_beats_the_plan() {
+        let none = Direction::default();
+        let plan = d(Some("sad"), Some(0.8));
+        let r = resolve_with_plan(&plan, &none, &none, &none, &none);
+        assert_eq!((r.emotion.value.as_str(), r.emotion.source, r.pace.source), ("sad", Level::Plan, Level::Plan));
+        for (p, c, s, l, who) in [
+            (d(Some("shout"), None), none.clone(), none.clone(), none.clone(), Level::Project),
+            (none.clone(), d(Some("shout"), None), none.clone(), none.clone(), Level::Character),
+            (none.clone(), none.clone(), d(Some("shout"), None), none.clone(), Level::Scene),
+            (none.clone(), none.clone(), none.clone(), d(Some("shout"), None), Level::Line),
+        ] {
+            let r = resolve_with_plan(&plan, &p, &c, &s, &l);
+            assert_eq!((r.emotion.value.as_str(), r.emotion.source), ("shout", who));
+            assert_eq!(r.pace.value, 0.8, "pace the person did not set still comes from the plan");
+        }
     }
 
     #[test]

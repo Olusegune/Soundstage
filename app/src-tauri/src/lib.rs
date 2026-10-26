@@ -245,9 +245,18 @@ async fn mix_preview(state: State<'_, AppState>, project: Project) -> Result<Mix
     .await?
 }
 
+/// The project from the screen has no plan in it (the plan lives in `plan.json`), so attach the saved one.
+fn with_plan(store: &Store, mut project: Project) -> Project {
+    if let Ok(dir) = store.dir(&project.id) {
+        project.plan = PlanStore::new(&dir).load().unwrap_or_default();
+    }
+    project
+}
+
 #[tauri::command]
 async fn analyze_project(state: State<'_, AppState>, project: Project) -> Result<Analysis, String> {
-    let (_, reg) = shared(&state);
+    let (store, reg) = shared(&state);
+    let project = with_plan(&store, project);
     blocking(move || render::analyze(&project, &reg.get())).await
 }
 
@@ -274,6 +283,7 @@ struct RenderOutcome {
 async fn render_lines(app: AppHandle, state: State<'_, AppState>, project: Project, keys: Vec<String>, job_id: Option<String>) -> Result<RenderOutcome, String> {
     let (store, reg) = shared(&state);
     let dir = store.dir(&project.id)?;
+    let project = with_plan(&store, project);
     blocking(move || {
         let reg = reg.get();
         let reg = &*reg;

@@ -3,7 +3,7 @@
 export type Licence = "commercial" | "non-commercial" | "unknown";
 export type LicenceTarget = "commercial" | "personal";
 export type TakeStatus = "pending" | "approved" | "held" | "rejected";
-export type Level = "default" | "project" | "character" | "scene" | "line";
+export type Level = "default" | "plan" | "project" | "character" | "scene" | "line";
 
 export type ConditionKind = "revenue_cap" | "territory" | "attribution" | "field_of_use" | "other";
 
@@ -221,6 +221,8 @@ export interface LineInfo {
   voice_id: string | null;
   selected_take: string | null;
   take_count: number;
+  /** What the cast voice will and will not use from this line's plan. */
+  plan_support?: { used: string[]; ignored: string[] } | null;
 }
 
 export interface Analysis {

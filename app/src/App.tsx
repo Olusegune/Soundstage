@@ -82,6 +82,7 @@ export default function App() {
   const [sendPrompt, setSendPrompt] = useState<{ provider: string; lines: number; chars: number; sofar: number; resolve: (ok: boolean) => void } | null>(null);
   const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
   const stopBatchRef = useRef(false);
+  const [planVersion, setPlanVersion] = useState(0);
   const [interrupted, setInterrupted] = useState<Interrupted | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [mixPreview, setMixPreview] = useState<MixPreview | null>(null);
@@ -143,7 +144,7 @@ export default function App() {
     let live = true;
     const t = window.setTimeout(() => { void api.analyze(project).then((a) => live && setAnalysis(a)).catch(() => undefined); }, 180);
     return () => { live = false; window.clearTimeout(t); };
-  }, [project, voices]);
+  }, [project, voices, planVersion]);
 
   // A preview mix describes the project as it was when it was built.
   useEffect(() => { setMixPreview(null); }, [project?.cues, project?.mix, project?.selected, project?.takes, project?.assets]);
@@ -559,7 +560,7 @@ export default function App() {
   /* ---------------------------------------------------------------- render */
   const ctx: Ctx | null = project && g ? {
     project, analysis, voices, dir, mode: prefs.mode, ffmpegPath: prefs.ffmpegPath, setFfmpegPath: (p) => setPrefs({ ffmpegPath: p }), edit, toast: say, goto: (n) => goStep(n),
-    openLibrary: () => openAux("library"), openPronunciation: () => openAux("pronunciation"), newProject: () => void newProject(), exportMemory: prefs.exportMemory, setExportMemory: (json) => { if (json !== prefs.exportMemory) setPrefs({ exportMemory: json }); }, voiceMemory: prefs.voiceMemory, assistantUrl: prefs.assistantUrl, assistantModel: prefs.assistantModel, rememberVoices: (picks) => setPrefs({ voiceMemory: { ...prefs.voiceMemory, ...picks } }), openHelp, render, confirmSend, renderBatch, stopBatch, batch, errors, busy,
+    openLibrary: () => openAux("library"), openPronunciation: () => openAux("pronunciation"), newProject: () => void newProject(), exportMemory: prefs.exportMemory, setExportMemory: (json) => { if (json !== prefs.exportMemory) setPrefs({ exportMemory: json }); }, voiceMemory: prefs.voiceMemory, assistantUrl: prefs.assistantUrl, assistantModel: prefs.assistantModel, rememberVoices: (picks) => setPrefs({ voiceMemory: { ...prefs.voiceMemory, ...picks } }), openHelp, render, confirmSend, renderBatch, stopBatch, planChanged: () => setPlanVersion((v) => v + 1), batch, errors, busy,
     steps: g.steps, next: g.next, mixPreview, mixBuilding, buildMix, markExported: () => setExported(true), focusKey,
   } : null;
 
