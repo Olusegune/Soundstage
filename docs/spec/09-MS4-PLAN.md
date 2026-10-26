@@ -2,7 +2,7 @@
 
 Status: **Proposed, planning only. No code until the owner approves it.** Written 2026-10-25. Expands section 7 of `06-MILESTONES-AND-TESTS.md`. Follows the listening method in `07-LISTENING-TEST-PROTOCOL.md`.
 
-**Status 2026-10-25: D-21 to D-25 approved. T-4.1 built** (test-set format, loader, checksum, 13 English scenes in `fixtures/lab/english-v1/`, 314 Rust tests). Owner answers: English only at first; no in-app blind player in version 1 (folder-and-spreadsheet method, score import in T-4.5); first dry run compares ElevenLabs with the Windows voices as a free baseline (assumed from "ElevenLabs"; change if you want a second paid provider). The code-switching scene is marked as needing native review and is left out of general results.
+**Status 2026-10-25: D-21 to D-25 approved. T-4.1, T-4.2 and T-4.3 built** (runner with estimate, exact approval, spending cap, resume, delete; clips, characters and time recorded per clip; 321 Rust tests and 242 of 242 real-window checks; the test never calls an online voice). No price is recorded because no provider publishes one the app can read; characters sent are counted conservatively, including a line refused before sending. Earlier: **T-4.1 built** (test-set format, loader, checksum, 13 English scenes in `fixtures/lab/english-v1/`, 314 Rust tests). Owner answers: English only at first; no in-app blind player in version 1 (folder-and-spreadsheet method, score import in T-4.5); first dry run compares ElevenLabs with the Windows voices as a free baseline (assumed from "ElevenLabs"; change if you want a second paid provider). The code-switching scene is marked as needing native review and is left out of general results.
 
 ## 1. Goal
 
