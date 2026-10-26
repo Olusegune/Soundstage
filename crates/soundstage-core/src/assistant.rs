@@ -67,7 +67,7 @@ pub fn improve(base_url: &str, model: &str, key: Option<&str>, kind: AssistKind,
 
 /// One chat request to an OpenAI-compatible server. Returns the model's reply text.
 fn chat(base: &crate::net::BaseUrl, key: Option<&str>, model: &str, system: &str, user: &str, max_tokens: u32) -> Result<String, String> {
-    let agent = ureq::AgentBuilder::new().redirects(0).timeout_connect(Duration::from_secs(10)).timeout_write(Duration::from_secs(30)).timeout_read(Duration::from_secs(180)).user_agent("Soundstage").build();
+    let agent = ureq::AgentBuilder::new().redirects(0).timeout_connect(Duration::from_secs(10)).timeout_write(Duration::from_secs(30)).timeout_read(Duration::from_secs(180)).user_agent("Soundstage").middleware(crate::net::local_guard).build();
     let body = serde_json::json!({
         "model": model, "stream": false, "max_tokens": max_tokens, "temperature": 0.4,
         "messages": [{ "role": "system", "content": system }, { "role": "user", "content": user }],

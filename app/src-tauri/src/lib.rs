@@ -1376,6 +1376,23 @@ fn run_checks(state: &AppState, config: &std::path::Path, ffmpeg_path: Option<&s
     });
     let (sp, jb) = EnginesConfig::load(config).map(|c| (c.speech.len() + usize::from(c.piper.is_some()), c.jobs.len())).unwrap_or((0, 0));
     out.push(Check { id: "engines", label: "Your own engines", status: "info", detail: format!("{sp} speech engine{} and {jb} music, effects or workflow engine{} set up.", if sp == 1 { "" } else { "s" }, if jb == 1 { "" } else { "s" }), fix: if sp + jb == 0 { "Optional. Add one under Voice engines.".into() } else { String::new() } });
+    let hw = soundstage_core::hardware::detect(&state.registry.models_dir());
+    let profile = soundstage_core::hardware::profile_of(&hw);
+    let gb = |mb: u64| format!("{:.0}", mb as f64 / 1024.0);
+    out.push(Check {
+        id: "hardware",
+        label: "This computer",
+        status: "info",
+        detail: format!(
+            "{} processor threads, {} GB memory, {}. {} GB free for downloaded models. Level: {}.",
+            hw.cpu_threads,
+            hw.ram_mb.map_or("unknown".into(), gb),
+            if hw.gpus.is_empty() { "no NVIDIA graphics card found".to_string() } else { hw.gpus.iter().map(|g| format!("{} ({} GB)", g.name, gb(g.vram_mb))).collect::<Vec<_>>().join(", ") },
+            hw.disk_free_mb.map_or("unknown".into(), gb),
+            profile.map_or("unknown".to_string(), |p| serde_json::to_string(&p).unwrap_or_default().trim_matches('"').replace('-', " ")),
+        ),
+        fix: String::new(),
+    });
     let probe = state.store.root.join(".write-test");
     let writable = std::fs::write(&probe, b"ok").is_ok();
     let _ = std::fs::remove_file(&probe);
@@ -1385,6 +1402,28 @@ fn run_checks(state: &AppState, config: &std::path::Path, ffmpeg_path: Option<&s
         Check { id: "folder", label: "Projects folder", status: "warn", detail: "Soundstage cannot write to its projects folder.".into(), fix: "Check that Documents\\Soundstage is not read-only and that your disk has space.".into() }
     });
     out
+}
+
+#[tauri::command]
+fn get_local_only() -> bool {
+    soundstage_core::net::local_only()
+}
+
+/// Local-only mode (D-13): nothing is sent to or fetched from the internet while it is on. The choice is
+/// kept in a small marker file so it is still on the next time the app starts.
+#[tauri::command]
+fn set_local_only(state: State<'_, AppState>, on: bool) -> Result<(), String> {
+    let marker = state.store.root.join(".config").join("local-only");
+    if on {
+        if let Some(dir) = marker.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| format!("Could not save the setting: {e}"))?;
+        }
+        std::fs::write(&marker, b"on").map_err(|e| format!("Could not save the setting: {e}"))?;
+    } else if marker.exists() {
+        std::fs::remove_file(&marker).map_err(|e| format!("Could not save the setting: {e}"))?;
+    }
+    soundstage_core::net::set_local_only(on);
+    Ok(())
 }
 
 /// A quick look at what this computer has, so a new user can see what works and what is optional.
@@ -1510,6 +1549,8 @@ pub fn run() {
             // Previews are throwaway; start each session clean.
             let _ = std::fs::remove_dir_all(root.join(".preview"));
             let registry: Arc<RegistryCell> = Arc::new(RegistryCell::new(root.join(".config").join("engines.json")));
+            // Local-only mode is remembered between runs and applied before anything can connect.
+            soundstage_core::net::set_local_only(root.join(".config").join("local-only").exists());
             // Find the installed voices in the background so the first screen opens at once.
             let warm = registry.clone();
             std::thread::spawn(move || {
@@ -1537,6 +1578,8 @@ pub fn run() {
             analyze_project,
             render_lines,
             job_begin,
+            get_local_only,
+            set_local_only,
             job_finish,
             pending_jobs,
             recover_job,

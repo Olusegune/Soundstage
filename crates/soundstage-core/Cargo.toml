@@ -15,4 +15,4 @@ symphonia = { version = "0.5", default-features = false, features = ["mp3", "fla
 zip = { version = "9.1.0", default-features = false, features = ["deflate"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
+windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_System_SystemInformation", "Win32_Storage_FileSystem"] }

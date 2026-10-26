@@ -38,7 +38,7 @@ impl ComfyTransport {
         Ok(Self::build(parse_base_url(base_url)?, workflow, Duration::from_secs(1), 600))
     }
     fn build(base: BaseUrl, workflow: Value, poll: Duration, max_polls: u32) -> Self {
-        let agent = ureq::AgentBuilder::new().redirects(0).timeout_connect(Duration::from_secs(10)).timeout_write(Duration::from_secs(30)).timeout_read(Duration::from_secs(120)).user_agent("Soundstage").build();
+        let agent = ureq::AgentBuilder::new().redirects(0).timeout_connect(Duration::from_secs(10)).timeout_write(Duration::from_secs(30)).timeout_read(Duration::from_secs(120)).user_agent("Soundstage").middleware(crate::net::local_guard).build();
         ComfyTransport { base, workflow, agent, poll, max_polls }
     }
     #[cfg(test)]

@@ -37,7 +37,7 @@ impl FalTransport {
         Self::build(model, template, keys, FAL_HOST.into(), fetch, Duration::from_secs(2), 300)
     }
     fn build(model: String, template: Value, keys: KeyProvider, base: String, fetch: Arc<dyn Fetcher>, poll: Duration, max_polls: u32) -> Self {
-        let agent = crate::net::cloud_agent_builder().redirects(0).timeout_connect(Duration::from_secs(10)).timeout_write(Duration::from_secs(30)).timeout_read(Duration::from_secs(60)).user_agent("Soundstage").build();
+        let agent = crate::net::cloud_agent_builder().redirects(0).timeout_connect(Duration::from_secs(10)).timeout_write(Duration::from_secs(30)).timeout_read(Duration::from_secs(60)).user_agent("Soundstage").middleware(crate::net::local_guard).build();
         FalTransport { model, template, keys, agent, base, fetch, poll, max_polls }
     }
     #[cfg(test)]

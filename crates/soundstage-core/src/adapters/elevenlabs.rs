@@ -75,7 +75,7 @@ impl ElevenLabsAdapter {
             .timeout_connect(Duration::from_secs(10))
             .timeout_write(Duration::from_secs(30))
             .timeout_read(Duration::from_secs(90))
-            .user_agent("Soundstage")
+            .user_agent("Soundstage").middleware(crate::net::local_guard)
             .build();
         ElevenLabsAdapter { keys, base, agent, voices: Mutex::new(None), extra: Mutex::new(Vec::new()), retry_delay, max_audio_bytes }
     }
@@ -199,6 +199,9 @@ fn error_code(r: ureq::Response) -> String {
 }
 
 fn map_status(code: u16, r: ureq::Response) -> AdapterError {
+    if code == crate::net::LOCAL_ONLY_STATUS {
+        return crate::net::local_only_error();
+    }
     let c = error_code(r);
     if c.contains("quota") || c.contains("insufficient_credits") || code == 402 {
         return AdapterError::Quota;

@@ -23,6 +23,11 @@ export function Settings(props: {
   const [has, setHas] = useState<boolean | null>(null);
   const [key, setKey] = useState("");
   const [removing, setRemoving] = useState(false);
+  const [localOnly, setLocalOnly] = useState(false);
+  useEffect(() => { void api.getLocalOnly().then(setLocalOnly).catch(() => undefined); }, []);
+  const toggleLocalOnly = async (on: boolean) => {
+    try { await api.setLocalOnly(on); setLocalOnly(on); props.toast(on ? "Local-only mode is on. Nothing will be sent to or fetched from the internet." : "Local-only mode is off."); } catch (e) { props.toast(messageOf(e), true); }
+  };
   const [helperKey, setHelperKey] = useState("");
   const [vk, setVk] = useState({ key: "", user: "", has: false, result: "" as string, bad: false, busy: false });
   const vkRefresh = () => { void Promise.all([api.hasApiKey("voicekiller"), api.hasApiKey("voicekiller:userid")]).then(([a, b]) => setVk((v) => ({ ...v, has: a && b }))).catch(() => undefined); };
@@ -98,6 +103,12 @@ export function Settings(props: {
           <label className="inline"><input type="checkbox" checked={props.prefs.keepHistory} onChange={(e) => props.onPrefs({ keepHistory: e.target.checked })} /> Keep a history of what Speak and Audio tools make</label>
           <button className="ghost" onClick={() => { props.onPrefs({ welcomed: false, toured: false }); props.toast("The welcome screen will show next time Soundstage starts."); }}>Show the welcome screen again</button>
         </div>
+      </div>
+
+      <div className="card" role="group" aria-label="Local-only mode">
+        <h2>Local-only mode</h2>
+        <label className="inline"><input type="checkbox" checked={localOnly} onChange={(e) => void toggleLocalOnly(e.target.checked)} /> Never use the internet</label>
+        <p className="small muted" style={{ margin: "6px 0 0" }}>While this is on, Soundstage refuses to send anything to online voices, music and effects services, or the AI prompt helper, and it does not download models. Voices on this computer, and engines running on this computer such as Ollama or ComfyUI, keep working. It stays on until you turn it off.</p>
       </div>
 
       <div className="card" role="group" aria-label="Sent this session">

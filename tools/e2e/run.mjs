@@ -442,6 +442,18 @@ try {
     await app.ev(`${inv("delete_project", { id: first })}`);
     await app.press("Ctrl+O"); await sleep(600);
   }
+  // Local-only mode refuses online use while on, and stays on across a reload until turned off.
+  {
+    const inv = (cmd, args) => `window.__TAURI_INTERNALS__.invoke('${cmd}',${JSON.stringify(args)})`;
+    await app.ev(`${inv("set_local_only", { on: true })}`);
+    app.check("local-only mode can be turned on", (await app.ev(`${inv("get_local_only", {})}`)) === true);
+    const dl = await app.ev(`${inv("whisper_download", { modelId: "tiny" })}.then(()=>'allowed',e=>String(e))`);
+    app.check("while it is on, an online download is refused in plain words", /Local-only mode is on/.test(String(dl)), String(dl).slice(0, 120));
+    await app.ev(`${inv("set_local_only", { on: false })}`);
+    app.check("local-only mode can be turned off", (await app.ev(`${inv("get_local_only", {})}`)) === false);
+    const checks = await app.ev(`${inv("system_check", { ffmpegPath: null })}`);
+    app.check("the system check describes this computer", checks.some((c) => c.id === "hardware" && /memory/.test(c.detail)), JSON.stringify(checks.find((c) => c.id === "hardware")));
+  }
   const screens = [["home", async () => { await app.press("Ctrl+O"); await sleep(600); }], ["library", async () => { await app.press("Ctrl+Shift+V"); await sleep(600); }]];
   for (const [theme, label] of [["light", "Light"], ["dark", "Dark"]]) {
     await app.press("Ctrl+,"); await sleep(400);

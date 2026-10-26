@@ -31,7 +31,7 @@ impl OpenAiSpeechAdapter {
     pub fn new(cfg: SpeechEngine, keys: KeyProvider) -> Result<Self, String> {
         cfg.validate()?;
         let base = crate::net::parse_base_url(&cfg.base_url)?;
-        let agent = ureq::AgentBuilder::new().redirects(0).timeout_connect(Duration::from_secs(10)).timeout_write(Duration::from_secs(30)).timeout_read(Duration::from_secs(180)).user_agent("Soundstage").build();
+        let agent = ureq::AgentBuilder::new().redirects(0).timeout_connect(Duration::from_secs(10)).timeout_write(Duration::from_secs(30)).timeout_read(Duration::from_secs(180)).user_agent("Soundstage").middleware(crate::net::local_guard).build();
         Ok(OpenAiSpeechAdapter { id: format!("speech-{}", cfg.id), label: cfg.label.clone(), base, keys, agent, retry_delay: Duration::from_secs(1), cfg })
     }
 

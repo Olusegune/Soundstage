@@ -46,7 +46,7 @@ impl KieTransport {
         Self::build(model, template, keys, KIE_HOST.into(), fetch, Duration::from_secs(5), 120)
     }
     fn build(model: String, template: Value, keys: KeyProvider, base: String, fetch: Arc<dyn Fetcher>, poll: Duration, max_polls: u32) -> Self {
-        let agent = crate::net::cloud_agent_builder().redirects(0).timeout_connect(Duration::from_secs(10)).timeout_write(Duration::from_secs(30)).timeout_read(Duration::from_secs(60)).user_agent("Soundstage").build();
+        let agent = crate::net::cloud_agent_builder().redirects(0).timeout_connect(Duration::from_secs(10)).timeout_write(Duration::from_secs(30)).timeout_read(Duration::from_secs(60)).user_agent("Soundstage").middleware(crate::net::local_guard).build();
         KieTransport { model, template, keys, agent, base, fetch, poll, max_polls }
     }
     #[cfg(test)]
@@ -71,6 +71,9 @@ impl KieTransport {
         let r = match res {
             Ok(r) => r,
             Err(ureq::Error::Status(code, r)) => {
+                if code == crate::net::LOCAL_ONLY_STATUS {
+                    return Err(crate::net::local_only_error());
+                }
                 let _ = crate::net::error_code(r);
                 return Err(code_error(code as i64));
             }

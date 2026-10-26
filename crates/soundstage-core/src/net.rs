@@ -131,6 +131,9 @@ pub fn error_code(r: ureq::Response) -> String {
 
 /// Map an HTTP failure into the common error set.
 pub fn error_from_status(code: u16, r: ureq::Response) -> AdapterError {
+    if code == LOCAL_ONLY_STATUS {
+        return local_only_error();
+    }
     let c = error_code(r);
     if c.contains("quota") || c.contains("insufficient") || code == 402 {
         return AdapterError::Quota;
@@ -229,7 +232,7 @@ pub fn check_download_url(url: &str, allowed_suffixes: &[&str]) -> Result<String
 }
 
 pub fn download(url: &str, allowed_suffixes: &[&str], max_bytes: usize) -> Result<Vec<u8>, String> {
-    let agent = ureq::AgentBuilder::new().resolver(PublicOnly).redirects(0).timeout_connect(Duration::from_secs(10)).timeout_read(Duration::from_secs(120)).user_agent("Soundstage").build();
+    let agent = ureq::AgentBuilder::new().resolver(PublicOnly).redirects(0).timeout_connect(Duration::from_secs(10)).timeout_read(Duration::from_secs(120)).user_agent("Soundstage").middleware(crate::net::local_guard).build();
     let mut current = url.to_string();
     for _ in 0..4 {
         check_download_url(&current, allowed_suffixes)?;
@@ -239,6 +242,7 @@ pub fn download(url: &str, allowed_suffixes: &[&str], max_bytes: usize) -> Resul
                 current = r.header("location").ok_or("The download redirected without saying where.")?.to_string();
             }
             Ok(r) => return Err(format!("The download failed (HTTP {}).", r.status())),
+            Err(ureq::Error::Status(crate::net::LOCAL_ONLY_STATUS, _)) => return Err("Local-only mode is on, so nothing was downloaded. Turn it off in Settings first.".into()),
             Err(ureq::Error::Status(code, _)) => return Err(format!("The download failed (HTTP {code}).")),
             Err(_) => return Err("The download could not be reached.".into()),
         }
@@ -252,7 +256,7 @@ pub fn download(url: &str, allowed_suffixes: &[&str], max_bytes: usize) -> Resul
 pub fn download_to_file(url: &str, allowed_suffixes: &[&str], expected_bytes: u64, expected_sha256: &str, dest: &std::path::Path, progress: &mut dyn FnMut(u64, u64)) -> Result<(), String> {
     use sha2::{Digest, Sha256};
     use std::io::Write;
-    let agent = cloud_agent_builder().resolver(PublicOnly).redirects(0).timeout_connect(Duration::from_secs(15)).timeout_read(Duration::from_secs(60)).user_agent("Soundstage").build();
+    let agent = cloud_agent_builder().resolver(PublicOnly).redirects(0).timeout_connect(Duration::from_secs(15)).timeout_read(Duration::from_secs(60)).user_agent("Soundstage").middleware(crate::net::local_guard).build();
     let mut current = url.to_string();
     let mut resp = None;
     for _ in 0..4 {
@@ -264,6 +268,7 @@ pub fn download_to_file(url: &str, allowed_suffixes: &[&str], expected_bytes: u6
             }
             Ok(r) if matches!(r.status(), 301 | 302 | 303 | 307 | 308) => current = r.header("location").ok_or("The download redirected without saying where.")?.to_string(),
             Ok(r) => return Err(format!("The download failed (HTTP {}).", r.status())),
+            Err(ureq::Error::Status(crate::net::LOCAL_ONLY_STATUS, _)) => return Err("Local-only mode is on, so nothing was downloaded. Turn it off in Settings first.".into()),
             Err(ureq::Error::Status(code, _)) => return Err(format!("The download failed (HTTP {code}).")),
             Err(ureq::Error::Transport(t)) => {
                 note_transport(&t);
@@ -466,6 +471,79 @@ pub fn last_transport_reason() -> String {
 /// A builder for services on the internet: it follows the `HTTPS_PROXY` / `ALL_PROXY` settings when they are set.
 pub fn cloud_agent_builder() -> ureq::AgentBuilder {
     ureq::AgentBuilder::new().try_proxy_from_env(true)
+}
+
+/* ------------------------------------------------------------------ local-only mode (D-13, T-1.7) */
+
+static LOCAL_ONLY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The status the guard answers with, so each adapter can turn it into one plain message.
+pub const LOCAL_ONLY_STATUS: u16 = 451;
+
+pub fn set_local_only(on: bool) {
+    LOCAL_ONLY.store(on, std::sync::atomic::Ordering::SeqCst);
+}
+
+pub fn local_only() -> bool {
+    LOCAL_ONLY.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+pub fn local_only_error() -> AdapterError {
+    AdapterError::ProviderError("Local-only mode is on, so nothing was sent. Turn it off in Settings to use online services.".into())
+}
+
+/// The host part of a URL, without scheme, port, path or brackets.
+fn host_of(url: &str) -> String {
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    let auth = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let auth = auth.rsplit('@').next().unwrap_or("");
+    if let Some(r) = auth.strip_prefix('[') {
+        return r.split(']').next().unwrap_or("").to_string();
+    }
+    auth.split(':').next().unwrap_or("").to_string()
+}
+
+/// Added to every HTTP agent. While local-only mode is on, anything that is not this computer is refused
+/// before a connection is made, whichever feature asked.
+pub fn local_guard(req: ureq::Request, next: ureq::MiddlewareNext) -> Result<ureq::Response, ureq::Error> {
+    if local_only() && !is_loopback_host(&host_of(req.url())) {
+        let r = ureq::Response::new(LOCAL_ONLY_STATUS, "Local only", "").map_err(|_| ureq::Error::Status(LOCAL_ONLY_STATUS, ureq::Response::new(500, "x", "").unwrap()))?;
+        return Err(ureq::Error::Status(LOCAL_ONLY_STATUS, r));
+    }
+    next.handle(req)
+}
+
+#[cfg(test)]
+mod local_only_tests {
+    use super::*;
+
+    #[test]
+    fn hosts_are_read_from_urls() {
+        assert_eq!(host_of("https://api.elevenlabs.io/v1/x?a=b"), "api.elevenlabs.io");
+        assert_eq!(host_of("http://127.0.0.1:8188/prompt"), "127.0.0.1");
+        assert_eq!(host_of("http://[::1]:11434/v1"), "::1");
+        assert_eq!(host_of("https://user:pw@evil.example:8443/"), "evil.example");
+        assert_eq!(host_of("http://localhost.evil.example/"), "localhost.evil.example");
+    }
+
+    #[test]
+    fn while_on_online_hosts_are_refused_without_a_connection_and_this_computer_is_not() {
+        // Tests share the process, so this one test owns the switch and restores it.
+        set_local_only(true);
+        let agent = ureq::AgentBuilder::new().middleware(local_guard).timeout_connect(std::time::Duration::from_secs(2)).build();
+        match agent.get("https://api.elevenlabs.io/v1/voices").call() {
+            Err(ureq::Error::Status(c, _)) => assert_eq!(c, LOCAL_ONLY_STATUS),
+            other => panic!("expected the local-only refusal, got {other:?}"),
+        }
+        // A loopback address passes the guard (and then simply fails to connect, as nothing listens on port 1).
+        match agent.get("http://127.0.0.1:1/").call() {
+            Err(ureq::Error::Transport(_)) => {}
+            other => panic!("loopback should reach the network layer, got {other:?}"),
+        }
+        set_local_only(false);
+        assert!(!local_only());
+        assert!(matches!(local_only_error(), AdapterError::ProviderError(m) if m.contains("Local-only")));
+    }
 }
 
 #[cfg(test)]
