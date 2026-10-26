@@ -18,10 +18,10 @@
 .brand:hover:not(:disabled) { background: none; }
 .brand-name { font-family: var(--font-display); font-weight: 300; font-size: 15px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--text); white-space: nowrap; }
 .brand-name b { font-weight: 300; color: var(--teal-text); }
-.rail-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); padding: var(--s3) var(--s3) var(--s1); white-space: nowrap; }
+.rail-label { flex-shrink: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); padding: var(--s3) var(--s3) var(--s1); white-space: nowrap; }
 .rail-item {
   width: 100%; justify-content: flex-start; background: transparent; border: 1px solid transparent; color: var(--text-2);
-  padding: 0 var(--s3); min-height: 38px; gap: var(--s3); text-align: left; position: relative;
+  padding: 0 var(--s3); min-height: 38px; flex-shrink: 0; gap: var(--s3); text-align: left; position: relative;
 }
 .rail-item:hover:not(:disabled) { background: var(--surface-3); border-color: transparent; color: var(--text); }
 .rail-item[aria-current="page"], .rail-item[aria-current="step"] { background: var(--surface-3); color: var(--text); border-color: var(--line-strong); }
@@ -33,7 +33,7 @@
 .step-dot.current { background: var(--gold); border-color: var(--gold); color: var(--on-gold); }
 .step-dot.blocked { border-style: dashed; color: var(--text-3); }
 .step-meta { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.rail-project { padding: 0 var(--s3) var(--s2); font-size: var(--fs-sm); color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rail-project { flex-shrink: 0; line-height: 1.4; padding: 0 var(--s3) var(--s2); font-size: var(--fs-sm); color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .shell[data-rail="collapsed"] .brand-name, .shell[data-rail="collapsed"] .rail-label, .shell[data-rail="collapsed"] .rail-item .grow,
 .shell[data-rail="collapsed"] .rail-item .step-meta, .shell[data-rail="collapsed"] .rail-project, .shell[data-rail="collapsed"] .kbd-hint { display: none; }
 .shell[data-rail="collapsed"] .rail-item { justify-content: center; padding: 0; }

@@ -1,11 +1,11 @@
 {
-  "when": "2026-10-26T00:51:08.627Z",
-  "passed": 208,
-  "total": 208,
+  "when": "2026-10-26T01:23:45.934Z",
+  "passed": 224,
+  "total": 224,
   "failed": [],
   "timings": {
-    "paletteOpenMs": 79,
-    "stepSwitchMs": 436
+    "paletteOpenMs": 78,
+    "stepSwitchMs": 437
   },
   "accessibility": [
     {
@@ -62,6 +62,14 @@
     },
     {
       "screen": "Director suggestions",
+      "violations": []
+    },
+    {
+      "screen": "Audition panel",
+      "violations": []
+    },
+    {
+      "screen": "Voice library with filters",
       "violations": []
     },
     {

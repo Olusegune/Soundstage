@@ -72,10 +72,10 @@ export function AuditionPanel(props: { ctx: Ctx; info: LineInfo; onClose: () => 
         <label className="inline"><input type="checkbox" checked={blind} onChange={(e) => { setBlind(e.target.checked); setRevealed(false); }} /> Blind: hide voice names until I choose</label>
       </div>
 
-      <div className="col" style={{ gap: 2, maxHeight: 220, overflow: "auto" }} role="group" aria-label="Voices to try">
+      <div className="col" style={{ gap: 4, maxHeight: 220, overflow: "auto" }} role="group" aria-label="Voices to try">
         {choices.length === 0 && <p className="small muted">No other voices match.</p>}
         {choices.map((v) => (
-          <label key={v.id} className="inline small">
+          <label key={v.id} className="inline small" style={{ minHeight: 28 }}>
             <input type="checkbox" checked={picked.includes(v.id)} disabled={!picked.includes(v.id) && picked.length >= AUDITION_CAP} onChange={() => toggle(v.id)} />
             <span>{v.name} <span className="muted">{v.accent} · {v.provider_label}</span></span>
             {v.sends_data && <span className="chip gold">sends text</span>}

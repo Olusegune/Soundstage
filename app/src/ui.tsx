@@ -87,7 +87,7 @@ export function Waveform({ projectId, file, bins = 96, tone = "teal", dim = fals
 
 export function PeaksView({ peaks, bins = 96, tone = "teal", dim = false, height = 36, label, fill = false }: { peaks: number[] | null; bins?: number; tone?: "teal" | "gold"; dim?: boolean; height?: number; label?: string; fill?: boolean }) {
   if (!peaks) return <div className="skeleton" style={{ height }} aria-hidden="true" />;
-  if (peaks.length === 0) return <div className="faint small" style={{ height, display: "grid", alignItems: "center" }}>No waveform available</div>;
+  if (peaks.length === 0) return <div className="muted small" style={{ height, display: "grid", alignItems: "center" }}>No waveform available</div>;
   const n = peaks.length;
   const w = 100 / n;
   return (

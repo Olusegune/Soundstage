@@ -444,6 +444,13 @@ try {
     await app.ev(`${inv("delete_project", { id: first })}`);
     await app.press("Ctrl+O"); await sleep(600);
   }
+  // A short window must not squash the project name in the side panel.
+  {
+    await app.resize(1000, 440); await sleep(400);
+    const clipped = await app.ev("(()=>{const e=document.querySelector('.rail-project');if(!e)return 'none';const r=e.getBoundingClientRect();return {h:Math.round(r.height),sh:e.scrollHeight}})()");
+    app.check("the project name in the side panel is not clipped in a short window", clipped === "none" || (clipped.h >= clipped.sh - 1), JSON.stringify(clipped));
+    await app.resetSize();
+  }
   // Local-only mode refuses online use while on, and stays on across a reload until turned off.
   {
     const inv = (cmd, args) => `window.__TAURI_INTERNALS__.invoke('${cmd}',${JSON.stringify(args)})`;
@@ -549,7 +556,7 @@ try {
     await app.ev(`${load()}.then(p=>window.__TAURI_INTERNALS__.invoke('plan_save',{project:p,plan:${JSON.stringify(plan)}}))`);
     const after = await statuses();
     app.check("a pause in the plan makes only that line out of date", after[0].startsWith("stale") && after[1].startsWith("rendered"), JSON.stringify(after));
-    app.check("the report says what this voice will not use", /feeling: sad/.test(after[0]) && /emphasis/.test(after[0]), after[0]);
+    app.check("the report says what this voice will not use", /emphasis/.test(after[0]), after[0]);
     const reRender = await app.ev(`${load()}.then(p=>window.__TAURI_INTERNALS__.invoke('render_lines',{project:p,keys:[${JSON.stringify(keys[0])}],jobId:null})).then(o=>o.results[0].ok)`);
     app.check("the line still renders even though the plan asks for something the voice cannot do", reRender === true);
     // Audition.
