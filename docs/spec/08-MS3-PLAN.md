@@ -2,6 +2,8 @@
 
 Status: **Proposed, planning only. No code until the owner approves it.** Written 2026-10-25 after MS1 (foundations) and the first MS2 slice (Director) shipped. This expands section 6 of `06-MILESTONES-AND-TESTS.md`.
 
+**Status 2026-10-25: MS3a built** (225 of 225 real-window checks, 304 Rust, 84 front-end tests). Decisions D-17 to D-20 approved; audition cap set to 4 by the owner. Deviations: no separate voice-profile object (the existing character notes cover style and pronunciation; accent preference is not stored yet); loudness matching of audition takes is not built, so takes can differ in volume; the pace of voices that ignore pace still counts in the cache key, to avoid making existing paid takes stale; the new "side panel not clipped" check ran with no project open and so passed trivially. Still to do for the MS3a exit gate: listening run with five to six listeners and the owner's demo.
+
 ## 1. Goal
 
 Turn the plan the Director (or the person) wrote into **better takes**, let the person **audition the same line on several voices and providers**, and make **vocal events** (a laugh, a gasp, a cough) reliable. Everything stays optional: a project with no plan renders exactly as it does today.

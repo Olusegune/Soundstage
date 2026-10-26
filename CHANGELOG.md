@@ -9,6 +9,12 @@
 - **Local-only mode** (Settings): refuses everything that would use the internet, including model downloads, until you turn it off.
 - **This computer** appears in the System check: memory, graphics card, free disk space, and a level that later decides which local models are offered.
 - **Director** (Direct step): suggests how each line should be played (what the character wants, what they hold back, pace, pauses, emphasis) using the chat server you set in Settings. It shows what will be sent and where before it sends anything, only suggests, and lets you accept line by line. What you edit is locked and never overwritten. "Simple rules only" works with no server. Action lines like `(She slams the door.)` are now understood and never spoken.
+- **The plan now shapes the take.** Pauses and sounds from the plan are written into the line; a feeling or pace the plan asks for is used only where you have not directed the line yourself. A plan never stops a line from rendering: what a voice cannot do is left out and listed ("This voice will not use from the plan: emphasis").
+- **Add a sound to a line** (laugh, sigh, gasp and others) on the Direct step. An unclosed tag such as `[laugh` is now reported instead of being read aloud.
+- **Try other voices:** audition one line with up to four voices side by side, optionally blind. Your cast and chosen take change only when you choose. Online voices ask first.
+- **Suggest other voices** when a line cannot be rendered: voices that can really do it, free ones first, never online ones in local-only mode.
+- **Voice library filters:** gender, age, accent, provider and what a voice can make. Accents are marked "not rated" because none have been listened to yet.
+- The side panel no longer squashes the project name in a short window.
 - Behind the scenes: a performance-plan format with checks, and a model list that cannot call anything verified without evidence.
 
 
