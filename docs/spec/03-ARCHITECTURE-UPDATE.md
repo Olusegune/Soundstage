@@ -25,11 +25,13 @@ This file is the delta from the as-built design in `docs/ARCHITECTURE.md` (v0.1,
 **Problem.** Lines are keyed `s{scene}-l{ordinal}` (`script.rs:125`). Inserting a line renumbers everything below it, so cache entries, directions, takes and stale marks attach to the wrong text.
 
 **Design.**
-- Each parsed element (scene, line, action) gets an immutable `id`: a short random string stored in the script sidecar `script.ids.json` next to the script, with the element's content hash and position.
+- Each parsed element (scene, line, action) gets an immutable `id`: a short string stored in the `line_ids` table inside `project.json` (as built; a separate sidecar file was not needed), with the element's content hash and position.
 - On re-parse, ids are matched to elements by this order: exact hash and position; exact hash anywhere nearby; same speaker and a text similarity above 0.85; otherwise a new id. Unmatched old ids become "orphaned" and their takes are kept under an Orphans list instead of deleted.
 - The user can accept, reassign, or discard a match when it is uncertain (similarity 0.85 to 0.95).
 - The cache key keeps its content hash parts; the line id replaces the ordinal.
-- **Migration.** Project format version 3 to 4. On first open, ids are assigned to the existing ordinals in order, takes and directions are carried over by ordinal, a backup `project.v3.bak` is written, and the migration is tested against the fixture projects. A project opened in an older app still loads read-only with a warning.
+- **Migration.** Project schema 1 to 2 (as built). On first open, ids are assigned to the existing ordinals in order, takes and directions are carried over by ordinal, a backup `project.v1.bak` is written, and the migration is tested against the fixture projects. A project opened in an older app still loads read-only with a warning.
+
+**As built (MS1, 2026-10-25).** Lines only; scenes keep their positional index (scene inserts can still move scene-level directions and status, a follow-up). The first ids are the old positional keys, so no take, direction or note was rewritten. The matcher runs on every parse and save (`ids.rs`): exact text in order, then similar text (0.85, within 200 lines), then paired gaps between matched neighbours, then new ids `l1`, `l2`, and so on. Lines that leave the script are kept as orphans (up to 500) and come back if the same text returns. Uncertain matches are not yet shown to the user for confirmation (follow-up). Opening a version 1 project writes `project.v1.bak`; an older Soundstage refuses a version 2 project with a plain "newer version" message rather than opening it read-only.
 
 ## 4. Performance plan
 
@@ -116,7 +118,7 @@ A registry file, `registry/models.json`, shipped with the app and updatable, one
 MyProject/
   project.json          format version, ids of other files
   script.txt            user text, never rewritten by the app
-  script.ids.json       stable ids (new)
+  project.json          also holds `line_ids`, the stable id table (as built)
   plan.json             PerformancePlan (new)
   timeline.json         tracks and clips (MS7)
   takes/                immutable audio

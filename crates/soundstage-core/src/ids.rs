@@ -22,6 +22,8 @@ use serde::{Deserialize, Serialize};
 
 const MAX_ORPHANS: usize = 500;
 const SIMILARITY: f32 = 0.85;
+/// How far from its old position an edited line is looked for. Long moves are matched exactly instead.
+const SEARCH_WINDOW: usize = 200;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -115,10 +117,19 @@ pub fn reconcile(table: &IdTable, script_text: &str, parsed: &Parsed) -> (IdTabl
     let mut matched_old: Vec<Option<usize>> = vec![None; n];
 
     // 1. Exact matches, in order: the first unused copy at or after the previous match.
+    // An index by speaker and text keeps this fast on very long scripts.
+    let mut by_text: std::collections::HashMap<(&str, &str), Vec<usize>> = std::collections::HashMap::new();
+    for (j, r) in old.iter().enumerate() {
+        by_text.entry((r.speaker.as_str(), r.text.as_str())).or_default().push(j);
+    }
     let mut last_j = 0usize;
     for i in 0..n {
-        let best = (0..old.len())
-            .filter(|&j| !old_used[j] && old[j].speaker == new_recs[i].speaker && old[j].text == new_recs[i].text)
+        let best = by_text
+            .get(&(new_recs[i].speaker.as_str(), new_recs[i].text.as_str()))
+            .into_iter()
+            .flatten()
+            .copied()
+            .filter(|&j| !old_used[j])
             .min_by_key(|&j| (old[j].scene != new_recs[i].scene, j < last_j, j));
         if let Some(j) = best {
             old_used[j] = true;
@@ -146,7 +157,8 @@ pub fn reconcile(table: &IdTable, script_text: &str, parsed: &Parsed) -> (IdTabl
             continue;
         }
         let mut best: Option<(usize, f32)> = None;
-        for j in 0..old.len() {
+        // Only lines near the old position are compared, which keeps this fast on very long scripts.
+        for j in i.saturating_sub(SEARCH_WINDOW)..(i + SEARCH_WINDOW).min(old.len()) {
             if old_used[j] || old[j].speaker != new_recs[i].speaker {
                 continue;
             }
@@ -310,6 +322,21 @@ mod tests {
         let (p, _) = parse_with(&t2, "# One\nBOLA: Who is there?\nZED: Another new line altogether.\n");
         assert_ne!(p.lines[1].key, p.lines[0].key);
         assert!(t2.seq >= 1);
+    }
+
+    #[test]
+    fn a_very_long_script_is_matched_quickly() {
+        let big: String = (0..30_000).map(|i| format!("AMA: This is line number {i} of a very long script.
+")).collect();
+        let t = parse_with(&IdTable::default(), &big).1;
+        let edited = format!("BOLA: A brand new first line.
+{big}").replace("line number 15000 ", "line number fifteen thousand ");
+        let start = std::time::Instant::now();
+        let (p, t2) = parse_with(&t, &edited);
+        assert!(start.elapsed().as_secs() < 8, "took {:?}", start.elapsed());
+        assert_eq!(p.lines.len(), 30_001);
+        assert_eq!(p.lines[15_001].key, "s0-l15000", "the edited line keeps its id");
+        assert!(t2.orphans.is_empty());
     }
 
     #[test]

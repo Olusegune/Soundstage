@@ -43,7 +43,7 @@ Goal: remove the weaknesses every later feature leans on.
 
 | Task | Depends on | Size | Test |
 |---|---|---|---|
-| T-1.1 Stable element ids, sidecar, matcher, migration v3 to v4 | approval of D-03 | L | unit: insert, delete, reorder, edit lines keep takes and directions; fixture project migrates; older app opens read-only |
+| T-1.1 Stable element ids, sidecar, matcher, migration schema 1 to 2 | approval of D-03 | L | unit: insert, delete, reorder, edit lines keep takes and directions; fixture project migrates; older app opens read-only |
 | T-1.2 Move cache keys and stale marks to ids | T-1.1 | M | insert a line above a rendered line: nothing else goes stale (AC-006) |
 | T-1.3 PerformancePlan schema, validation, migration hook, empty plan | T-1.1 | M | schema round trip, unknown fields kept, bad document rejected, old plan kept |
 | T-1.4 Job record, queue, six states, cancel, interrupted recovery | none | L | kill the process mid-render, reopen: job is `interrupted`, project intact, resume works (AC-011) |
@@ -51,6 +51,14 @@ Goal: remove the weaknesses every later feature leans on.
 | T-1.6 Hardware detection and profile verdicts (needs dependency approval) | D-11 | M | fake probe fixtures for each profile; a real run on the owner's PC recorded |
 | T-1.7 Global "local only" switch | T-1.5 | S | with it on, every cloud action is disabled with a reason |
 | T-1.8 Update `ARCHITECTURE.md` banner and project docs | none | S | links resolve |
+
+**Status 2026-10-25: built, awaiting the full real-window run and the owner's demo.** Deviations from the plan above:
+- T-1.1: ids kept in `project.json` (`line_ids`), not a sidecar file; lines only, scenes follow later; no user-confirmation screen for uncertain matches yet.
+- T-1.3: the plan schema, validation and `plan.json` store exist (`plan.rs`); nothing writes a plan until MS2.
+- T-1.4: job records cover render batches, with "Stop after this line" and recovery of finished takes after an interruption. A general queue with per-resource limits is not built; it is not needed until MS5.
+- T-1.5: model registry file, loader and the no-verified-without-evidence rule exist (`capability.rs`, `data/models.json`); structured licence conditions are enforced at export and editable. Moving each adapter's tag knowledge into the registry is deferred to MS3.
+- T-1.6: hardware detection with no new crate (Windows memory and disk calls through the already-used `windows-sys` crate with two more feature flags, and `nvidia-smi` from its fixed install paths). Shown in the System check. Measuring the thresholds on real machines is still to do.
+- T-1.7: local-only mode refuses all non-loopback network use, including model downloads.
 
 **Exit gate:** AC-006 and AC-011 pass automatically; migration test on fixture projects; hardware verdict shown in System check; the real-window run covers insert-line, kill-and-reopen, and local-only.
 

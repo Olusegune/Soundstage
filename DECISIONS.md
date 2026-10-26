@@ -22,7 +22,7 @@ One line per decision, newest group last. **Approved** means the owner said yes 
 |---|---|---|---|---|
 | D-01 | Adopt `MS0` to `MS9` as the milestone vocabulary, mapped to PRD-002 phases and master v1/v2/v3 | C-02 | MS1 | Approved 2026-10-25 (owner) |
 | D-02 | The `dev_spec` is `docs/ARCHITECTURE.md` plus `docs/spec/03-ARCHITECTURE-UPDATE.md`; `ARCHITECTURE.md` gets a stale banner | C-10, C-11 | MS1 | Approved 2026-10-25 (owner) |
-| D-03 | **Stable element ids** with a sidecar file and project format v4 migration, before any new feature | C-06 | **MS1 (blocking)** | Approved 2026-10-25 (owner) |
+| D-03 | **Stable element ids** with a sidecar file and project schema 2 migration, before any new feature | C-06 | **MS1 (blocking)** | Approved 2026-10-25 (owner) |
 | D-04 | Job records and six states for all long operations; interrupted jobs recoverable | C-07 | MS1 | Approved 2026-10-25 (owner) |
 | D-05 | Keep plain CSS design tokens; do not adopt Tailwind | C-05 | MS2 | Proposed |
 | D-06 | Director safety design (consent, fenced untrusted text, validated JSON, no agency, rule-based fallback). The Director host(s) to approve are the owner's choice | C-16 | **MS2 (blocking)** | Proposed |

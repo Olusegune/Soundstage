@@ -492,21 +492,12 @@ pub fn local_only_error() -> AdapterError {
     AdapterError::ProviderError("Local-only mode is on, so nothing was sent. Turn it off in Settings to use online services.".into())
 }
 
-/// The host part of a URL, without scheme, port, path or brackets.
-fn host_of(url: &str) -> String {
-    let rest = url.split_once("://").map_or(url, |(_, r)| r);
-    let auth = rest.split(['/', '?', '#']).next().unwrap_or("");
-    let auth = auth.rsplit('@').next().unwrap_or("");
-    if let Some(r) = auth.strip_prefix('[') {
-        return r.split(']').next().unwrap_or("").to_string();
-    }
-    auth.split(':').next().unwrap_or("").to_string()
-}
-
 /// Added to every HTTP agent. While local-only mode is on, anything that is not this computer is refused
 /// before a connection is made, whichever feature asked.
 pub fn local_guard(req: ureq::Request, next: ureq::MiddlewareNext) -> Result<ureq::Response, ureq::Error> {
-    if local_only() && !is_loopback_host(&host_of(req.url())) {
+    // Ask the HTTP library itself which host it will connect to, so no spelling of a URL can disagree with it.
+    let host = req.request_url().map(|u| u.host().trim_matches(['[', ']']).to_string()).unwrap_or_default();
+    if local_only() && !is_loopback_host(&host) {
         let r = ureq::Response::new(LOCAL_ONLY_STATUS, "Local only", "").map_err(|_| ureq::Error::Status(LOCAL_ONLY_STATUS, ureq::Response::new(500, "x", "").unwrap()))?;
         return Err(ureq::Error::Status(LOCAL_ONLY_STATUS, r));
     }
@@ -518,12 +509,16 @@ mod local_only_tests {
     use super::*;
 
     #[test]
-    fn hosts_are_read_from_urls() {
-        assert_eq!(host_of("https://api.elevenlabs.io/v1/x?a=b"), "api.elevenlabs.io");
-        assert_eq!(host_of("http://127.0.0.1:8188/prompt"), "127.0.0.1");
-        assert_eq!(host_of("http://[::1]:11434/v1"), "::1");
-        assert_eq!(host_of("https://user:pw@evil.example:8443/"), "evil.example");
-        assert_eq!(host_of("http://localhost.evil.example/"), "localhost.evil.example");
+    fn tricky_urls_cannot_pass_as_this_computer() {
+        set_local_only(true);
+        let agent = ureq::AgentBuilder::new().middleware(local_guard).timeout_connect(std::time::Duration::from_secs(2)).build();
+        for url in ["http://evil.example\\@127.0.0.1/", "http://127.0.0.1@evil.example/", "http://localhost.evil.example/", "http://127.0.0.1.evil.example/", "https://[::ffff:8.8.8.8]/"] {
+            match agent.get(url).call() {
+                Err(ureq::Error::Status(c, _)) => assert_eq!(c, LOCAL_ONLY_STATUS, "{url}"),
+                other => panic!("{url} should be refused, got {other:?}"),
+            }
+        }
+        set_local_only(false);
     }
 
     #[test]

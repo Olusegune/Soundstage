@@ -30,7 +30,7 @@ Sources merged: PRD-002 (`docs/PRD_AI_MODELS_UPDATE.md`), the master `docs/PRD.m
 | SC-P0-09 | Cloud/local provider adapters | Existing | 8 adapters plus generators, contract suite | registry (see 4.4) | MS1 |
 | SC-P0-10 | Basic audio timeline | Existing | `layout.rs`, Mix screen | editable (MS7) | - |
 | SC-P0-11 | Individual audio export | Existing | OTIO plus per-clip WAV, stems, `exporter.rs` | none | - |
-| SC-P0-12 | Model compatibility and hardware detection | New | System check covers voices, FFmpeg, Whisper only | CPU, RAM, GPU, VRAM, backends | MS1 |
+| SC-P0-12 | Model compatibility and hardware detection | Partial | `hardware.rs`, System check line, verdict logic | per-model requirements and measured thresholds | MS5 |
 | SC-P1-01 | Soundscape and Foley generation | Partial | "Sound for your scenes", generators | no cue extraction from action lines; no Foley categories | MS6 |
 | SC-P1-02 | Acoustic simulation | New | - | room, distance, occlusion DSP | MS6 |
 | SC-P1-03 | Music generation | Existing | ElevenLabs, Kie/Suno, fal, ComfyUI | cue planning (MUS-001, 002) | MS6 |
@@ -54,7 +54,7 @@ Sources merged: PRD-002 (`docs/PRD_AI_MODELS_UPDATE.md`), the master `docs/PRD.m
 | ARCH-4.1b | Provider selection weighs capability, language, accent, expressiveness, hardware, licence, cost, latency, preference | Partial | licence and `sends_data` shown; manual choice | automatic ranking from the registry | MS3 |
 | ARCH-4.2 | Cloud candidates verified before use | Partial | ElevenLabs v3, VoiceKiller verified from docs; v4 unverified | verify v4, Gemini, GPT, video APIs | MS0 task T-0.4 |
 | ARCH-4.3 | Local candidates validated per checkpoint | Partial | Whisper, Piper, ComfyUI, OpenAI-compatible servers | Chatterbox, Qwen3-TTS, ACE-Step, Stable Audio Open, WhisperX, Demucs | MS5 |
-| ARCH-4.4 | Model Capability Registry (14 fields) | New | prose matrix in `PROVIDERS.md` | machine-readable registry, UI, states verified/experimental/unsupported | MS1 |
+| ARCH-4.4 | Model Capability Registry (14 fields) | Partial | `capability.rs`, `data/models.json`, rule that nothing is verified without evidence | UI, accents and languages, adapters read from it | MS3 |
 | ARCH-4.5 | Provider fallback with approval, no silent change of cost or privacy | Partial | confirm prompts before any online send; session totals | automatic alternatives list, cost estimate, "preserve plan" | MS3 |
 
 ## 3. Director Engine (PRD-002 section 5)
@@ -69,7 +69,7 @@ Sources merged: PRD-002 (`docs/PRD_AI_MODELS_UPDATE.md`), the master `docs/PRD.m
 | DIR-006 | Alternative interpretations | New | - | n alternatives per line | MS2 |
 | DIR-007 | Preserve user changes when regenerating others | Partial | script is the source of truth | needs stable IDs and a plan object | MS1, MS2 |
 | DIR-008 | Confidence and uncertainty notes | New | - | schema field and UI | MS2 |
-| DIR-PLAN | PerformancePlan, versioned and validated (13 fields) | New | `direction.rs` resolves a subset (emotion, pace, pause, note) | schema, validation, migration | MS1 |
+| DIR-PLAN | PerformancePlan, versioned and validated (13 fields) | Partial | `plan.rs` has the schema, validation and store; `direction.rs` resolves a subset | nothing produces or uses a plan yet | MS2 |
 
 ## 4. Emotional Intelligence Engine (section 6)
 
@@ -195,7 +195,7 @@ Sources merged: PRD-002 (`docs/PRD_AI_MODELS_UPDATE.md`), the master `docs/PRD.m
 
 | ID | Requirement | Status | Evidence | Gap | MS |
 |---|---|---|---|---|---|
-| HW-001 | Detect CPU, RAM, GPU, VRAM | New | - | detection | MS1 |
+| HW-001 | Detect CPU, RAM, GPU, VRAM | Existing | `hardware::detect` (NVIDIA only for GPU) | other GPUs show as unknown | - |
 | HW-002 | Detect inference backends | New | - | CUDA, Vulkan, DirectML probes | MS1 |
 | HW-003 | Show compatibility before download | Partial | model size shown | hardware verdict | MS1, MS5 |
 | HW-004 | Estimate storage | Partial | sizes shown for Whisper models | for all packs, free-space check | MS5 |
@@ -223,7 +223,7 @@ Sources merged: PRD-002 (`docs/PRD_AI_MODELS_UPDATE.md`), the master `docs/PRD.m
 | SEC-004 | Generation provenance | Partial | take records, `GenInfo`, manifest | plan and LLM provenance; per-event | MS2 |
 | SEC-005 | Validate commercial rights of checkpoints and assets | Partial | licence tags and gate | structured conditions (C-18) | MS1 |
 | SEC-006 | Disclose when data goes to the cloud | Existing | confirm dialogs and session totals | extend to Director and video | MS2 |
-| SEC-007 | Local-only generation switch | Partial | local engines selectable | a global "local only" mode that disables cloud | MS1 |
+| SEC-007 | Local-only generation switch | Existing | `net::local_guard` on every HTTP agent, Settings toggle | none | - |
 | SEC-008 | Restrict local workers to approved folders | New | subprocesses use temp folders only | worker sandbox rules | MS5 |
 | SEC-009 | Do not execute imported scripts or downloaded model code | Partial | no script execution; pinned, hashed downloads | pack format rule: no pickle (C-26) | MS5 |
 | SEC-010 | Approval for paid generation | Existing | every online path asks first | extend to new paths | each MS |
@@ -232,7 +232,7 @@ Sources merged: PRD-002 (`docs/PRD_AI_MODELS_UPDATE.md`), the master `docs/PRD.m
 
 | ID | Requirement | Status | Evidence | Gap | MS |
 |---|---|---|---|---|---|
-| REL-JOBS | Job IDs and six states | New | - | job record and queue (C-07) | MS1 |
+| REL-JOBS | Job IDs and six states | Partial | `jobrec.rs` for render batches | general queue | MS5 |
 | REL-STATUS | Progress for long operations | Partial | batch progress, download progress | uniform | MS1 |
 | REL-INTERRUPT | Interrupted work does not damage projects | Partial | atomic save, `.bak` recovery | interrupted state on restart | MS1 |
 | REL-RETRY | Failed generations keep the error and can retry | Partial | per-line error and retry | stored on the job | MS1 |
@@ -247,12 +247,12 @@ Sources merged: PRD-002 (`docs/PRD_AI_MODELS_UPDATE.md`), the master `docs/PRD.m
 | AC-003 | Vocal events placed, not read aloud | Partial | inline tags, provider-dependent | event placement UI and test across adapters | MS3 |
 | AC-004 | Hybrid physical performance | New | - | pipeline | MS3 |
 | AC-005 | Language/accent selection with evaluation state | Partial | selection | state | MS4 |
-| AC-006 | Regenerate one line without touching others | Partial | works until a line is inserted | stable IDs | MS1 |
+| AC-006 | Regenerate one line without touching others | Existing | `inserting_a_line_leaves_every_other_line_rendered_and_costs_no_calls` and a real-window check | none | - |
 | AC-007 | Layered, independently editable soundscape | Partial | cues are independent | layers per category, DSP | MS6 |
 | AC-008 | Local model, no cloud transmission | Partial | Piper, Whisper, local servers | a validated TTS pack | MS5 |
 | AC-009 | Fallback alternatives without silent charges | New | - | alternatives flow | MS3 |
 | AC-010 | Export clips and stems with correct names and durations | Existing | OTIO clips, stems, tests | naming scheme review | MS7 |
-| AC-011 | Reopen after interrupted generation | Partial | atomic saves | job recovery | MS1 |
+| AC-011 | Reopen after interrupted generation | Existing | job records, adoption of finished takes, real-window check | a true process-kill test | - |
 | AC-012 | Video sync within a tolerance | New | - | whole feature | MS8 |
 
 ## 18. Master PRD requirements carried forward (FR-1 to FR-16)
