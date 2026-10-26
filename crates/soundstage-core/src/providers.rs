@@ -442,6 +442,7 @@ pub fn licence_info(licence: Licence, source: &str, checked: &str, notes: &str) 
         source: if source.is_empty() { None } else { Some(source.to_string()) },
         checked: if checked.is_empty() { None } else { Some(checked.to_string()) },
         notes: notes.to_string(),
+        conditions: vec![],
     }
 }
 

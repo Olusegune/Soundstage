@@ -157,7 +157,7 @@ impl Adapter for PiperAdapter {
         "Piper (offline)"
     }
     fn licence(&self) -> LicenceInfo {
-        LicenceInfo { licence: Licence::Unknown, source: None, checked: None, notes: "Each Piper voice has its own licence. Read the voice's model card and record your check.".into() }
+        LicenceInfo { licence: Licence::Unknown, source: None, checked: None, notes: "Each Piper voice has its own licence. Read the voice's model card and record your check.".into(), conditions: vec![], }
     }
     fn capabilities(&self) -> Capabilities {
         let mut languages: Vec<String> = self.voices().iter().map(|v| v.language.clone()).collect();

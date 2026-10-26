@@ -139,6 +139,7 @@ fn licence_for(cfg: &SpeechEngine) -> LicenceInfo {
         source: None,
         checked: None,
         notes: if cfg.licence_note.is_empty() { "Depends on the model this engine runs. Read its licence and record your check.".into() } else { cfg.licence_note.clone() },
+        conditions: vec![],
     }
 }
 

@@ -417,6 +417,31 @@ try {
     app.check("a backup cannot be written inside the projects folder", !/allowed/.test(String(inside)));
     try { (await import("node:fs")).rmSync(tmpFile, { force: true }); } catch { /* best effort */ }
   }
+  // Stable line ids (D-03) and recovery of a render run that was cut short (D-04).
+  {
+    const inv = (cmd, args) => `window.__TAURI_INTERNALS__.invoke('${cmd}',${JSON.stringify(args)})`;
+    const first = await app.ev(`${inv("create_project", { name: "e2e ids", sample: false })}.then(p=>{p.script=['# T','AMA: First line here.','KOLA: Second line here.','AMA: Third line here.'].join(String.fromCharCode(10));return window.__TAURI_INTERNALS__.invoke('save_project',{project:p}).then(()=>p.id)})`);
+    const before = await app.ev(`${inv("load_project", { id: first })}.then(p=>p.line_ids.lines.map(l=>l.id+'|'+l.text))`);
+    app.check("every line has a saved stable id", Array.isArray(before) && before.length === 3 && before.every((x) => !x.startsWith("|")), JSON.stringify(before));
+    const after = await app.ev(`${inv("load_project", { id: first })}.then(p=>{p.script=['# T','AMA: First line here.','ZED: A new line goes in.','KOLA: Second line here.','AMA: Third line here.'].join(String.fromCharCode(10));return window.__TAURI_INTERNALS__.invoke('save_project',{project:p}).then(()=>window.__TAURI_INTERNALS__.invoke('load_project',{id:p.id})).then(q=>q.line_ids.lines.map(l=>l.id+'|'+l.text))})`);
+    const same = before.every((b) => after.includes(b));
+    app.check("inserting a line keeps every other line's id (AC-006)", same && after.length === 4, JSON.stringify(after));
+    const cut = await app.ev(`${inv("job_begin", { projectId: first, keys: ["a", "b", "c"] })}`);
+    const dir = await app.ev(`${inv("project_dir", { id: first })}`);
+    const fs = await import("node:fs");
+    const file = `${dir}/jobs/${cut}.json`;
+    app.check("a render run leaves a progress record in the project", fs.existsSync(file) && JSON.parse(fs.readFileSync(file, "utf8")).state === "running");
+    await app.ev("location.reload()"); await sleep(1800);
+    await app.ev("(()=>{const c=[...document.querySelectorAll('.proj-card')].find(x=>/e2e ids/.test(x.textContent));[...c.querySelectorAll('button')].find(b=>b.textContent.trim()==='Open').click();})()"); await sleep(1200);
+    app.check("reopening after a cut-short run offers to keep the work", await app.waitFor("[...document.querySelectorAll('[role=alertdialog]')].some(d=>/Rendering was interrupted/.test(d.textContent))", 8000));
+    await audit("Interrupted render dialog");
+    app.check("it says how many lines are left", (await app.text()).includes("Finish the other 3"));
+    await app.clickText("Keep what was done");
+    await sleep(500);
+    app.check("keeping closes the dialog and clears the record", !(await app.ev("!!document.querySelector('[role=alertdialog]')")) && !fs.existsSync(file));
+    await app.ev(`${inv("delete_project", { id: first })}`);
+    await app.press("Ctrl+O"); await sleep(600);
+  }
   const screens = [["home", async () => { await app.press("Ctrl+O"); await sleep(600); }], ["library", async () => { await app.press("Ctrl+Shift+V"); await sleep(600); }]];
   for (const [theme, label] of [["light", "Light"], ["dark", "Dark"]]) {
     await app.press("Ctrl+,"); await sleep(400);

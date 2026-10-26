@@ -29,6 +29,7 @@ export interface Ctx {
   confirmSend: (keys: string[]) => Promise<boolean>;
   /** Render many lines one at a time with progress, asking once up front. */
   renderBatch: (keys: string[]) => Promise<void>;
+  stopBatch: () => void;
   batch: { done: number; total: number } | null;
   errors: Record<string, string>;
   busy: Set<string>;

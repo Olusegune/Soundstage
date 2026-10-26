@@ -5,11 +5,22 @@ export type LicenceTarget = "commercial" | "personal";
 export type TakeStatus = "pending" | "approved" | "held" | "rejected";
 export type Level = "default" | "project" | "character" | "scene" | "line";
 
+export type ConditionKind = "revenue_cap" | "territory" | "attribution" | "field_of_use" | "other";
+
+/** A term attached to a licence that must be confirmed before a commercial export (D-13). */
+export interface LicenceCondition {
+  kind: ConditionKind;
+  text: string;
+  value?: string | null;
+  confirmed?: string | null;
+}
+
 export interface LicenceInfo {
   licence: Licence;
   source: string | null;
   checked: string | null;
   notes: string;
+  conditions?: LicenceCondition[];
 }
 
 export interface Direction {
@@ -277,6 +288,7 @@ export interface GateItem {
   reason: string;
   severity: "blocking" | "notice";
   source: string | null;
+  conditions?: LicenceCondition[];
 }
 
 export interface GateReport {

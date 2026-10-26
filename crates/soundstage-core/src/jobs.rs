@@ -189,7 +189,7 @@ pub struct JobMeta {
 }
 
 fn job_licence(note: &str) -> LicenceInfo {
-    LicenceInfo { licence: Licence::Unknown, source: None, checked: None, notes: if note.is_empty() { "Depends on the model. Read its terms and record your check.".into() } else { note.to_string() } }
+    LicenceInfo { licence: Licence::Unknown, source: None, checked: None, notes: if note.is_empty() { "Depends on the model. Read its terms and record your check.".into() } else { note.to_string() }, conditions: vec![], }
 }
 
 /// Speech through a job engine. Directions are not available (the user cannot declare tags for a job template),

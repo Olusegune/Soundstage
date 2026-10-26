@@ -1,8 +1,9 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
-  Analysis, Asset, Destination, Attestation, AudioInfo, WhisperStatus, CleanOut, Cue2, HistoryView, PronRule, SpeakOut, ToolInfo, TranscriptOut, CloneEntry, CloneInfo, ClonedVoice, DesignPreview, DesignerInfo, RefReport, EnginesConfig, GeneratorInfo, SystemCheck, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Voice, VoiceDef,
+  Analysis, Asset, Destination, Attestation, AudioInfo, WhisperStatus, CleanOut, Cue2, HistoryView, PronRule, SpeakOut, ToolInfo, TranscriptOut, CloneEntry, CloneInfo, ClonedVoice, DesignPreview, DesignerInfo, RefReport, EnginesConfig, GeneratorInfo, SystemCheck, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Take, Voice, VoiceDef,
 } from "./types";
+import type { Interrupted } from "./shell/InterruptedDialog";
 
 /** Tauri rejects with a string for plain errors and with an object for structured ones. */
 export function messageOf(e: unknown): string {
@@ -25,7 +26,11 @@ export const api = {
   voices: () => invoke<Voice[]>("list_voices"),
   previewVoice: (voiceId: string, text: string) => invoke<{ path: string }>("preview_voice", { voiceId, text }),
   analyze: (project: Project) => invoke<Analysis>("analyze_project", { project }),
-  renderLines: (project: Project, keys: string[]) => invoke<RenderOutcome>("render_lines", { project, keys }),
+  renderLines: (project: Project, keys: string[], jobId?: string | null) => invoke<RenderOutcome>("render_lines", { project, keys, jobId: jobId ?? null }),
+  jobBegin: (projectId: string, keys: string[]) => invoke<string>("job_begin", { projectId, keys }),
+  jobFinish: (projectId: string, jobId: string, outcome: "succeeded" | "cancelled" | "failed") => invoke<void>("job_finish", { projectId, jobId, outcome }),
+  pendingJobs: (projectId: string) => invoke<Interrupted[]>("pending_jobs", { projectId }),
+  recoverJob: (project: Project, jobId: string) => invoke<{ new_takes: Take[]; selected: Record<string, string> }>("recover_job", { project, jobId }),
   waveform: (projectId: string, file: string, bins: number) => invoke<number[]>("waveform", { projectId, file, bins }),
   layout: (project: Project) => invoke<Layout>("compute_layout", { project }),
   destinations: () => invoke<Destination[]>("destinations"),

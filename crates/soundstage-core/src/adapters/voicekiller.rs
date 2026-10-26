@@ -45,6 +45,7 @@ fn licence() -> LicenceInfo {
         source: Some("https://voicekiller.com".into()),
         checked: None,
         notes: "Commercial terms depend on your VoiceKiller plan. Read them and record your check before a commercial export.".into(),
+        conditions: vec![],
     }
 }
 

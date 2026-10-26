@@ -3,6 +3,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, messageOf } from "../api";
 import type { Ctx } from "../ctx";
+import { withConditions } from "../logic";
 import * as I from "../icons";
 import { Empty, Help } from "../ui";
 import type { Aspect, Codec, ExportCaps, ExportError, ExportOptions, ExportResult, GateItem, GateReport } from "../types";
@@ -213,7 +214,7 @@ export function ExportStep({ ctx }: { ctx: Ctx }) {
               </div>
               {editing === k && (
                 <div style={{ marginTop: 8 }}>
-                  <LicenceEditor initial={project.licence_checks[checkKey(i)] ?? { licence: "unknown", source: i.source, checked: null, notes: "" }}
+                  <LicenceEditor initial={withConditions(project.licence_checks[checkKey(i)] ?? { licence: "unknown", source: i.source, checked: null, notes: "" }, i.conditions)}
                     onSave={(info) => { edit((p) => ({ ...p, licence_checks: { ...p.licence_checks, [checkKey(i)]: info } })); setEditing(null); }} />
                 </div>
               )}

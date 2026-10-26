@@ -60,6 +60,7 @@ export function RenderStep({ ctx }: { ctx: Ctx }) {
             {batch ? <><span className="spin" aria-hidden="true" /> Rendering {batch.done}/{batch.total}</> : <>{cloud.length > 0 && todo.some((l) => ctx.voices.find((v) => v.id === l.voice_id)?.sends_data) ? <I.Cloud size={16} /> : <I.Zap size={16} />} Render {todo.length} line{todo.length === 1 ? "" : "s"}</>}
           </button>
         </div>
+        {batch && <div className="row" style={{ marginTop: 8 }}><button className="small" onClick={ctx.stopBatch}>Stop after this line</button><span className="small muted">Lines already rendered are kept.</span></div>}
         {batch && <div className="bar" style={{ marginTop: 12 }} role="progressbar" aria-label="Rendering progress" aria-valuemin={0} aria-valuemax={batch.total} aria-valuenow={batch.done}><div style={{ width: `${(100 * batch.done) / batch.total}%` }} /></div>}
       </div>
 

@@ -268,6 +268,7 @@ fn licence() -> LicenceInfo {
         source: None,
         checked: None,
         notes: "Commercial rights depend on your ElevenLabs plan. Read the current terms and record your check.".into(),
+        conditions: vec![],
     }
 }
 
@@ -542,7 +543,7 @@ impl Generator for ElevenLabsGenerator {
         if kind == GenKind::Music { MUSIC } else { SFX }
     }
     fn licence(&self) -> LicenceInfo {
-        LicenceInfo { licence: Licence::Unknown, source: None, checked: None, notes: "Rights to ElevenLabs music and sound effects depend on your plan. Read their current terms and record your check before a commercial export.".into() }
+        LicenceInfo { licence: Licence::Unknown, source: None, checked: None, notes: "Rights to ElevenLabs music and sound effects depend on your plan. Read their current terms and record your check before a commercial export.".into(), conditions: vec![], }
     }
     fn notes(&self) -> String {
         "Your description is sent to ElevenLabs and uses your plan's credits. Soundstage cannot show the cost in advance.".into()

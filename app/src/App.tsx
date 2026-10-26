@@ -24,6 +24,7 @@ import { TEMPLATES } from "./templates";
 import { emptyBible } from "./logic";
 import { Splash, Welcome } from "./shell/Onboarding";
 import { Rail, type View } from "./shell/Rail";
+import { InterruptedDialog, type Interrupted } from "./shell/InterruptedDialog";
 import { ShortcutsDialog } from "./shell/ShortcutsDialog";
 import { Toolbar } from "./shell/Toolbar";
 import { Tour } from "./shell/Tour";
@@ -80,6 +81,8 @@ export default function App() {
   const [saved, setSaved] = useState<"saved" | "saving" | "error">("saved");
   const [sendPrompt, setSendPrompt] = useState<{ provider: string; lines: number; chars: number; sofar: number; resolve: (ok: boolean) => void } | null>(null);
   const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
+  const stopBatchRef = useRef(false);
+  const [interrupted, setInterrupted] = useState<Interrupted | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [mixPreview, setMixPreview] = useState<MixPreview | null>(null);
   const [mixBuilding, setMixBuilding] = useState(false);
@@ -249,6 +252,8 @@ export default function App() {
       setStep(0);
       setSaved("saved");
       setView("project");
+      // A render run that was cut short last time: offer to keep its work.
+      api.pendingJobs(id).then((j) => setInterrupted(j[0] ?? null)).catch(() => setInterrupted(null));
     } catch (e) { say(messageOf(e), true); }
   }, [flush, say]);
 
@@ -286,13 +291,13 @@ export default function App() {
     return new Promise((resolve) => setSendPrompt({ provider, lines: cloud.length, chars, sofar: provider.split(" and ").reduce((n, p) => n + sentBy(p), 0), resolve }));
   }, []);
 
-  const render = useCallback(async (keys: string[], opts?: { confirmed?: boolean }) => {
+  const render = useCallback(async (keys: string[], opts?: { confirmed?: boolean; jobId?: string | null }) => {
     const cur = projectRef.current;
     if (!cur) return null;
     if (!opts?.confirmed && !(await confirmSend(keys))) return null;
     setBusy((b) => new Set([...b, ...keys]));
     try {
-      const out = await api.renderLines(cur, keys);
+      const out = await api.renderLines(cur, keys, opts?.jobId);
       // Merge only what the run changed, so edits made meanwhile survive.
       edit((p) => ({ ...p, takes: [...p.takes, ...out.new_takes], selected: { ...p.selected, ...out.selected } }));
       const failed = out.results.filter((r) => !r.ok);
@@ -310,9 +315,14 @@ export default function App() {
     setBatch({ done: 0, total: keys.length });
     setErrors((e) => { const n = { ...e }; keys.forEach((k) => delete n[k]); return n; });
     let done = 0, failed = 0;
+    stopBatchRef.current = false;
+    const pid = projectRef.current?.id;
+    // The record lets a run that is cut short be picked up again. It never blocks rendering.
+    const jobId = pid ? await api.jobBegin(pid, keys).catch(() => null) : null;
     // One line at a time keeps the progress honest and the interface responsive.
     for (const k of keys) {
-      const out = await render([k], { confirmed: true });
+      if (stopBatchRef.current) break;
+      const out = await render([k], { confirmed: true, jobId });
       done += 1;
       setBatch({ done, total: keys.length });
       const bad = out?.results.find((r) => !r.ok);
@@ -320,8 +330,27 @@ export default function App() {
       else if (out === null) { failed += 1; setErrors((e) => ({ ...e, [k]: "Rendering failed. Try again." })); }
     }
     setBatch(null);
+    const stopped = stopBatchRef.current;
+    if (pid && jobId) void api.jobFinish(pid, jobId, stopped ? "cancelled" : failed ? "failed" : "succeeded").catch(() => undefined);
+    if (stopped) { say(`Stopped. ${done} of ${keys.length} lines were rendered.`); return; }
     say(failed ? `${keys.length - failed} of ${keys.length} lines rendered. ${failed} need attention.` : `Rendered ${keys.length} line${keys.length === 1 ? "" : "s"}.`, failed > 0);
   }, [confirmSend, render, say]);
+
+  const stopBatch = useCallback(() => { stopBatchRef.current = true; }, []);
+
+  /** Keep what an interrupted run finished; optionally render the lines it did not reach. */
+  const recover = useCallback(async (finish: boolean) => {
+    const job = interrupted;
+    const cur = projectRef.current;
+    setInterrupted(null);
+    if (!job || !cur) return;
+    try {
+      const out = await api.recoverJob(cur, job.id);
+      if (out.new_takes.length > 0) edit((p) => ({ ...p, takes: [...p.takes, ...out.new_takes], selected: { ...out.selected, ...p.selected } }));
+      if (finish && job.remaining.length > 0) await renderBatch(job.remaining);
+      else say(out.new_takes.length > 0 ? `Kept ${out.new_takes.length} take${out.new_takes.length === 1 ? "" : "s"} from the interrupted run.` : "Nothing more to keep.");
+    } catch (e) { say(messageOf(e), true); }
+  }, [interrupted, edit, renderBatch, say]);
 
   const buildMix = useCallback(async () => {
     const p = projectRef.current;
@@ -530,7 +559,7 @@ export default function App() {
   /* ---------------------------------------------------------------- render */
   const ctx: Ctx | null = project && g ? {
     project, analysis, voices, dir, mode: prefs.mode, ffmpegPath: prefs.ffmpegPath, setFfmpegPath: (p) => setPrefs({ ffmpegPath: p }), edit, toast: say, goto: (n) => goStep(n),
-    openLibrary: () => openAux("library"), openPronunciation: () => openAux("pronunciation"), newProject: () => void newProject(), exportMemory: prefs.exportMemory, setExportMemory: (json) => { if (json !== prefs.exportMemory) setPrefs({ exportMemory: json }); }, voiceMemory: prefs.voiceMemory, rememberVoices: (picks) => setPrefs({ voiceMemory: { ...prefs.voiceMemory, ...picks } }), openHelp, render, confirmSend, renderBatch, batch, errors, busy,
+    openLibrary: () => openAux("library"), openPronunciation: () => openAux("pronunciation"), newProject: () => void newProject(), exportMemory: prefs.exportMemory, setExportMemory: (json) => { if (json !== prefs.exportMemory) setPrefs({ exportMemory: json }); }, voiceMemory: prefs.voiceMemory, rememberVoices: (picks) => setPrefs({ voiceMemory: { ...prefs.voiceMemory, ...picks } }), openHelp, render, confirmSend, renderBatch, stopBatch, batch, errors, busy,
     steps: g.steps, next: g.next, mixPreview, mixBuilding, buildMix, markExported: () => setExported(true), focusKey,
   } : null;
 
@@ -601,6 +630,7 @@ export default function App() {
       )}
       {splash && <Splash ready={voicesReady} onDone={() => setSplash(false)} />}
       <Toast toast={toast} onClose={() => setToast(null)} />
+      {interrupted && view === "project" && <InterruptedDialog job={interrupted} onKeep={() => void recover(false)} onFinish={() => void recover(true)} />}
       {sendPrompt && (
         <Confirm title={`Send text to ${sendPrompt.provider}?`} confirmLabel="Send and render" danger={false}
           body={<p>{sendPrompt.lines} line{sendPrompt.lines === 1 ? "" : "s"} ({sendPrompt.chars} characters of dialogue) will be sent over the internet to {sendPrompt.provider} to be spoken. It is billed to your account there, and Soundstage cannot show the cost in advance. Their copy follows their own retention policy.{sendPrompt.sofar > 0 ? ` So far this session you have sent ${sendPrompt.sofar.toLocaleString()} characters to ${sendPrompt.provider}.` : ""}</p>}

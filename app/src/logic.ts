@@ -1,4 +1,4 @@
-import type { Analysis, Licence, LicenceInfo, Project, StepName } from "./types";
+import type { Analysis, Licence, LicenceCondition, LicenceInfo, Project, StepName } from "./types";
 import { STEPS } from "./types";
 
 export const REQUIRED: Record<StepName, boolean> = {
@@ -87,6 +87,13 @@ export function daysSince(date: string | null): number | null {
   if (!date) return null;
   const t = Date.parse(`${date}T00:00:00Z`);
   return Number.isNaN(t) ? null : Math.floor((Date.now() - t) / 86_400_000);
+}
+
+/** Add the provider's declared conditions to a recorded check, without duplicating ones already there. */
+export function withConditions(info: LicenceInfo, declared: LicenceCondition[] | undefined): LicenceInfo {
+  const mine = info.conditions ?? [];
+  const extra = (declared ?? []).filter((d) => !mine.some((m) => m.kind === d.kind && m.text === d.text));
+  return { ...info, conditions: [...mine, ...extra] };
 }
 
 export function licenceNote(info: LicenceInfo): string {

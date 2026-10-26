@@ -14,6 +14,7 @@ pub mod exporter;
 pub mod generate;
 pub mod history;
 pub mod ids;
+pub mod jobrec;
 pub mod jobs;
 pub mod layout;
 pub mod licence;

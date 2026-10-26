@@ -10,6 +10,7 @@ use soundstage_core::loudness::{Destination, DESTINATIONS};
 use soundstage_core::generate::{clean_prompt, GenKind, GenLimits, GenRequest};
 use soundstage_core::licence::LicenceInfo as Lic;
 use soundstage_core::project::{Asset, AssetKind, GenInfo, Project, Store, Summary, Take};
+use soundstage_core::jobrec::{self, JobState, JobStore};
 use soundstage_core::adapters::openai_speech::OpenAiSpeechAdapter;
 use soundstage_core::engines::{valid_engine_id, EnginesConfig, VoiceDef};
 use soundstage_core::providers::{KeyProvider, Registry, Voice};
@@ -268,14 +269,18 @@ struct RenderOutcome {
 }
 
 #[tauri::command]
-async fn render_lines(app: AppHandle, state: State<'_, AppState>, project: Project, keys: Vec<String>) -> Result<RenderOutcome, String> {
+async fn render_lines(app: AppHandle, state: State<'_, AppState>, project: Project, keys: Vec<String>, job_id: Option<String>) -> Result<RenderOutcome, String> {
     let (store, reg) = shared(&state);
     let dir = store.dir(&project.id)?;
     blocking(move || {
         let reg = reg.get();
         let reg = &*reg;
+        let jobs = JobStore::new(&dir);
+        // Progress notes must never stop a render, so a missing or damaged record is simply ignored.
+        let mut job = job_id.as_deref().and_then(|id| jobs.load(id).ok());
         let mut p = project;
         let before = p.takes.len();
+        let mut noted = before;
         let mut selected = BTreeMap::new();
         let mut results = Vec::new();
         for key in keys {
@@ -286,10 +291,20 @@ async fn render_lines(app: AppHandle, state: State<'_, AppState>, project: Proje
                         selected.insert(key.clone(), id.clone());
                     }
                     let _ = app.emit("render-progress", serde_json::json!({ "key": key, "status": "rendered" }));
+                    if let Some(j) = job.as_mut() {
+                        j.takes.extend(p.takes[noted..].iter().cloned());
+                        noted = p.takes.len();
+                        j.done.push(key.clone());
+                        let _ = jobs.save(j);
+                    }
                     results.push(LineOutcome { key, ok: true, cached: r.cached, error_kind: None, message: None, result: Some(r) });
                 }
                 Err(e) => {
                     let _ = app.emit("render-progress", serde_json::json!({ "key": key, "status": "failed" }));
+                    if let Some(j) = job.as_mut() {
+                        j.failed.push(key.clone());
+                        let _ = jobs.save(j);
+                    }
                     results.push(LineOutcome { key, ok: false, cached: false, error_kind: Some(e.kind), message: Some(e.message), result: None });
                 }
             }
@@ -297,6 +312,61 @@ async fn render_lines(app: AppHandle, state: State<'_, AppState>, project: Proje
         RenderOutcome { new_takes: p.takes[before..].to_vec(), selected, results }
     })
     .await
+}
+
+/// Start a record for a batch of lines, so a cut-short run can be picked up again.
+#[tauri::command]
+fn job_begin(state: State<'_, AppState>, project_id: String, keys: Vec<String>) -> Result<String, String> {
+    let dir = state.store.dir(&project_id)?;
+    Ok(JobStore::new(&dir).create("render", keys)?.id)
+}
+
+#[tauri::command]
+fn job_finish(state: State<'_, AppState>, project_id: String, job_id: String, outcome: String) -> Result<(), String> {
+    let dir = state.store.dir(&project_id)?;
+    let st = match outcome.as_str() {
+        "succeeded" => JobState::Succeeded,
+        "cancelled" => JobState::Cancelled,
+        _ => JobState::Failed,
+    };
+    JobStore::new(&dir).finish(&job_id, st, None)
+}
+
+#[derive(Serialize)]
+struct PendingJob {
+    id: String,
+    created: String,
+    total: usize,
+    done: usize,
+    failed: usize,
+    remaining: Vec<String>,
+    kept_takes: usize,
+}
+
+/// Work that was cut short the last time this project was open. Anything still marked running is
+/// marked interrupted first, since nothing can be running while a project is being opened.
+#[tauri::command]
+fn pending_jobs(state: State<'_, AppState>, project_id: String) -> Result<Vec<PendingJob>, String> {
+    let dir = state.store.dir(&project_id)?;
+    let jobs = JobStore::new(&dir);
+    jobs.mark_interrupted();
+    Ok(jobs
+        .pending()
+        .into_iter()
+        .map(|j| PendingJob { id: j.id.clone(), created: j.created.clone(), total: j.keys.len(), done: j.done.len(), failed: j.failed.len(), remaining: j.remaining(), kept_takes: j.takes.len() })
+        .collect())
+}
+
+/// Keep the audio an interrupted run finished, then close the record. The UI merges the result like a render.
+#[tauri::command]
+fn recover_job(state: State<'_, AppState>, project: Project, job_id: String) -> Result<jobrec::Adopted, String> {
+    let dir = state.store.dir(&project.id)?;
+    let jobs = JobStore::new(&dir);
+    let rec = jobs.load(&job_id)?;
+    let mut p = project;
+    let adopted = jobrec::adopt(&mut p, &dir, &rec);
+    jobs.discard(&job_id)?;
+    Ok(adopted)
 }
 
 /// Peak envelope of a take or asset inside a project, for drawing waveforms.
@@ -1466,6 +1536,10 @@ pub fn run() {
             mix_preview,
             analyze_project,
             render_lines,
+            job_begin,
+            job_finish,
+            pending_jobs,
+            recover_job,
             compute_layout,
             waveform,
             destinations,

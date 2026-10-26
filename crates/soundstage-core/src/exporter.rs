@@ -16,8 +16,15 @@ use std::path::Path;
 
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// The user's recorded check wins, but conditions the provider declares can never be dropped by it.
 fn effective(project: &Project, key: &str, base: LicenceInfo) -> LicenceInfo {
-    project.licence_checks.get(key).cloned().unwrap_or(base)
+    let Some(mut mine) = project.licence_checks.get(key).cloned() else { return base };
+    for c in base.conditions {
+        if !mine.conditions.iter().any(|m| m.kind == c.kind && m.text == c.text) {
+            mine.conditions.push(c);
+        }
+    }
+    mine
 }
 
 /// Everything the export gate must judge: voices, models, music and effects actually used.
@@ -89,6 +96,7 @@ pub fn check(project: &Project, reg: &Registry) -> GateReport {
                 reason: problems.join(" "),
                 severity: crate::licence::Severity::Blocking,
                 source: None,
+                conditions: vec![],
             });
             r.allowed = false;
         }
@@ -104,6 +112,7 @@ pub fn check(project: &Project, reg: &Registry) -> GateReport {
             reason: "Lines that are not rendered, or whose take is rejected, are left out of the mix.".into(),
             severity: crate::licence::Severity::Notice,
             source: None,
+            conditions: vec![],
         });
     }
     r
@@ -477,7 +486,7 @@ mod tests {
         write_wav_16_mono(&dir.join("assets/m.wav"), &tone, 22050).unwrap();
         p.assets.push(Asset {
             id: "asset-m".into(), name: "Library Theme".into(), kind: AssetKind::Music, file: "assets/m.wav".into(), duration_ms: 2000,
-            licence: LicenceInfo { licence: lic, source: Some("https://example.com/licence".into()), checked, notes: String::new() },
+            licence: LicenceInfo { licence: lic, source: Some("https://example.com/licence".into()), checked, notes: String::new(), conditions: vec![] },
             uses_prohibited: vec![], source_note: String::new(), generated: None,
         });
         p.cues.push(Cue { id: "cue-1".into(), asset_id: "asset-m".into(), scene: Some(0), loop_to_scene: true, ..Default::default() });
@@ -538,7 +547,7 @@ mod tests {
         // The user records a fresh check, which overrides the stale one.
         p.licence_checks.insert(
             "asset:asset-m".into(),
-            LicenceInfo { licence: Licence::Commercial, source: Some("https://example.com/licence".into()), checked: Some(date_string(today_days())), notes: "re-checked".into() },
+            LicenceInfo { licence: Licence::Commercial, source: Some("https://example.com/licence".into()), checked: Some(date_string(today_days())), notes: "re-checked".into(), conditions: vec![] },
         );
         assert!(export(&p, &reg, &dir, &dest, false).is_ok());
         std::fs::remove_dir_all(dir).ok();
@@ -680,5 +689,22 @@ mod tests {
         assert!(matches!(export(&p, &reg, &dir, &dest, true), Err(ExportError::Failed { .. })));
         let _ = ScratchAdapter.id();
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_users_licence_check_cannot_drop_a_condition_the_provider_declares() {
+        use crate::licence::{ConditionKind, LicenceCondition};
+        let cond = LicenceCondition { kind: ConditionKind::RevenueCap, text: "Revenue limit".into(), value: None, confirmed: None };
+        let base = LicenceInfo { licence: Licence::Commercial, conditions: vec![cond.clone()], ..Default::default() };
+        let mut p = Project::new("L", false);
+        p.licence_checks.insert("voice:v".into(), LicenceInfo { licence: Licence::Commercial, source: Some("https://example.com/t".into()), checked: Some("2026-10-01".into()), notes: String::new(), conditions: vec![] });
+        let e = effective(&p, "voice:v", base.clone());
+        assert_eq!(e.conditions, vec![cond.clone()]);
+        assert_eq!(e.source.as_deref(), Some("https://example.com/t"));
+        // The user's confirmation of the same condition is kept, not duplicated.
+        let mut confirmed = cond.clone();
+        confirmed.confirmed = Some("2026-10-02".into());
+        p.licence_checks.get_mut("voice:v").unwrap().conditions = vec![confirmed.clone()];
+        assert_eq!(effective(&p, "voice:v", base).conditions, vec![confirmed]);
     }
 }

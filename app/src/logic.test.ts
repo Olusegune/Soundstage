@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canEnter, insertAt, removeTagFromRow, splitTags, stepComplete } from "./logic";
+import { canEnter, insertAt, removeTagFromRow, splitTags, stepComplete, withConditions } from "./logic";
 import type { Analysis, Project } from "./types";
 
 const project = {} as Project;
@@ -51,3 +51,14 @@ describe("script editing helpers", () => {
   });
 });
 
+
+describe("withConditions", () => {
+  const cap = { kind: "revenue_cap" as const, text: "Revenue limit", value: null, confirmed: null };
+  it("adds declared conditions once and keeps the user's confirmation", () => {
+    const base = { licence: "commercial" as const, source: null, checked: null, notes: "" };
+    expect(withConditions(base, [cap]).conditions).toEqual([cap]);
+    const mine = { ...base, conditions: [{ ...cap, confirmed: "2026-10-01" }] };
+    expect(withConditions(mine, [cap]).conditions).toEqual([{ ...cap, confirmed: "2026-10-01" }]);
+    expect(withConditions(base, undefined).conditions).toEqual([]);
+  });
+});
