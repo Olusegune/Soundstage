@@ -75,7 +75,7 @@ impl Rng {
 }
 
 /// A cell that a spreadsheet will treat as text, never as a formula.
-fn csv_cell(s: &str) -> String {
+pub(crate) fn csv_cell(s: &str) -> String {
     let mut t: String = s.chars().filter(|c| !c.is_control()).collect();
     if t.starts_with(['=', '+', '-', '@']) {
         t.insert(0, '\'');

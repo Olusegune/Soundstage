@@ -658,6 +658,67 @@ try {
     await app.ev(`${inv("lab_delete_run", { runId: run.id })}`);
     app.check("a run can be deleted, taking its clips with it", !fs.existsSync(clip));
   }
+  // Listening results: score sheets are read against the private key and judged against the pass levels.
+  {
+    const fs = await import("node:fs");
+    const inv = (cmd, args) => `window.__TAURI_INTERNALS__.invoke('${cmd}',${JSON.stringify(args)})`;
+    const base = `${process.env.TEMP}/soundstage-e2e-scores`.replace(/\\/g, "/");
+    fs.rmSync(base, { recursive: true, force: true });
+    fs.mkdirSync(`${base}/out`, { recursive: true });
+    const wav = (name, amp) => {
+      const n = 48000 * 2;
+      const buf = Buffer.alloc(44 + n * 2);
+      buf.write("RIFF", 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write("WAVEfmt ", 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22);
+      buf.writeUInt32LE(48000, 24); buf.writeUInt32LE(96000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write("data", 36); buf.writeUInt32LE(n * 2, 40);
+      for (let i = 0; i < n; i++) buf.writeInt16LE(Math.round(amp * 32767 * Math.sin((2 * Math.PI * 300 * i) / 48000) * (1 + 0.3 * Math.sin(i / 4000))), 44 + i * 2);
+      fs.writeFileSync(`${base}/${name}`, buf);
+      return `${base}/${name}`;
+    };
+    const clips = [
+      { group: "Kitchen", label: "plain", path: wav("a1.wav", 0.1) }, { group: "Kitchen", label: "planned", path: wav("a2.wav", 0.2) }, { group: "Kitchen", label: "planned+sounds", path: wav("a3.wav", 0.3) },
+    ];
+    const pack = await app.ev(`${inv("make_listening_pack", { clips, destDir: `${base}/out`, listeners: 5, targetLufs: -23 })}`);
+    const keyRows = fs.readFileSync(pack.key_file, "utf8").split("\n").slice(1).filter(Boolean).map((l) => l.split(","));
+    const labelOf = (listener, code) => keyRows.find((r) => r[0] === listener && r[3] === code)[4];
+    const sheetPaths = [];
+    for (let i = 1; i <= 5; i++) {
+      const p = `${pack.folder}/listener-L${i}/score-sheet.csv`;
+      const lines = fs.readFileSync(p, "utf8").split("\n").filter(Boolean);
+      const out = [lines[0]];
+      for (const line of lines.slice(1)) {
+        const [listener, scene, code] = line.split(",");
+        const label = labelOf(listener, code);
+        const nat = label === "plain" ? 3 : 4;
+        const rank = label === "plain" ? 3 : label === "planned" ? 1 : 2;
+        out.push(`${listener},${scene},${code},${nat},${nat},,yes,yes,${rank},ok`);
+      }
+      if (i === 5) out.push(`L5,Kitchen,NOPE-1,3,3,,yes,yes,,x`);
+      fs.writeFileSync(p, out.join("\n") + "\n");
+      sheetPaths.push(p);
+    }
+    const info = await app.ev(`${inv("scores_read_key", { keyPath: pack.key_file })}`);
+    app.check("the private key is read and its versions listed", info.labels.length === 3 && info.listeners === 5 && info.clips === 15, JSON.stringify(info));
+    const rep = await app.ev(`${inv("scores_report", { keyPath: pack.key_file, sheetPaths, options: { reference_label: "plain", sound_labels: ["planned+sounds"], min_listeners: 5 } })}.then(x=>x,e=>'ERR '+String(e))`);
+    const planned = rep.labels.find((l) => l.label === "planned");
+    const plain = rep.labels.find((l) => l.label === "plain");
+    app.check("five listeners' sheets give a report with their problem rows reported", rep.listeners === 5 && rep.rows_used === 15 && rep.issues.length === 1 && /not a code/.test(rep.issues[0].message), JSON.stringify(rep.issues));
+    app.check("a version scored 4 meets the natural level and one scored 3 does not", planned.gates[0].verdict === "met" && plain.gates[0].verdict === "not_met", JSON.stringify([planned.gates[0], plain.gates[0]]));
+    app.check("a version ranked above the reference is preferred", planned.gates.some((g) => g.name.startsWith("Preferred") && g.verdict === "met"));
+    const few = await app.ev(`${inv("scores_report", { keyPath: pack.key_file, sheetPaths: sheetPaths.slice(0, 2), options: { reference_label: null, sound_labels: [], min_listeners: 5 } })}`);
+    app.check("two listeners cannot meet a level", few.labels.flatMap((l) => l.gates).every((g) => g.verdict === "not_enough"));
+    const md = `${base}/report.md`;
+    await app.ev(`${inv("scores_export", { report: rep, dest: md, title: "E2E" })}`);
+    app.check("a report is saved as a document that says it is not a claim about languages", fs.existsSync(md) && /not a claim about a language/.test(fs.readFileSync(md, "utf8")));
+    const bad = await app.ev(`${inv("scores_export", { report: rep, dest: `${base}/report.txt`, title: "E2E" })}.then(()=>'saved',e=>String(e))`);
+    app.check("only .md and .csv reports can be saved", /\.md or \.csv/.test(String(bad)), String(bad));
+    await app.press("Ctrl+O"); await sleep(500);
+    await app.ev("(()=>{const b=[...document.querySelectorAll('button')].find(x=>/Audio tools/.test(x.textContent));b&&b.click()})()"); await sleep(600);
+    await app.clickText("Listening pack"); await sleep(500);
+    app.check("the Listening pack tab has a Results section", (await app.text()).includes("Choose the private key"));
+    await audit("Listening results");
+    await app.press("Ctrl+O"); await sleep(500);
+    fs.rmSync(base, { recursive: true, force: true });
+  }
   const screens = [["home", async () => { await app.press("Ctrl+O"); await sleep(600); }], ["library", async () => { await app.press("Ctrl+Shift+V"); await sleep(600); }]];
   for (const [theme, label] of [["light", "Light"], ["dark", "Dark"]]) {
     await app.press("Ctrl+,"); await sleep(400);

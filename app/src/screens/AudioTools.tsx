@@ -4,6 +4,7 @@ import { api, messageOf } from "../api";
 import { loadPrefs } from "../prefs";
 import { OfflineSpeech } from "../shell/OfflineSpeech";
 import { ListeningPack } from "./ListeningPack";
+import { ScoreResults } from "./ScoreResults";
 import { ConsentFields, EMPTY_ATTESTATION, consentComplete } from "../shell/ConsentFields";
 import { Confirm, PlayButton } from "../ui";
 import type { Attestation, CleanOut, CloneInfo, Cue2, ToolInfo, TranscriptOut, Voice } from "../types";
@@ -119,7 +120,7 @@ export function AudioTools(props: { keepHistory: boolean; voices: Voice[]; toast
         <button role="radio" aria-checked={listen} onClick={() => setListen(true)}>Listening pack</button>
       </div>
 
-      {listen ? <ListeningPack toast={props.toast} /> : (<>
+      {listen ? <><ListeningPack toast={props.toast} /><ScoreResults toast={props.toast} /></> : (<>
       {(tab === "transcribe" || tab === "dub") && <OfflineSpeech toast={props.toast} onChanged={() => { void api.listAudioTools().then(setTools).catch(() => setTools([])); }} />}
 
       <div className="card">

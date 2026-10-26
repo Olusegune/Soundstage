@@ -414,6 +414,67 @@ fn lab_delete_run(state: State<'_, AppState>, run_id: String) -> Result<(), Stri
     soundstage_core::lab::delete_run(&lab_root(&state.store), &run_id)
 }
 
+fn read_small_text(path: &str) -> Result<String, String> {
+    let p = PathBuf::from(path);
+    let meta = std::fs::metadata(&p).map_err(|_| "That file could not be opened.".to_string())?;
+    if !meta.is_file() || meta.len() as usize > soundstage_core::scores::MAX_FILE_BYTES {
+        return Err("That file is not a score sheet or key (it is not a file, or it is too large).".into());
+    }
+    std::fs::read(&p).map(|b| String::from_utf8_lossy(&b).to_string()).map_err(|_| "That file could not be read.".to_string())
+}
+
+#[derive(Serialize)]
+struct KeyInfo {
+    labels: Vec<String>,
+    listeners: usize,
+    clips: usize,
+}
+
+/// What a private key from a listening pack contains, so the screen can ask which version is the reference.
+#[tauri::command]
+fn scores_read_key(key_path: String) -> Result<KeyInfo, String> {
+    let key = soundstage_core::scores::read_key(&read_small_text(&key_path)?)?;
+    let mut labels: Vec<String> = vec![];
+    for k in &key {
+        if !labels.contains(&k.label) {
+            labels.push(k.label.clone());
+        }
+    }
+    let mut ls: Vec<&String> = key.iter().map(|k| &k.listener).collect();
+    ls.sort();
+    ls.dedup();
+    Ok(KeyInfo { labels, listeners: ls.len(), clips: key.len() })
+}
+
+/// Read the listeners' score sheets against the private key and work out the results against the pass levels.
+#[tauri::command]
+fn scores_report(key_path: String, sheet_paths: Vec<String>, options: soundstage_core::scores::Options) -> Result<soundstage_core::scores::Report, String> {
+    let key_text = read_small_text(&key_path)?;
+    let mut sheets = vec![];
+    for p in sheet_paths.iter().take(soundstage_core::scores::MAX_SHEETS + 1) {
+        let name = PathBuf::from(p).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        sheets.push((name, read_small_text(p)?));
+    }
+    let table = soundstage_core::scores::import(&key_text, &sheets)?;
+    Ok(soundstage_core::scores::report(&table, &options))
+}
+
+/// Save a report as Markdown or CSV where the person chose.
+#[tauri::command]
+fn scores_export(report: soundstage_core::scores::Report, dest: String, title: String) -> Result<(), String> {
+    let dest = PathBuf::from(dest);
+    let ext = dest.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase());
+    let text = match ext.as_deref() {
+        Some("md") => soundstage_core::scores::to_markdown(&report, &title),
+        Some("csv") => soundstage_core::scores::to_csv(&report),
+        _ => return Err("Choose a file name ending in .md or .csv.".into()),
+    };
+    if dest.parent().map_or(true, |d| !d.is_dir()) {
+        return Err("That folder does not exist.".into());
+    }
+    std::fs::write(&dest, text).map_err(|e| format!("Could not save the report: {e}"))
+}
+
 /// Other voices that could stand in on a line that failed or cannot be done. Nothing is called here.
 #[tauri::command]
 fn fallback_options(state: State<'_, AppState>, project: Project, line_key: String) -> Vec<render::FallbackOption> {
@@ -1789,6 +1850,9 @@ pub fn run() {
             render_lines,
             job_begin,
             audition_line,
+            scores_read_key,
+            scores_report,
+            scores_export,
             lab_set,
             lab_estimate,
             lab_start,

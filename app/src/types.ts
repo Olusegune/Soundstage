@@ -473,3 +473,15 @@ export interface FallbackOption {
 }
 
 export interface PackReport { folder: string; key_file: string; listeners: number; groups: number; clips: number; files_written: number; notes: string[] }
+
+export interface ScoreIssue { file: string; line: number; message: string }
+export interface ScoreGate { name: string; verdict: "met" | "not_met" | "not_enough"; detail: string }
+export interface ScoreLabel {
+  label: string; listeners: number; ratings: number;
+  natural_median: number | null; emotion_median: number | null; low_share: number | null;
+  spoken_tag_words: string[]; same_voice_rate: number | null; understood_rate: number | null;
+  preferred_or_tied: number | null; comparisons: number; gates: ScoreGate[];
+}
+export interface ScoreReport { listeners: number; rows_used: number; issues: ScoreIssue[]; labels: ScoreLabel[]; notes: string[] }
+export interface ScoreOptions { reference_label: string | null; sound_labels: string[]; min_listeners: number }
+export interface KeyInfo { labels: string[]; listeners: number; clips: number }

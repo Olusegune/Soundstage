@@ -34,6 +34,7 @@ pub mod projectpack;
 pub mod perform;
 pub mod pronounce;
 pub mod providers;
+pub mod scores;
 pub mod render;
 pub mod safety;
 pub mod secure;
