@@ -326,6 +326,30 @@ async fn render_lines(app: AppHandle, state: State<'_, AppState>, project: Proje
     .await
 }
 
+/// Make a blind, loudness-matched listening test from a few clips. Written only to a folder the person chose, never inside the projects folder.
+#[tauri::command]
+async fn make_listening_pack(state: State<'_, AppState>, clips: Vec<ListenClip>, dest_dir: String, listeners: usize, target_lufs: f64) -> Result<soundstage_core::listening::PackReport, String> {
+    let (store, _) = shared(&state);
+    blocking(move || {
+        let dest = PathBuf::from(dest_dir);
+        if let (Ok(root), Ok(d)) = (std::fs::canonicalize(&store.root), std::fs::canonicalize(&dest)) {
+            if d.starts_with(&root) {
+                return Err("Choose a folder outside the Soundstage projects folder.".to_string());
+            }
+        }
+        let clips: Vec<soundstage_core::listening::ClipIn> = clips.into_iter().map(|c| soundstage_core::listening::ClipIn { group: c.group, label: c.label, path: PathBuf::from(c.path) }).collect();
+        soundstage_core::listening::make_pack(&clips, &dest, &soundstage_core::listening::PackOptions { listeners, target_lufs, seed: None })
+    })
+    .await?
+}
+
+#[derive(Deserialize)]
+struct ListenClip {
+    group: String,
+    label: String,
+    path: String,
+}
+
 /// Other voices that could stand in on a line that failed or cannot be done. Nothing is called here.
 #[tauri::command]
 fn fallback_options(state: State<'_, AppState>, project: Project, line_key: String) -> Vec<render::FallbackOption> {
@@ -1701,6 +1725,7 @@ pub fn run() {
             render_lines,
             job_begin,
             audition_line,
+            make_listening_pack,
             fallback_options,
             director_estimate,
             director_run,

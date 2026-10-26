@@ -471,3 +471,5 @@ export interface FallbackOption {
   sends_data: boolean;
   plan?: { used: string[]; ignored: string[] } | null;
 }
+
+export interface PackReport { folder: string; key_file: string; listeners: number; groups: number; clips: number; files_written: number; notes: string[] }

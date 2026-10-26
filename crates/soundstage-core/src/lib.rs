@@ -20,6 +20,7 @@ pub mod ids;
 pub mod jobrec;
 pub mod jobs;
 pub mod layout;
+pub mod listening;
 pub mod licence;
 pub mod loudness;
 pub mod mix;

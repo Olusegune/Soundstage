@@ -588,6 +588,44 @@ try {
     await audit("Voice library with filters");
     await app.press("Ctrl+O"); await sleep(600);
   }
+  // Listening pack: blind, loudness-matched clips for a fair listening test.
+  {
+    const fs = await import("node:fs");
+    const inv = (cmd, args) => `window.__TAURI_INTERNALS__.invoke('${cmd}',${JSON.stringify(args)})`;
+    const base = `${process.env.TEMP}/soundstage-e2e-listen`.replace(/\\/g, "/");
+    fs.rmSync(base, { recursive: true, force: true });
+    fs.mkdirSync(`${base}/out`, { recursive: true });
+    const wav = (name, amp, secs) => {
+      const n = Math.floor(48000 * secs);
+      const buf = Buffer.alloc(44 + n * 2);
+      buf.write("RIFF", 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write("WAVEfmt ", 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22);
+      buf.writeUInt32LE(48000, 24); buf.writeUInt32LE(96000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write("data", 36); buf.writeUInt32LE(n * 2, 40);
+      for (let i = 0; i < n; i++) buf.writeInt16LE(Math.round(amp * 32767 * Math.sin((2 * Math.PI * 300 * i) / 48000) * (1 + 0.3 * Math.sin(i / 4000))), 44 + i * 2);
+      fs.writeFileSync(`${base}/${name}`, buf);
+      return `${base}/${name}`;
+    };
+    const clips = [
+      { group: "Kitchen", label: "plain", path: wav("a1.wav", 0.05, 2.5) }, { group: "Kitchen", label: "planned", path: wav("a2.wav", 0.2, 2.8) }, { group: "Kitchen", label: "planned+sounds", path: wav("a3.wav", 0.4, 3) },
+      { group: "Market", label: "plain", path: wav("b1.wav", 0.1, 2.5) }, { group: "Market", label: "planned", path: wav("b2.wav", 0.03, 2.6) },
+    ];
+    const r = await app.ev(`${inv("make_listening_pack", { clips, destDir: `${base}/out`, listeners: 3, targetLufs: -23 })}.then(x=>x,e=>'ERR '+String(e))`);
+    app.check("a listening pack is made for each listener", typeof r === "object" && r.listeners === 3 && r.files_written === 15, JSON.stringify(r).slice(0, 160));
+    const l1 = fs.readdirSync(`${r.folder}/listener-L1`);
+    app.check("a listener's folder holds only coded clips, a score sheet and instructions", l1.filter((f) => f.endsWith(".wav")).length === 5 && l1.includes("score-sheet.csv") && l1.includes("READ-ME-FIRST.txt") && !l1.some((f) => /plain|planned|kitchen|market|a1|b2/i.test(f)), l1.join(","));
+    const key = fs.readFileSync(r.key_file, "utf8");
+    app.check("the private key says which code is which clip", key.includes("planned+sounds") && key.split("\n").filter(Boolean).length === 16);
+    const refused = await app.ev(`${inv("app_info", {})}.then(i=>window.__TAURI_INTERNALS__.invoke('make_listening_pack',{clips:${JSON.stringify(clips)},destDir:i.projects_root,listeners:1,targetLufs:-23}).then(()=>'made',e=>String(e)))`);
+    app.check("a pack cannot be written inside the projects folder", /outside the Soundstage projects folder/.test(String(refused)), String(refused));
+    const one = await app.ev(`${inv("make_listening_pack", { clips: clips.slice(0, 1), destDir: `${base}/out`, listeners: 1, targetLufs: -23 })}.then(()=>'made',e=>String(e))`);
+    app.check("a single clip is refused in plain words", /at least two|between 2/.test(String(one)), String(one));
+    await app.press("Ctrl+O"); await sleep(500);
+    await app.ev("(()=>{const b=[...document.querySelectorAll('button')].find(x=>/Audio tools/.test(x.textContent));b&&b.click()})()"); await sleep(600);
+    const opened = await app.clickText("Listening pack"); await sleep(500);
+    app.check("Audio tools offers a Listening pack tab", opened === true && (await app.text()).includes("Make a fair listening test"));
+    await audit("Listening pack");
+    await app.press("Ctrl+O"); await sleep(500);
+    fs.rmSync(base, { recursive: true, force: true });
+  }
   const screens = [["home", async () => { await app.press("Ctrl+O"); await sleep(600); }], ["library", async () => { await app.press("Ctrl+Shift+V"); await sleep(600); }]];
   for (const [theme, label] of [["light", "Light"], ["dark", "Dark"]]) {
     await app.press("Ctrl+,"); await sleep(400);

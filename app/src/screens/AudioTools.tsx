@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, messageOf } from "../api";
 import { loadPrefs } from "../prefs";
 import { OfflineSpeech } from "../shell/OfflineSpeech";
+import { ListeningPack } from "./ListeningPack";
 import { ConsentFields, EMPTY_ATTESTATION, consentComplete } from "../shell/ConsentFields";
 import { Confirm, PlayButton } from "../ui";
 import type { Attestation, CleanOut, CloneInfo, Cue2, ToolInfo, TranscriptOut, Voice } from "../types";
@@ -24,6 +25,7 @@ export function AudioTools(props: { keepHistory: boolean; voices: Voice[]; toast
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [info, setInfo] = useState<CloneInfo | null>(null);
   const [tab, setTab] = useState<Tab>("transcribe");
+  const [listen, setListen] = useState(false);
   const [file, setFile] = useState<string | null>(null);
   const [lang, setLang] = useState("");
   const [engine, setEngine] = useState("");
@@ -48,7 +50,7 @@ export function AudioTools(props: { keepHistory: boolean; voices: Voice[]; toast
   }, [props.voices, chosen?.id, vq]);
   const target_voice = changeVoices.find((v) => v.id === voiceId) ?? changeVoices[0];
 
-  const switchTab = (t: Tab) => { setTab(t); setEngine(""); setFile(null); setTr(null); setClean(null); setCues([]); setTranslated(null); };
+  const switchTab = (t: Tab) => { setListen(false); setTab(t); setEngine(""); setFile(null); setTr(null); setClean(null); setCues([]); setTranslated(null); };
 
   const pick = async () => {
     const p = await open({ multiple: false, title: "Choose a recording", filters: [{ name: "Audio", extensions: ["wav", "mp3", "flac", "ogg", "m4a", "aac", "mp4"] }] });
@@ -110,12 +112,14 @@ export function AudioTools(props: { keepHistory: boolean; voices: Voice[]; toast
     <div className="page">
       <div className="stage-title"><h1>Audio tools</h1><span className="spacer" /><button onClick={props.onBack}>Back</button></div>
       <div className="seg" role="radiogroup" aria-label="Tool" style={{ marginBottom: 12 }}>
-        <button role="radio" aria-checked={tab === "transcribe"} onClick={() => switchTab("transcribe")}>Speech to text</button>
-        <button role="radio" aria-checked={tab === "clean"} onClick={() => switchTab("clean")}>Clean audio</button>
-        <button role="radio" aria-checked={tab === "change"} onClick={() => switchTab("change")}>Change voice</button>
-        <button role="radio" aria-checked={tab === "dub"} onClick={() => switchTab("dub")}>Dub</button>
+        <button role="radio" aria-checked={!listen && tab === "transcribe"} onClick={() => switchTab("transcribe")}>Speech to text</button>
+        <button role="radio" aria-checked={!listen && tab === "clean"} onClick={() => switchTab("clean")}>Clean audio</button>
+        <button role="radio" aria-checked={!listen && tab === "change"} onClick={() => switchTab("change")}>Change voice</button>
+        <button role="radio" aria-checked={!listen && tab === "dub"} onClick={() => switchTab("dub")}>Dub</button>
+        <button role="radio" aria-checked={listen} onClick={() => setListen(true)}>Listening pack</button>
       </div>
 
+      {listen ? <ListeningPack toast={props.toast} /> : (<>
       {(tab === "transcribe" || tab === "dub") && <OfflineSpeech toast={props.toast} onChanged={() => { void api.listAudioTools().then(setTools).catch(() => setTools([])); }} />}
 
       <div className="card">
@@ -201,6 +205,7 @@ export function AudioTools(props: { keepHistory: boolean; voices: Voice[]; toast
           body={<p>The recording is converted on this computer and sent over the internet to {chosen.label}. It may use credits on your account there.{tab === "change" ? " The speaker's consent record stays on this computer and is not sent." : ""}</p>}
           onConfirm={() => void run()} />
       )}
+      </>)}
     </div>
   );
 }
