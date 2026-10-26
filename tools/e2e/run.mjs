@@ -386,6 +386,8 @@ try {
     await app.ev("window.__TAURI_INTERNALS__.invoke('create_project',{name:'e2e-scene auto',sample:false}).then(p=>{p.script=['# Test','AMA: Good morning, how are you today?','KOLA: [pause:short] I am fine, thank you.'].join(String.fromCharCode(10));return window.__TAURI_INTERNALS__.invoke('save_project',{project:p})})");
     await app.press("Ctrl+O"); await sleep(300);
     await app.ev("location.reload()"); await sleep(1800);
+    // Online voices can take a few seconds to list after a reload; casting needs them, so wait until the screen has them.
+    await app.waitFor("window.__TAURI_INTERNALS__.invoke('list_voices').then(v=>v.length>0)", 30000); await sleep(4000);
     await app.ev("(()=>{const c=[...document.querySelectorAll('.proj-card')].find(x=>/e2e-scene auto/.test(x.textContent));[...c.querySelectorAll('button')].find(b=>b.textContent.trim()==='Open').click();})()"); await sleep(1200);
     const hasAuto = await app.waitFor("[...document.querySelectorAll('button')].some(b=>/Do all the steps for me/.test(b.textContent))", 8000);
     app.check("the guide offers Do all the steps for me", hasAuto);

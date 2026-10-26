@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased (MS1 foundations)
+
+### Added
+- **Lines keep their identity.** Adding, deleting, editing or moving a line no longer marks the other lines as needing a re-render, and their takes, directions and notes stay with the right text. Older projects are upgraded on first open; a copy of the old file is kept as `project.v1.bak`.
+- **Interrupted renders can be picked up again.** If Soundstage closes or crashes during a batch, reopening the project offers to keep the audio already made and finish the rest. A new **Stop after this line** button ends a batch early.
+- **Licence conditions.** A licence can now carry conditions (revenue limit, country limit, limited uses). A commercial export asks you to confirm each one; a credit line shows as a notice. Conditions a provider declares cannot be removed by recording your own check.
+- **Local-only mode** (Settings): refuses everything that would use the internet, including model downloads, until you turn it off.
+- **This computer** appears in the System check: memory, graphics card, free disk space, and a level that later decides which local models are offered.
+- Behind the scenes: a performance-plan format with checks, and a model list that cannot call anything verified without evidence.
+
+
 ## 0.2.0 (2026-10-23)
 
 ### Added

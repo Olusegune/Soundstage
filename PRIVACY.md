@@ -18,6 +18,10 @@ Soundstage asks before sending anything. Depending on what you set up:
 - **AI prompt helper:** the description you typed, sent to the chat server you set in Settings. If that is Ollama on your computer, nothing leaves it.
 Local engines, Piper, ComfyUI on this computer and Windows voices send nothing.
 
+**Local-only mode** (Settings) refuses every connection except to this computer, so nothing is sent and nothing is downloaded until you turn it off.
+
+**This computer check** reads your memory, free disk space and graphics card name locally to describe what your computer can run. It is shown on screen and in the System check report, and is never sent anywhere.
+
 Each service has its own privacy terms and billing. Soundstage cannot see or change how they store or use what you send.
 
 ## Consent records

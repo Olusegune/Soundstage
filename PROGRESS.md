@@ -7,16 +7,16 @@ Last updated 2026-10-25.
 | Area | State |
 |---|---|
 | App v0.1 and v0.2 (everything in `CHANGELOG.md`) | Built, tested, pushed. Last code commit `f5ff35f` |
-| Tests at that commit | 233 Rust, 82 front-end, 181 of 181 real-window checks, types clean, 0 audit findings |
-| PRD-002 (AI models update) | **MS0 spec written, awaiting owner approval.** No code written for it |
+| Tests now | 279 Rust, 83 front-end, 192 of 192 real-window checks, types clean |
+| PRD-002 (AI models update) | MS0 spec approved in part (see `DECISIONS.md`). **MS1 Foundations built 2026-10-25**, awaiting the owner's demo and sign-off |
 | Next implementation milestone | MS1 Foundations: D-01, D-02, D-03, D-04, D-11, D-13 approved; awaiting the detailed MS1 task plan and the owner go-ahead |
 
 ## Milestones
 
 | MS | Name | State |
 |---|---|---|
-| MS0 | Spec | Done, pending owner review |
-| MS1 | Foundations | Not started, needs D-03, D-04, D-13 |
+| MS0 | Spec | Done |
+| MS1 | Foundations | Built and tested; awaiting owner demo and sign-off |
 | MS2 | Director v1 | Not started, needs D-06 and a host choice |
 | MS3 | Performance v1 | Not started |
 | MS4 | Model Lab v1 | Not started |
@@ -26,7 +26,7 @@ Last updated 2026-10-25.
 | MS8 | Video import and sync | Not started, needs D-07 |
 | MS9 | Video generation | Not scheduled |
 
-Traceability at MS0: 46 Existing, 68 Partial, 57 New of 171 rows (`docs/spec/02-TRACEABILITY.md`).
+Traceability after MS1: 50 Existing, 69 Partial, 52 New of 171 rows (MS0: 46, 68, 57) (`docs/spec/02-TRACEABILITY.md`).
 
 ## Waiting on the owner
 

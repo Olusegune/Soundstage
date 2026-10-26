@@ -1,11 +1,11 @@
 {
-  "when": "2026-10-24T15:21:20.557Z",
-  "passed": 181,
-  "total": 181,
+  "when": "2026-10-26T00:33:55.823Z",
+  "passed": 192,
+  "total": 192,
   "failed": [],
   "timings": {
-    "paletteOpenMs": 78,
-    "stepSwitchMs": 435
+    "paletteOpenMs": 77,
+    "stepSwitchMs": 434
   },
   "accessibility": [
     {
@@ -50,6 +50,10 @@
     },
     {
       "screen": "mix with the prompt helper",
+      "violations": []
+    },
+    {
+      "screen": "Interrupted render dialog",
       "violations": []
     },
     {

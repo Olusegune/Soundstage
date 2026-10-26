@@ -1,16 +1,16 @@
 # Soundstage QA report
 
-Last full run: 2026-10-23, Windows 11, release build of v0.1.0 plus the v0.2 additions.
+Last full run: 2026-10-25, Windows 11, release build of v0.2.0 plus MS1 (stable line ids, job recovery, licence conditions, local-only mode).
 
 ## How to run everything
 
 | Layer | Command (from the repo root unless noted) | Result at last run |
 |---|---|---|
-| Core and shell unit and integration tests (Rust) | `cargo test --workspace` | 233 passed, 0 failed |
-| Front-end unit tests (Vitest) | `npm run test` in `app/` (`npx vitest run`) | 82 passed, 0 failed |
+| Core and shell unit and integration tests (Rust) | `cargo test --workspace` | 279 passed, 0 failed |
+| Front-end unit tests (Vitest) | `npm run test` in `app/` (`npx vitest run`) | 83 passed, 0 failed |
 | Types | `npx tsc --noEmit` in `app/` | clean |
 | Lint | `cargo clippy --workspace --all-targets` | style warnings only, no errors |
-| Real-window end-to-end, accessibility and screenshots | `node tools/e2e/run.mjs` (needs a release build: `npx tauri build` in `app/`) | 181 of 181 passed |
+| Real-window end-to-end, accessibility and screenshots | `node tools/e2e/run.mjs` (needs a release build: `npx tauri build` in `app/`) | 192 of 192 passed |
 | Secrets | `rafter secrets .` | none found |
 | Dependencies | `npm audit --omit=dev` in `app/` | 0 vulnerabilities |
 

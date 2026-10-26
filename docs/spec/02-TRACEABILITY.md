@@ -11,7 +11,7 @@ Sources merged: PRD-002 (`docs/PRD_AI_MODELS_UPDATE.md`), the master `docs/PRD.m
 
 "Evidence" points to a module or test in the repository. A dash means there is none. `MS` is the milestone in `06-MILESTONES-AND-TESTS.md` that delivers the missing part.
 
-**Totals** (rows with a status, 171): **Existing 46**, **Partial 68**, **New 57**. Existing 26%, Partial 39%, New 33%. Counted by script from this file; update them when a row changes.
+**Totals** (rows with a status, 171): **Existing 50**, **Partial 69**, **New 52**. Existing 29%, Partial 40%, New 30%. Counted by script from this file; update them when a row changes. (At MS0 the counts were 46, 68 and 57.)
 
 ---
 
