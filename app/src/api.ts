@@ -1,7 +1,7 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
-  Analysis, Asset, Destination, Attestation, AudioInfo, WhisperStatus, CleanOut, Cue2, HistoryView, PronRule, SpeakOut, ToolInfo, TranscriptOut, CloneEntry, CloneInfo, ClonedVoice, DesignPreview, DesignerInfo, RefReport, EnginesConfig, GeneratorInfo, SystemCheck, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Take, Voice, VoiceDef,
+  Analysis, Asset, Destination, Attestation, AudioInfo, WhisperStatus, CleanOut, Cue2, HistoryView, PronRule, SpeakOut, ToolInfo, TranscriptOut, CloneEntry, CloneInfo, ClonedVoice, DesignPreview, DesignerInfo, RefReport, EnginesConfig, GeneratorInfo, SystemCheck, EnginesView, ExportCaps, ExportOptions, ExportResult, GateReport, Layout, MixPreview, Project, RenderOutcome, Summary, Take, DirectorEstimate, DirectorProposal, LineChange, LinePlan, PerformancePlan, Direction, Voice, VoiceDef,
 } from "./types";
 import type { Interrupted } from "./shell/InterruptedDialog";
 
@@ -27,6 +27,14 @@ export const api = {
   previewVoice: (voiceId: string, text: string) => invoke<{ path: string }>("preview_voice", { voiceId, text }),
   analyze: (project: Project) => invoke<Analysis>("analyze_project", { project }),
   renderLines: (project: Project, keys: string[], jobId?: string | null) => invoke<RenderOutcome>("render_lines", { project, keys, jobId: jobId ?? null }),
+  directorEstimate: (project: Project) => invoke<DirectorEstimate>("director_estimate", { project }),
+  directorRun: (project: Project, baseUrl: string, model: string, useModel: boolean, confirmed: boolean) => invoke<DirectorProposal>("director_run", { project, baseUrl, model, useModel, confirmed }),
+  planLoad: (projectId: string) => invoke<PerformancePlan>("plan_load", { projectId }),
+  planSave: (project: Project, plan: PerformancePlan) => invoke<void>("plan_save", { project, plan }),
+  planChanges: (current: PerformancePlan, proposed: PerformancePlan) => invoke<LineChange[]>("plan_changes", { current, proposed }),
+  planMerge: (current: PerformancePlan, proposed: PerformancePlan, accepted: string[]) => invoke<PerformancePlan>("plan_merge", { current, proposed, accepted }),
+  planEdit: (project: Project, plan: PerformancePlan, lineId: string, edited: LinePlan) => invoke<PerformancePlan>("plan_edit", { project, plan, lineId, edited }),
+  planDirections: (project: Project, plan: PerformancePlan) => invoke<[Record<string, Direction>, number]>("plan_directions", { project, plan }),
   getLocalOnly: () => invoke<boolean>("get_local_only"),
   setLocalOnly: (on: boolean) => invoke<void>("set_local_only", { on }),
   jobBegin: (projectId: string, keys: string[]) => invoke<string>("job_begin", { projectId, keys }),

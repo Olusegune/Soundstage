@@ -4,6 +4,7 @@ import type { Ctx } from "../ctx";
 import * as I from "../icons";
 import { removeTagFromRow, splitTags } from "../logic";
 import { Empty, Help, PlayButton, Waveform } from "../ui";
+import { PlanPanel } from "./PlanPanel";
 import type { Direction, Level, LineInfo } from "../types";
 import { EMOTIONS } from "../types";
 
@@ -67,6 +68,7 @@ export function DirectStep({ ctx }: { ctx: Ctx }) {
       </nav>
 
       <div>
+        <PlanPanel ctx={ctx} />
         {advanced && (
           <div className="card">
             <h2>Direction levels <Help text="Delivery is set from broad to fine: project, then character, then scene, then line. A finer level overrides a broader one." /></h2>

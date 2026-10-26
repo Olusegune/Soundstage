@@ -66,7 +66,7 @@ pub fn improve(base_url: &str, model: &str, key: Option<&str>, kind: AssistKind,
 }
 
 /// One chat request to an OpenAI-compatible server. Returns the model's reply text.
-fn chat(base: &crate::net::BaseUrl, key: Option<&str>, model: &str, system: &str, user: &str, max_tokens: u32) -> Result<String, String> {
+pub(crate) fn chat(base: &crate::net::BaseUrl, key: Option<&str>, model: &str, system: &str, user: &str, max_tokens: u32) -> Result<String, String> {
     let agent = ureq::AgentBuilder::new().redirects(0).timeout_connect(Duration::from_secs(10)).timeout_write(Duration::from_secs(30)).timeout_read(Duration::from_secs(180)).user_agent("Soundstage").middleware(crate::net::local_guard).build();
     let body = serde_json::json!({
         "model": model, "stream": false, "max_tokens": max_tokens, "temperature": 0.4,
@@ -87,7 +87,7 @@ fn chat(base: &crate::net::BaseUrl, key: Option<&str>, model: &str, system: &str
     v["choices"][0]["message"]["content"].as_str().map(String::from).ok_or_else(|| "The helper's answer was not in the expected format.".to_string())
 }
 
-fn checked_connection(base_url: &str, model: &str, key: Option<&str>) -> Result<(crate::net::BaseUrl, Option<String>), String> {
+pub(crate) fn checked_connection(base_url: &str, model: &str, key: Option<&str>) -> Result<(crate::net::BaseUrl, Option<String>), String> {
     let model = model.trim();
     if model.is_empty() || model.chars().count() > 100 || model.chars().any(|c| c.is_control() || c.is_whitespace()) {
         return Err("Enter the helper's model name (for example llama3.2) in Settings.".into());
@@ -145,7 +145,7 @@ pub fn translate_lines(base_url: &str, model: &str, key: Option<&str>, target: &
     Ok(out)
 }
 
-fn helper_error(e: AdapterError) -> String {
+pub(crate) fn helper_error(e: AdapterError) -> String {
     match e {
         AdapterError::Network => "Could not reach the helper. If you use Ollama, make sure it is running.".into(),
         AdapterError::Auth => "The helper refused the key. Check it in Settings.".into(),

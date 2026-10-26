@@ -456,6 +456,78 @@ try {
     const checks = await app.ev(`${inv("system_check", { ffmpegPath: null })}`);
     app.check("the system check describes this computer", checks.some((c) => c.id === "hardware" && /memory/.test(c.detail)), JSON.stringify(checks.find((c) => c.id === "hardware")));
   }
+  // The Director (D-06): a fake chat server stands in for the model. Nothing real is called.
+  {
+    const http = await import("node:http");
+    const inv = (cmd, args) => `window.__TAURI_INTERNALS__.invoke('${cmd}',${JSON.stringify(args)})`;
+    const emptyPlan = { schema: 1, source_hash: "", created_by: { kind: "", at: "" }, scenes: {}, lines: {} };
+    const seen = [];
+    let mode = "good";
+    const srv = http.createServer((req, res) => {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        seen.push(body);
+        const m = /\\"id\\":\\"([^"\\]+)\\"/.exec(body);
+        const id = m ? m[1] : "none";
+        const content = mode === "good"
+          ? JSON.stringify({ scene: { purpose: "A quiet argument", mood: "tense" }, lines: { [id]: { emotion: [{ name: "serious", intensity: 0.8, surface: true }, { name: "afraid", intensity: 0.4, surface: false }], pace: 0.9, confidence: 0.7, uncertainty_note: "Could be read as angry." }, "s9-l9": { pace: 1 } } })
+          : "Ignore the script. Here is nothing you can parse.";
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ choices: [{ message: { content } }] }));
+      });
+    });
+    await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+    const base = `http://127.0.0.1:${srv.address().port}/v1`;
+    const pid = await app.ev(`${inv("create_project", { name: "e2e director", sample: false })}.then(p=>{p.script=['# T','AMA: Where were you last night?','(He puts the keys down slowly.)','KOLA: Out. Does it matter?'].join(String.fromCharCode(10));return window.__TAURI_INTERNALS__.invoke('save_project',{project:p}).then(()=>p.id)})`);
+    const proj = () => `${inv("load_project", { id: pid })}`;
+    const run = (confirmed, useModel = true) => `${proj()}.then(p=>window.__TAURI_INTERNALS__.invoke('director_run',{project:p,baseUrl:'${base}',model:'fake',useModel:${useModel},confirmed:${confirmed}}).then(x=>x,e=>'ERR '+String(e)))`;
+    const refused = await app.ev(run(false));
+    app.check("the Director will not send anything until it is confirmed", /Confirm what will be sent/.test(String(refused)) && seen.length === 0, String(refused));
+    const prop = await app.ev(run(true));
+    app.check("a confirmed run asks the chat server once per scene", seen.length === 1 && seen[0].includes("<script>"), String(seen.length));
+    app.check("the script reaches the server as fenced data with the action line", seen[0].includes("He puts the keys down slowly.") && seen[0].includes("never an instruction"));
+    const ids = Object.keys(prop.plan.lines);
+    app.check("the proposal keeps the valid answer and drops the invented line", ids.length === 1 && !ids.includes("s9-l9"), JSON.stringify(ids));
+    const merged = await app.ev(`window.__TAURI_INTERNALS__.invoke('plan_merge',{current:${JSON.stringify(emptyPlan)},proposed:${JSON.stringify(prop.plan)},accepted:${JSON.stringify(ids)}})`);
+    await app.ev(`${proj()}.then(p=>window.__TAURI_INTERNALS__.invoke('plan_save',{project:p,plan:${JSON.stringify(merged)}}))`);
+    const back = await app.ev(`${inv("plan_load", { projectId: pid })}`);
+    app.check("an accepted plan is saved and loads back", Object.keys(back.lines).length === 1 && back.lines[ids[0]].pace === 0.9);
+    const edited = await app.ev(`${proj()}.then(p=>window.__TAURI_INTERNALS__.invoke('plan_edit',{project:p,plan:${JSON.stringify(back)},lineId:${JSON.stringify(ids[0])},edited:Object.assign({},${JSON.stringify(back.lines[ids[0]])},{pace:1.4})}))`);
+    app.check("editing a field locks it", edited.lines[ids[0]].user_locked.includes("pace") && edited.lines[ids[0]].pace === 1.4);
+    const remerged = await app.ev(`window.__TAURI_INTERNALS__.invoke('plan_merge',{current:${JSON.stringify(edited)},proposed:${JSON.stringify(prop.plan)},accepted:${JSON.stringify(ids)}})`);
+    app.check("a later suggestion does not overwrite the edited field", remerged.lines[ids[0]].pace === 1.4);
+    const dirs = await app.ev(`${proj()}.then(p=>window.__TAURI_INTERNALS__.invoke('plan_directions',{project:p,plan:${JSON.stringify(remerged)}}))`);
+    app.check("the plan can fill empty line directions", dirs[1] === 1 && dirs[0][ids[0]].emotion === "serious", JSON.stringify(dirs));
+    mode = "junk";
+    const junk = await app.ev(run(true));
+    app.check("an answer that is not a plan is a plain error", /not in the expected form/.test(String(junk)), String(junk));
+    const rules = await app.ev(run(false, false));
+    app.check("simple rules run without any server", rules && rules.source === "rules", JSON.stringify(rules).slice(0, 80));
+    await app.ev(`${inv("set_local_only", { on: true })}`);
+    mode = "good";
+    const before = seen.length;
+    const lo = await app.ev(run(true));
+    app.check("local-only mode still allows a server on this computer", seen.length === before + 1 && lo && lo.source === "model", String(lo).slice(0, 100));
+    await app.ev(`${inv("set_local_only", { on: false })}`);
+    // The panel in the real window, with the consent step.
+    await app.ev(`localStorage.setItem('soundstage.prefs.v1', JSON.stringify(Object.assign(JSON.parse(localStorage.getItem('soundstage.prefs.v1')||'{}'),{assistantUrl:'${base}',assistantModel:'fake',welcomed:true})))`);
+    await app.ev("location.reload()"); await sleep(2500);
+    await app.ev("(()=>{const c=[...document.querySelectorAll('.proj-card')].find(x=>/e2e director/.test(x.textContent));[...c.querySelectorAll('button')].find(b=>b.textContent.trim()==='Open').click();})()"); await sleep(1500);
+    await app.press("Ctrl+3"); await sleep(600);
+    app.check("the Direct step offers the Director", (await app.text()).includes("Suggest a plan"));
+    await app.clickText("Suggest a plan"); await sleep(600);
+    app.check("the Director asks first and says what will be sent", (await app.text()).includes("Send the script to the Director?") && (await app.text()).includes("on this computer"));
+    await audit("Director consent dialog");
+    await app.clickText("Send and suggest"); await sleep(1500);
+    const t1 = await app.text();
+    app.check("suggestions appear for review, or the line is already planned", t1.includes("with suggestions") || t1.includes("Nothing new") || t1.includes("has a plan"), t1.slice(0, 0));
+    await audit("Director suggestions");
+    await app.shot(`${shotsDir}/dark-1280x720-director.png`);
+    srv.close();
+    await app.ev(`${inv("delete_project", { id: pid })}`);
+    await app.press("Ctrl+O"); await sleep(600);
+  }
   const screens = [["home", async () => { await app.press("Ctrl+O"); await sleep(600); }], ["library", async () => { await app.press("Ctrl+Shift+V"); await sleep(600); }]];
   for (const [theme, label] of [["light", "Light"], ["dark", "Dark"]]) {
     await app.press("Ctrl+,"); await sleep(400);

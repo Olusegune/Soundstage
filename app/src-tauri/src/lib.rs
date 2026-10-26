@@ -11,6 +11,8 @@ use soundstage_core::generate::{clean_prompt, GenKind, GenLimits, GenRequest};
 use soundstage_core::licence::LicenceInfo as Lic;
 use soundstage_core::project::{Asset, AssetKind, GenInfo, Project, Store, Summary, Take};
 use soundstage_core::jobrec::{self, JobState, JobStore};
+use soundstage_core::director::{self, Estimate, LineChange, Proposal};
+use soundstage_core::plan::{LinePlan, PerformancePlan, PlanStore};
 use soundstage_core::adapters::openai_speech::OpenAiSpeechAdapter;
 use soundstage_core::engines::{valid_engine_id, EnginesConfig, VoiceDef};
 use soundstage_core::providers::{KeyProvider, Registry, Voice};
@@ -1404,6 +1406,80 @@ fn run_checks(state: &AppState, config: &std::path::Path, ffmpeg_path: Option<&s
     out
 }
 
+/// What the Director would send, so the screen can say so before anything is sent.
+#[tauri::command]
+fn director_estimate(project: Project) -> Estimate {
+    director::estimate(&project.parsed())
+}
+
+/// Ask the Director for a plan proposal. With `use_model` false only the simple text rules run and nothing is sent.
+/// Sending needs `confirmed`: the screen shows what will go to which server first.
+#[tauri::command]
+async fn director_run(project: Project, base_url: String, model: String, use_model: bool, confirmed: bool) -> Result<Proposal, String> {
+    director::check_script(&project.script)?;
+    if use_model && !confirmed {
+        return Err("Confirm what will be sent before the Director runs.".into());
+    }
+    blocking(move || {
+        let parsed = project.parsed();
+        if parsed.lines.is_empty() {
+            return Err("Write some dialogue first.".to_string());
+        }
+        let hash = soundstage_core::ids::script_hash(&project.script);
+        if use_model {
+            let key = key_provider()("assistant");
+            director::run_model(&base_url, &model, key.as_deref(), &parsed, &hash)
+        } else {
+            let mut plan = director::rules_plan(&parsed);
+            plan.source_hash = hash;
+            Ok(Proposal { plan, source: "rules".into(), dropped: 0, notes: vec![] })
+        }
+    })
+    .await?
+}
+
+fn line_lengths(project: &Project) -> BTreeMap<String, usize> {
+    project.parsed().lines.iter().map(|l| (l.key.clone(), l.text.chars().count())).collect()
+}
+
+#[tauri::command]
+fn plan_load(state: State<'_, AppState>, project_id: String) -> Result<PerformancePlan, String> {
+    PlanStore::new(&state.store.dir(&project_id)?).load()
+}
+
+/// Save the plan after the same checks every plan must pass. A plan that fails them is refused and the old one stays.
+#[tauri::command]
+fn plan_save(state: State<'_, AppState>, project: Project, plan: PerformancePlan) -> Result<(), String> {
+    PlanStore::new(&state.store.dir(&project.id)?).save(&plan, &line_lengths(&project))
+}
+
+#[tauri::command]
+fn plan_changes(current: PerformancePlan, proposed: PerformancePlan) -> Vec<LineChange> {
+    director::changes(&current, &proposed)
+}
+
+#[tauri::command]
+fn plan_merge(current: PerformancePlan, proposed: PerformancePlan, accepted: Vec<String>) -> PerformancePlan {
+    director::merge(&current, &proposed, &accepted)
+}
+
+/// The person edited a line's plan: keep it and lock what they changed.
+#[tauri::command]
+fn plan_edit(project: Project, mut plan: PerformancePlan, line_id: String, edited: LinePlan) -> Result<PerformancePlan, String> {
+    let lens = line_lengths(&project);
+    edited.validate(lens.get(&line_id).copied())?;
+    director::user_edit(&mut plan, &line_id, edited);
+    Ok(plan)
+}
+
+/// Carry the plan's emotion and pace into the line directions that are still empty.
+#[tauri::command]
+fn plan_directions(project: Project, plan: PerformancePlan) -> (BTreeMap<String, soundstage_core::direction::Direction>, usize) {
+    let mut d = project.line_directions.clone();
+    let n = director::apply_to_directions(&plan, &mut d);
+    (d, n)
+}
+
 #[tauri::command]
 fn get_local_only() -> bool {
     soundstage_core::net::local_only()
@@ -1578,6 +1654,14 @@ pub fn run() {
             analyze_project,
             render_lines,
             job_begin,
+            director_estimate,
+            director_run,
+            plan_load,
+            plan_save,
+            plan_changes,
+            plan_merge,
+            plan_edit,
+            plan_directions,
             get_local_only,
             set_local_only,
             job_finish,

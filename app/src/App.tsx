@@ -559,7 +559,7 @@ export default function App() {
   /* ---------------------------------------------------------------- render */
   const ctx: Ctx | null = project && g ? {
     project, analysis, voices, dir, mode: prefs.mode, ffmpegPath: prefs.ffmpegPath, setFfmpegPath: (p) => setPrefs({ ffmpegPath: p }), edit, toast: say, goto: (n) => goStep(n),
-    openLibrary: () => openAux("library"), openPronunciation: () => openAux("pronunciation"), newProject: () => void newProject(), exportMemory: prefs.exportMemory, setExportMemory: (json) => { if (json !== prefs.exportMemory) setPrefs({ exportMemory: json }); }, voiceMemory: prefs.voiceMemory, rememberVoices: (picks) => setPrefs({ voiceMemory: { ...prefs.voiceMemory, ...picks } }), openHelp, render, confirmSend, renderBatch, stopBatch, batch, errors, busy,
+    openLibrary: () => openAux("library"), openPronunciation: () => openAux("pronunciation"), newProject: () => void newProject(), exportMemory: prefs.exportMemory, setExportMemory: (json) => { if (json !== prefs.exportMemory) setPrefs({ exportMemory: json }); }, voiceMemory: prefs.voiceMemory, assistantUrl: prefs.assistantUrl, assistantModel: prefs.assistantModel, rememberVoices: (picks) => setPrefs({ voiceMemory: { ...prefs.voiceMemory, ...picks } }), openHelp, render, confirmSend, renderBatch, stopBatch, batch, errors, busy,
     steps: g.steps, next: g.next, mixPreview, mixBuilding, buildMix, markExported: () => setExported(true), focusKey,
   } : null;
 

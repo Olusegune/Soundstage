@@ -25,6 +25,17 @@ pub struct ParsedLine {
     pub tag_issues: Vec<TagIssue>,
 }
 
+/// A stage direction or action line: `(He slams the door.)` or `> Rain starts.` It is never spoken. The Director and
+/// the sound planner read it to learn what is physically happening.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ParsedAction {
+    pub scene: usize,
+    pub row: usize,
+    pub text: String,
+    /// How many dialogue lines came before it in the whole script, so it can be placed between lines.
+    pub after_lines: usize,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ScriptIssue {
     pub row: usize,
@@ -36,6 +47,8 @@ pub struct Parsed {
     pub scenes: Vec<ParsedScene>,
     pub speakers: Vec<String>,
     pub lines: Vec<ParsedLine>,
+    #[serde(default)]
+    pub actions: Vec<ParsedAction>,
     pub issues: Vec<ScriptIssue>,
 }
 
@@ -56,6 +69,20 @@ fn speaker_split(line: &str) -> Option<(String, &str)> {
         return None;
     }
     Some((name.to_uppercase(), rest))
+}
+
+/// `(Parenthesised line)` or `> action line`. Anything else without a speaker is still reported as a mistake.
+fn action_text(line: &str) -> Option<String> {
+    let t = line.trim();
+    let inner = if let Some(rest) = t.strip_prefix('>') {
+        rest.trim()
+    } else if t.starts_with('(') && t.ends_with(')') && t.len() > 2 {
+        t[1..t.len() - 1].trim()
+    } else {
+        return None;
+    };
+    let clean: String = inner.chars().filter(|c| !c.is_control()).take(400).collect();
+    (!clean.is_empty()).then_some(clean)
 }
 
 fn heading(line: &str) -> Option<(String, String, String)> {
@@ -95,6 +122,13 @@ pub fn parse(source: &str) -> Parsed {
             let index = out.scenes.len();
             out.scenes.push(ParsedScene { index, title, location, time_of_day, cast: vec![] });
             ordinal = 0;
+            continue;
+        }
+        if let Some(action) = action_text(line) {
+            if out.scenes.is_empty() {
+                out.scenes.push(ParsedScene { index: 0, title: "Scene 1".into(), location: String::new(), time_of_day: String::new(), cast: vec![] });
+            }
+            out.actions.push(ParsedAction { scene: out.scenes.len() - 1, row, text: action, after_lines: out.lines.len() });
             continue;
         }
         let Some((speaker, text)) = speaker_split(line) else {
@@ -151,6 +185,26 @@ mod tests {
         assert_eq!(p.lines[2].key, "s1-l0");
         assert_eq!(p.issues.len(), 1);
         assert_eq!(p.issues[0].row, 7);
+    }
+
+    #[test]
+    fn action_lines_are_kept_apart_from_dialogue_and_never_spoken() {
+        let p = parse("# A
+AMA: Hi.
+(She closes the door hard.)
+> Rain starts.
+KOLA: Hello.
+()
+(   )
+");
+        assert_eq!(p.lines.len(), 2);
+        assert_eq!(p.actions.len(), 2);
+        assert_eq!(p.actions[0].text, "She closes the door hard.");
+        assert_eq!(p.actions[0].after_lines, 1);
+        assert_eq!(p.actions[1].text, "Rain starts.");
+        assert!(p.issues.is_empty() || p.issues.iter().all(|i| i.row > 5), "empty parentheses are not a mistake worth blocking on");
+        assert!(parse("AMA: hi
+no speaker here").issues.len() == 1, "a stray line is still reported");
     }
 
     #[test]

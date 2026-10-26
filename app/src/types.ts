@@ -228,6 +228,7 @@ export interface Analysis {
     scenes: ParsedScene[];
     speakers: string[];
     lines: ParsedLine[];
+    actions?: { scene: number; row: number; text: string; after_lines: number }[];
     issues: { row: number; message: string }[];
   };
   lines: LineInfo[];
@@ -430,3 +431,33 @@ export interface HistoryView { item: HistoryItem; path: string }
 
 export interface ModelInfo { id: string; label: string; blurb: string; mb: number; installed: boolean; english_only: boolean }
 export interface WhisperStatus { program: boolean; models: ModelInfo[] }
+
+/* ---- Director plan (D-06) ---- */
+export interface EmotionPart { name: string; intensity: number; surface: boolean }
+export interface LinePlan {
+  objective?: string | null;
+  subtext?: string | null;
+  relationship?: string | null;
+  emotion: EmotionPart[];
+  pace?: number | null;
+  pauses: { at: number; ms: number }[];
+  emphasis: { start: number; end: number; level: number }[];
+  events: { kind: string; at: number; duration_ms?: number | null; intensity: number; source: string }[];
+  languages: { start: number; end: number; language: string; accent?: string | null }[];
+  alternatives: { label: string; change: unknown }[];
+  confidence?: number | null;
+  uncertainty_note?: string | null;
+  user_locked: string[];
+  [extra: string]: unknown;
+}
+export interface PerformancePlan {
+  schema: number;
+  source_hash: string;
+  created_by: { kind: string; provider?: string | null; model?: string | null; at: string };
+  scenes: Record<string, { purpose?: string | null; mood?: string | null; notes?: string | null }>;
+  lines: Record<string, LinePlan>;
+  [extra: string]: unknown;
+}
+export interface DirectorEstimate { scenes: number; lines: number; chars: number; approx_input_tokens: number; max_output_tokens: number; calls: number }
+export interface DirectorProposal { plan: PerformancePlan; source: "model" | "rules"; dropped: number; notes: string[] }
+export interface LineChange { line_id: string; fields: string[] }

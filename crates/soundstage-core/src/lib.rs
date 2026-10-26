@@ -9,6 +9,7 @@ pub mod clone;
 pub mod consent;
 pub mod decode;
 pub mod direction;
+pub mod director;
 pub mod editor;
 pub mod engines;
 pub mod exporter;

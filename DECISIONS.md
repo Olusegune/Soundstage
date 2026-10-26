@@ -25,7 +25,7 @@ One line per decision, newest group last. **Approved** means the owner said yes 
 | D-03 | **Stable element ids** with a sidecar file and project schema 2 migration, before any new feature | C-06 | **MS1 (blocking)** | Approved 2026-10-25 (owner) |
 | D-04 | Job records and six states for all long operations; interrupted jobs recoverable | C-07 | MS1 | Approved 2026-10-25 (owner) |
 | D-05 | Keep plain CSS design tokens; do not adopt Tailwind | C-05 | MS2 | Proposed |
-| D-06 | Director safety design (consent, fenced untrusted text, validated JSON, no agency, rule-based fallback). The Director host(s) to approve are the owner's choice | C-16 | **MS2 (blocking)** | Proposed |
+| D-06 | Director safety design (consent, fenced untrusted text, validated JSON, no agency, rule-based fallback). Host: only the chat server the owner already sets in Settings for the prompt helper (Ollama on this computer by default); no new host is added | C-16 | MS2 | Approved 2026-10-25 (owner said "go for it" after MS1; scope limited to the existing chat server, owner may widen later) |
 | D-07 | Video: import, preview and sync (MS8) are in scope; generation and lip-sync (MS9) are out until the owner decides and a likeness safety document exists | C-01, C-17 | **MS8 and MS9 (blocking)** | Proposed |
 | D-08 | The 12 PRD workspaces map onto the existing six-step Golden Path; new ones appear only when their milestone ships | C-04 | MS2 | Proposed |
 | D-09 | A language, accent or capability is `verified` only after a Model Lab run meets `docs/spec/07-LISTENING-TEST-PROTOCOL.md`; automated scores never promote | C-13, C-15, C-19 | MS4 | Proposed |

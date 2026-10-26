@@ -21,6 +21,9 @@ export interface Ctx {
   exportMemory: string;
   setExportMemory: (json: string) => void;
   voiceMemory: Record<string, string>;
+  /** The chat server from Settings, used by the prompt helper and the Director. */
+  assistantUrl: string;
+  assistantModel: string;
   rememberVoices: (picks: Record<string, string>) => void;
   openHelp: (articleId?: string) => void;
   /** Render lines into takes. Resolves with the outcome, or null if the call itself failed. */
